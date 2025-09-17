@@ -1,0 +1,15 @@
+export const CANADIAN_PROVINCES = [
+  { value: "AB", label: "AB" },
+  { value: "BC", label: "BC" },
+  { value: "MB", label: "MB" },
+  { value: "NB", label: "NB" },
+  { value: "NL", label: "NL" },
+  { value: "NS", label: "NS" },
+  { value: "NT", label: "NT" },
+  { value: "NU", label: "NU" },
+  { value: "ON", label: "ON" },
+  { value: "PE", label: "PE" },
+  { value: "QC", label: "QC" },
+  { value: "SK", label: "SK" },
+  { value: "YT", label: "YT" },
+];
