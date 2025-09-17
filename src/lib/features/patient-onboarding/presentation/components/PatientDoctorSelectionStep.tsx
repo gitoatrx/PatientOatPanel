@@ -7,7 +7,6 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { PatientStepShell } from "./PatientStepShell";
 import { DoctorList } from "@/components/onboarding/patient/doctor/DoctorList";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
@@ -128,7 +127,7 @@ export function PatientDoctorSelectionStep() {
       currentStep={stepData.currentStep}
       totalSteps={stepData.totalSteps}
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit as any)()}
+      onNext={() => form.handleSubmit(handleSubmit)()}
       nextLabel="Continue"
       isNextDisabled={!form.watch("doctorId")}
       useCard={false}

@@ -5,7 +5,6 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { PatientStepShell } from "./PatientStepShell";
 import { AppointmentDateTimeStep } from "@/components/onboarding/patient/steps/AppointmentDateTimeStep";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
@@ -24,18 +23,18 @@ export function PatientAppointmentDateTimeStep() {
   const { saveStep, state } = usePatientOnboarding();
   const stepData = getStepComponentData("appointmentDateTime");
 
+  const form = useForm<AppointmentDateTimeFormData>({
+    resolver: zodResolver(appointmentDateTimeSchema),
+    defaultValues: {
+      appointmentDate: (state?.draft?.appointmentDate as string) || "",
+      appointmentTime: (state?.draft?.appointmentTime as string) || "",
+    },
+  });
+
   // Add null check for state
   if (!state) {
     return <div>Loading...</div>;
   }
-
-  const form = useForm<AppointmentDateTimeFormData>({
-    resolver: zodResolver(appointmentDateTimeSchema),
-    defaultValues: {
-      appointmentDate: state.draft?.appointmentDate || "",
-      appointmentTime: state.draft?.appointmentTime || "",
-    },
-  });
 
   const handleSubmit = async (data: AppointmentDateTimeFormData) => {
     try {
@@ -50,9 +49,9 @@ export function PatientAppointmentDateTimeStep() {
     router.push("/onboarding/patient/doctor-selection");
   };
 
-  const getPersonalizedLabel = (field: string) => {
+  const getPersonalizedLabel = (step: number) => {
     const firstName = state.draft?.firstName || "there";
-    return `${firstName}, ${field}`;
+    return `${firstName}, step ${step}`;
   };
 
   return (
@@ -63,7 +62,7 @@ export function PatientAppointmentDateTimeStep() {
       currentStep={stepData.currentStep}
       totalSteps={stepData.totalSteps}
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit as any)()}
+      onNext={() => form.handleSubmit(handleSubmit)()}
       nextLabel="Continue"
       isNextDisabled={!form.watch("appointmentDate") || !form.watch("appointmentTime")}
       useCard={false}

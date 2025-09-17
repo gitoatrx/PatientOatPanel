@@ -341,7 +341,7 @@ export function AiAssessmentChat({
           {isTyping && (
             <div className="flex gap-2 sm:gap-3 justify-start">
               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden flex-shrink-0">
-                <BimbleLogoIcon width={24} height={24} className="sm:w-8 sm:h-8" />
+                <BimbleLogoIcon width={24} height={24} />
               </div>
               <div className="bg-gray-100 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl max-w-[80%] sm:max-w-none">
                 <div className="flex items-center gap-2">
@@ -577,7 +577,7 @@ function ChatMessageComponent({ message }: { message: ChatMessage }) {
     >
       {message.type === "ai" && (
         <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden flex-shrink-0">
-          <BimbleLogoIcon width={24} height={24} className="sm:w-8 sm:h-8" />
+          <BimbleLogoIcon width={24} height={24} />
         </div>
       )}
 

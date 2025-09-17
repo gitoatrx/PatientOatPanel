@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   CheckCircle,
   Clock,
@@ -12,12 +11,9 @@ import {
 } from "lucide-react";
 import { AiAssessmentChat } from "./AiAssessmentChat";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 
 export function AppointmentConfirmationContent() {
-  const router = useRouter();
-  const [assessmentCompleted, setAssessmentCompleted] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
 
   const appt = {
@@ -39,9 +35,6 @@ export function AppointmentConfirmationContent() {
     documents: ["Prior lab results (last 6 months)", "Medication list"]
   };
 
-  const handleGoToDashboard = () => {
-    router.push("/dashboard");
-  };
 
   const handleStartAssessment = () => {
     setShowAssessment(true);

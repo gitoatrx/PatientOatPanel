@@ -12,7 +12,6 @@ import {
   generateVancouverTimeSlots,
   formatVancouverDateForDisplay,
   formatVancouverDayForDisplay,
-  formatTimeForDisplay,
   isVancouverToday,
   isPastVancouverBusinessHours,
 } from "@/lib/utils/date-time-utils";
