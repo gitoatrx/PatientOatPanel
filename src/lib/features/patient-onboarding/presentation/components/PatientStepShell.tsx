@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ChevronLeft, LogOut } from "lucide-react";
 import { BimbleLogoIcon } from "@/../public/icons/icons";
-import { gsap } from "gsap";
+// import { gsap } from "gsap"; // COMMENTED OUT FOR TESTING
 import { BaseErrorBoundary } from "@/components/error-boundaries/BaseErrorBoundary";
 // Removed tokenStorage import - not needed in UI-only mode
 
@@ -84,77 +84,102 @@ export function PatientStepShell({
 
   useEffect(() => {
     if (!contentRef.current) return;
-    const ctx = gsap.context(() => {
-      // Simple, smooth fade-up animation without double rendering
-      gsap.fromTo(
-        contentRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.8,
-          ease: "power3.out",
-          force3D: true,
-        },
-      );
-    }, contentRef);
-    return () => ctx.revert();
+    
+    // GSAP ANIMATION COMMENTED OUT FOR TESTING
+    // try {
+    //   const ctx = gsap.context(() => {
+    //     // Simple, smooth fade-up animation without double rendering
+    //     gsap.fromTo(
+    //       contentRef.current,
+    //       { opacity: 0, y: 20 },
+    //       {
+    //         opacity: 1,
+    //         y: 0,
+    //         duration: 0.8,
+    //         ease: "power3.out",
+    //         force3D: true,
+    //       },
+    //     );
+    //   }, contentRef);
+    //   return () => ctx.revert();
+    // } catch (error) {
+    //   // Fallback: just show content without animation if GSAP fails
+    //   console.warn('GSAP animation failed, showing content without animation:', error);
+    //   if (contentRef.current) {
+    //     contentRef.current.style.opacity = '1';
+    //     contentRef.current.style.transform = 'translateY(0)';
+    //   }
+    // }
+    
+    // SIMPLE FALLBACK: Just show content without animation
+    if (contentRef.current) {
+      contentRef.current.style.opacity = '1';
+      contentRef.current.style.transform = 'translateY(0)';
+    }
   }, [title, description, progressPercent]);
 
   // Memoize event handlers to prevent serialization issues
   const handleBack = useCallback(() => {
     if (onBack) {
+      // GSAP ANIMATION COMMENTED OUT FOR TESTING
       // Add smooth fade-out animation before navigation
-      if (contentRef.current) {
-        gsap.context(() => {
-          gsap.to(contentRef.current, {
-            opacity: 0,
-            y: 20,
-            duration: 0.6,
-            ease: "power3.in",
-            force3D: true,
-            onComplete: () => {
-              onBack();
-            },
-          });
-        }, contentRef);
-      } else {
-        onBack();
-      }
+      // if (contentRef.current) {
+      //   gsap.context(() => {
+      //     gsap.to(contentRef.current, {
+      //       opacity: 0,
+      //       y: 20,
+      //       duration: 0.6,
+      //       ease: "power3.in",
+      //       force3D: true,
+      //       onComplete: () => {
+      //         onBack();
+      //       },
+      //     });
+      //   }, contentRef);
+      // } else {
+      //   onBack();
+      // }
+      
+      // SIMPLE FALLBACK: Call onBack directly without animation
+      onBack();
     }
   }, [onBack]);
 
   const handleNext = useCallback(async () => {
     if (onNext) {
       try {
+        // GSAP ANIMATION COMMENTED OUT FOR TESTING
         // Add smooth fade-out animation before navigation
-        if (contentRef.current) {
-          gsap.context(() => {
-            gsap.to(contentRef.current, {
-              opacity: 0,
-              y: 20,
-              duration: 0.6,
-              ease: "power3.in",
-              force3D: true,
-              onComplete: () => {
-                try {
-                  onNext();
-                } catch (error) {
-                  console.error("Error in onNext callback:", error);
-                  // Restore opacity if navigation fails
-                  gsap.to(contentRef.current, {
-                    opacity: 1,
-                    y: 0,
-                    duration: 0.3,
-                    ease: "power3.out",
-                  });
-                }
-              },
-            });
-          }, contentRef);
-        } else {
-          onNext();
-        }
+        // if (contentRef.current) {
+        //   gsap.context(() => {
+        //     gsap.to(contentRef.current, {
+        //       opacity: 0,
+        //       y: 20,
+        //       duration: 0.6,
+        //       ease: "power3.in",
+        //       force3D: true,
+        //       onComplete: () => {
+        //         try {
+        //           onNext();
+        //         } catch (error) {
+        //           console.error("Error in onNext callback:", error);
+        //           // Restore opacity if navigation fails
+        //           gsap.to(contentRef.current, {
+        //             opacity: 1,
+        //             y: 0,
+        //             duration: 0.3,
+        //             ease: "power3.out",
+        //           });
+        //         }
+        //       },
+        //     });
+        //   }, contentRef);
+        // } else {
+        //   onNext();
+        // }
+        
+        // SIMPLE FALLBACK: Call onNext directly without animation
+        onNext();
       } catch (error) {
         console.error("Error in handleNext:", error);
         // Fallback: call onNext without animation
@@ -277,7 +302,7 @@ export function PatientStepShell({
           key={`${title}-${progressPercent}`}
           className="space-y-1 bg-background"
           ref={contentRef}
-          style={{ opacity: 0 }} // Prevent flash by starting with opacity 0
+          style={{ opacity: 1 }} // GSAP COMMENTED OUT - Show content immediately
         >
           {title && description && (
             <div className="space-y-1">
@@ -303,6 +328,10 @@ export function PatientStepShell({
                   showHomeButton={false}
                   showBackButton={true}
                   showRetryButton={true}
+                  onRetry={() => {
+                    // Force a re-render by updating a key
+                    window.location.reload();
+                  }}
                 >
                   {children}
                 </BaseErrorBoundary>
@@ -313,6 +342,10 @@ export function PatientStepShell({
                 showHomeButton={false}
                 showBackButton={true}
                 showRetryButton={true}
+                onRetry={() => {
+                  // Force a re-render by updating a key
+                  window.location.reload();
+                }}
               >
                 {children}
               </BaseErrorBoundary>

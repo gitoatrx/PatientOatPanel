@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { Toaster } from "@/components/ui/use-toast";
 
 export const metadata: Metadata = {
   title: "Bimble - Find Doctors Fast",
@@ -27,6 +28,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

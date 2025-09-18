@@ -5,6 +5,7 @@ import { PatientOnboardingProvider } from "@/lib/features/patient-onboarding/pre
 import { PatientOnboardingRouteGuard } from "@/lib/features/patient-onboarding/presentation/components/PatientOnboardingRouteGuard";
 import { PatientHealthCardStep } from "@/lib/features/patient-onboarding/presentation/components/PatientHealthCardStep";
 import { PatientOnboardingStep } from "@/lib/features/patient-onboarding/domain/patient-onboarding-types";
+import { OnboardingErrorBoundary } from "@/components/error-boundaries/OnboardingErrorBoundary";
 
 function PatientHealthCardContent() {
   return (
@@ -12,11 +13,13 @@ function PatientHealthCardContent() {
       <PatientOnboardingRouteGuard
         requiredStep={PatientOnboardingStep.HealthCard}
       >
-        <div className="min-h-screen bg-background">
-          <div className="container mx-auto px-4 py-8">
-            <PatientHealthCardStep />
+        <OnboardingErrorBoundary stepName="health-card">
+          <div className="min-h-screen bg-background">
+            <div className="container mx-auto px-4 py-8">
+              <PatientHealthCardStep />
+            </div>
           </div>
-        </div>
+        </OnboardingErrorBoundary>
       </PatientOnboardingRouteGuard>
     </PatientOnboardingProvider>
   );

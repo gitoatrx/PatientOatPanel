@@ -7,10 +7,13 @@ import { PatientStepShell } from "./PatientStepShell";
 import { FormInput } from "@/components/ui/form-input";
 import { motion } from "framer-motion";
 import { FormPhoneInput, FormSelect } from "@/components/ui";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
+import { patientService } from "@/lib/services/patientService";
+import { getRouteFromApiStep } from "@/lib/config/api";
 
 const emergencyContactSchema = z
   .object({
@@ -71,9 +74,19 @@ const RELATIONSHIP_OPTIONS = [
 export function PatientEmergencyContactStep() {
   const router = useRouter();
   const { state, saveStep, isLoading } = usePatientOnboarding();
+  const { toast } = useToast();
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
   
   // Get step configuration
   const stepData = getStepComponentData("emergencyContact");
+
+  // Get phone number from state
+  useEffect(() => {
+    if (state?.draft?.phone) {
+      setPhoneNumber(state.draft.phone as string);
+    }
+  }, [state]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(emergencyContactSchema),
@@ -87,20 +100,145 @@ export function PatientEmergencyContactStep() {
   });
 
   const handleSubmit = async (values: FormValues) => {
+    if (!phoneNumber) {
+      console.error("No phone number found");
+      return;
+    }
+
     try {
+      setError(null);
       console.log("Emergency contact submitted:", values);
       
-      // Save to centralized state
-      const result = await saveStep(stepData.stepId, {
-        emergencyContactRelationship: values.emergencyContactRelationship,
-        emergencyContactName: values.emergencyContactName,
-        emergencyContactPhone: values.emergencyContactPhone,
+      // Check if user doesn't want to provide emergency contact
+      if (values.emergencyContactRelationship === "none") {
+        // Save to centralized state without API call
+        await saveStep(stepData.stepId, {
+          emergencyContactRelationship: values.emergencyContactRelationship,
+          emergencyContactName: "",
+          emergencyContactPhone: "",
+        });
+        
+        // Navigate to doctor selection step
+        router.push("/onboarding/patient/doctor-selection");
+        return;
+      }
+      
+      // Validate required fields for emergency contact
+      if (!values.emergencyContactName || !values.emergencyContactPhone) {
+        console.error("Emergency contact name and phone are required");
+        return;
+      }
+      
+      // Prepare emergency contact data for API
+      const emergencyContactData = {
+        name: values.emergencyContactName,
+        relationship: values.emergencyContactRelationship,
+        emergency_phone: values.emergencyContactPhone,
+      };
+      
+      let apiResponse;
+      try {
+        // Call emergency contact API
+        apiResponse = await patientService.saveEmergencyContact(phoneNumber, emergencyContactData);
+      } catch (apiError) {
+        console.error('API call failed:', apiError);
+        const errorMessage = 'Network error. Please check your connection and try again.';
+        
+        // Show error toast IMMEDIATELY
+        toast({
+          variant: "error",
+          title: "Network Error",
+          description: errorMessage,
+        });
+        
+        // Set error state after toast
+        setError(errorMessage);
+        return;
+      }
+      
+      if (apiResponse.success) {
+        console.log("Emergency contact saved successfully:", apiResponse);
+        
+        try {
+          // Save to centralized state
+          await saveStep(stepData.stepId, {
+            emergencyContactRelationship: values.emergencyContactRelationship,
+            emergencyContactName: values.emergencyContactName,
+            emergencyContactPhone: values.emergencyContactPhone,
+            currentStep: apiResponse.data.current_step,
+            status: apiResponse.data.status,
+            guestPatientId: apiResponse.data.guest_patient_id,
+            appointmentId: apiResponse.data.appointment_id,
+          });
+          
+          // Navigate to next step based on API response (no success toast)
+          const nextStep = apiResponse.data.current_step;
+          const nextRoute = getRouteFromApiStep(nextStep);
+          console.log(`Emergency contact API response:`, apiResponse);
+          console.log(`Next step from API: ${nextStep}`);
+          console.log(`Mapped route: ${nextRoute}`);
+          console.log(`Navigating to: ${nextRoute}`);
+          router.push(nextRoute);
+        } catch (saveError) {
+          console.error('Error saving step:', saveError);
+          const errorMessage = 'Failed to save your information. Please try again.';
+          
+          // Show error toast IMMEDIATELY
+          toast({
+            variant: "error",
+            title: "Save Error",
+            description: errorMessage,
+          });
+          
+          // Set error state after toast
+          setError(errorMessage);
+        }
+      } else {
+        // Handle API error response
+        const errorMessage = apiResponse.message || "Failed to save emergency contact information";
+        
+        // Show error toast IMMEDIATELY
+        toast({
+          variant: "error",
+          title: "Save Failed",
+          description: errorMessage,
+        });
+        
+        // Set error state after toast
+        setError(errorMessage);
+      }
+    } catch (err) {
+      console.error('Unexpected error in handleSubmit:', err);
+      
+      // Handle different error types
+      let errorMessage = '';
+      let errorTitle = 'Unexpected Error';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network error')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+          errorTitle = 'Network Error';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+          errorTitle = 'Request Timeout';
+        } else {
+          errorMessage = `Error: ${err.message}`;
+          errorTitle = 'Error';
+        }
+      } else {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+        errorTitle = 'Unexpected Error';
+      }
+      
+      // Show error toast IMMEDIATELY
+      toast({
+        variant: "error",
+        title: errorTitle,
+        description: errorMessage,
       });
       
-      // Navigate to doctor selection step
-      router.push("/onboarding/patient/doctor-selection");
-    } catch (error) {
-      console.error("Error saving emergency contact:", error);
+      // Set error state after toast
+      setError(errorMessage);
     }
   };
 
@@ -134,6 +272,13 @@ export function PatientEmergencyContactStep() {
     >
         <FormProvider {...form}>
           <div className="max-w-xl mx-auto space-y-4">
+            {/* Error Display */}
+            {error && (
+              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm text-destructive font-medium">{error}</p>
+              </div>
+            )}
+            
             <FormSelect
               name="emergencyContactRelationship"
               label="Relationship to you"

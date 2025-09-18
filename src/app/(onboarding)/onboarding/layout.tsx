@@ -1,6 +1,5 @@
 "use client";
 import React from "react";
-import CookieConsentBanner from "@/components/cookies/CookieConsentBanner";
 import { Toaster } from "@/components/ui/use-toast";
 import { BaseErrorBoundary } from "@/components/error-boundaries/BaseErrorBoundary";
 
@@ -20,7 +19,6 @@ export default function OnboardingLayout({
         <main>{children}</main>
       </BaseErrorBoundary>
       <Toaster />
-      <CookieConsentBanner />
     </div>
   );
 }

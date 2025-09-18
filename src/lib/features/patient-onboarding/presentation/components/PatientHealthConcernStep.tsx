@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FormProvider, useForm, useFormState } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,8 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { useSmartBackNavigation } from "../hooks/useSmartBackNavigation";
 import { FormTextarea } from "@/components/ui";
+import { patientService } from "@/lib/services/patientService";
+import { HealthConcern } from "@/lib/types/api";
 
 const healthConcernSchema = z.object({
   selectedReason: z.string().min(1, "Please select a health concern"),
@@ -26,6 +28,9 @@ type FormValues = z.infer<typeof healthConcernSchema>;
 export function PatientHealthConcernStep() {
   const router = useRouter();
   const { state, saveStep, isLoading } = usePatientOnboarding();
+  const [healthConcerns, setHealthConcerns] = useState<HealthConcern[]>([]);
+  const [isLoadingConcerns, setIsLoadingConcerns] = useState(true);
+  const [concernsError, setConcernsError] = useState<string | null>(null);
 
   // Get health concern from localStorage
   const getStoredHealthConcern = () => {
@@ -46,7 +51,36 @@ export function PatientHealthConcernStep() {
     defaultValues: { selectedReason: "", symptoms: "" },
   });
 
-  const healthConditions = getHealthConditions();
+  // Fetch health concerns from API
+  useEffect(() => {
+    const fetchHealthConcerns = async () => {
+      try {
+        setIsLoadingConcerns(true);
+        setConcernsError(null);
+        
+        const response = await patientService.getHealthConcernsList();
+        
+        if (response.success) {
+          console.log('Health concerns loaded from API:', response.data);
+          setHealthConcerns(response.data);
+        } else {
+          console.error('Failed to load health concerns:', response.message);
+          setConcernsError(response.message);
+          // Fallback to static data
+          setHealthConcerns(getHealthConditions().map(item => ({ id: 0, name: item.label })));
+        }
+      } catch (error) {
+        console.error('Error fetching health concerns:', error);
+        setConcernsError('Failed to load health concerns');
+        // Fallback to static data
+        setHealthConcerns(getHealthConditions().map(item => ({ id: 0, name: item.label })));
+      } finally {
+        setIsLoadingConcerns(false);
+      }
+    };
+
+    fetchHealthConcerns();
+  }, []);
 
   // Prefill from onboarding state (draft)
   useEffect(() => {
@@ -141,25 +175,43 @@ export function PatientHealthConcernStep() {
     >
       <FormProvider {...form}>
         <div className="max-w-xl mx-auto space-y-6">
+          {/* Error Display */}
+          {concernsError && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium">
+                {concernsError} - Using fallback data.
+              </p>
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div>
-              <Combobox
-                options={healthConditions}
-                value={formValues.selectedReason}
-                onValueChange={(value) =>
-                  form.setValue("selectedReason", value, {
-                    shouldValidate: true,
-                  })
-                }
-                placeholder="Select your health concern..."
-                emptyMessage="No health conditions found."
-                displayValue={(value) => {
-                  const option = healthConditions.find(
-                    (opt) => opt.value === value,
-                  );
-                  return option ? option.label : value;
-                }}
-              />
+              {isLoadingConcerns ? (
+                <div className="p-4 border border-border rounded-lg">
+                  <p className="text-sm text-muted-foreground">Loading health concerns...</p>
+                </div>
+              ) : (
+                <Combobox
+                  options={healthConcerns.map(concern => ({
+                    value: concern.name,
+                    label: concern.name,
+                  }))}
+                  value={formValues.selectedReason}
+                  onValueChange={(value) =>
+                    form.setValue("selectedReason", value, {
+                      shouldValidate: true,
+                    })
+                  }
+                  placeholder="Select your health concern..."
+                  emptyMessage="No health conditions found."
+                  displayValue={(value) => {
+                    const option = healthConcerns.find(
+                      (concern) => concern.name === value,
+                    );
+                    return option ? option.name : value;
+                  }}
+                />
+              )}
               {form.formState.errors.selectedReason && (
                 <p className="text-sm text-red-600 mt-1">
                   {form.formState.errors.selectedReason?.message as string}

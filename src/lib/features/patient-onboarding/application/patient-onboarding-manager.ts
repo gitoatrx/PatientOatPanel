@@ -98,6 +98,9 @@ export class PatientOnboardingManager {
       this.state.isLoading = true;
       this.state.error = null;
 
+      // No API calls for step saving - using local storage only
+      console.log('Saving step data locally:', data);
+
       // Update local state with form data
       this.state.draft = { ...this.state.draft, ...(data as Record<string, unknown>) };
       
@@ -127,11 +130,17 @@ export class PatientOnboardingManager {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to save step";
       this.state.error = errorMessage;
+      
+      // Save error state to localStorage for recovery
+      this.saveToLocalStorage();
+      
       throw new Error(errorMessage);
     } finally {
       this.state.isLoading = false;
     }
   }
+
+  // No API calls needed for step saving - using local storage only
 
   async completeOnboarding(): Promise<void> {
     if (!this.state) {
