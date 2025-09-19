@@ -25,6 +25,7 @@ interface PatientOnboardingContextType {
   registerPatient: (data: unknown) => Promise<boolean>;
   clearError: () => void;
   refreshState: () => Promise<void>;
+  loadProgressFromAPI: (phone: string) => Promise<void>;
 }
 
 const PatientOnboardingContext =
@@ -102,8 +103,9 @@ export function PatientOnboardingProvider({
         setError(null);
         const result = await manager.saveStep(step, data);
 
-        // Don't refresh state after saving to prevent extra API calls and flicker
-        // The manager already updates the local state
+        // Refresh state after saving to ensure the next step has the updated data
+        const newState = await manager.getOnboardingState();
+        setState(newState);
 
         // Return the nextHref and currentStep for navigation
         return result;
@@ -182,6 +184,23 @@ export function PatientOnboardingProvider({
     setError(null);
   }, []);
 
+  const loadProgressFromAPI = useCallback(async (phone: string) => {
+    try {
+      console.log("PatientOnboardingContext: Loading progress from API for phone:", phone);
+      setError(null);
+      await manager.loadProgressFromAPI(phone);
+      
+      // Refresh state after loading progress
+      const newState = await manager.getOnboardingState();
+      setState(newState);
+      
+      console.log("PatientOnboardingContext: Successfully loaded progress from API");
+    } catch (err) {
+      console.error("PatientOnboardingContext: Failed to load progress from API:", err);
+      setError(err instanceof Error ? err.message : "Failed to load progress");
+    }
+  }, [manager]);
+
   // Initialize state on mount
   useEffect(() => {
     const initializeState = async () => {
@@ -234,6 +253,7 @@ export function PatientOnboardingProvider({
     completeOnboarding,
     registerPatient,
     clearError,
+    loadProgressFromAPI,
   };
 
   return (

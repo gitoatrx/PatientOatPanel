@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
-import { getRouteFromApiStep } from "@/lib/config/api";
+import { getRouteFromApiStep, API_STEP_TO_ROUTE_MAP } from "@/lib/config/api";
 
 const emergencyContactSchema = z
   .object({
@@ -73,31 +73,58 @@ const RELATIONSHIP_OPTIONS = [
 
 export function PatientEmergencyContactStep() {
   const router = useRouter();
-  const { state, saveStep, isLoading } = usePatientOnboarding();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   
   // Get step configuration
   const stepData = getStepComponentData("emergencyContact");
 
-  // Get phone number from state
+  // Get phone number from localStorage and fetch progress data
   useEffect(() => {
-    if (state?.draft?.phone) {
-      setPhoneNumber(state.draft.phone as string);
+    const savedPhone = localStorage.getItem('patient-phone-number');
+    if (savedPhone) {
+      setPhoneNumber(savedPhone);
+      fetchProgressAndPrefillForm(savedPhone);
+    } else {
+      setIsLoadingProgress(false);
     }
-  }, [state]);
+  }, []);
+
+  const fetchProgressAndPrefillForm = async (phone: string) => {
+    try {
+      setIsLoadingProgress(true);
+      const progressResponse = await patientService.getOnboardingProgress(phone);
+      
+      if (progressResponse.success && progressResponse.data?.state?.emergency_contact) {
+        const emergencyContact = progressResponse.data.state.emergency_contact;
+        console.log('Prefilling emergency contact form with:', emergencyContact);
+        
+        // Prefill form with existing data
+        form.setValue('emergencyContactName', emergencyContact.name || '');
+        form.setValue('emergencyContactPhone', emergencyContact.phone || '');
+        form.setValue('emergencyContactRelationship', emergencyContact.relationship || '');
+      }
+    } catch (error) {
+      console.error('Error fetching progress for prefill:', error);
+    } finally {
+      setIsLoadingProgress(false);
+    }
+  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(emergencyContactSchema),
     mode: "onChange",
     reValidateMode: "onChange",
     defaultValues: {
-      emergencyContactRelationship: (state?.draft?.emergencyContactRelationship as string) || "",
-      emergencyContactName: (state?.draft?.emergencyContactName as string) || "",
-      emergencyContactPhone: (state?.draft?.emergencyContactPhone as string) || "",
+      emergencyContactRelationship: "",
+      emergencyContactName: "",
+      emergencyContactPhone: "",
     },
   });
+
+  // Form prefilling is now handled by fetchProgressAndPrefillForm
 
   const handleSubmit = async (values: FormValues) => {
     if (!phoneNumber) {
@@ -111,13 +138,6 @@ export function PatientEmergencyContactStep() {
       
       // Check if user doesn't want to provide emergency contact
       if (values.emergencyContactRelationship === "none") {
-        // Save to centralized state without API call
-        await saveStep(stepData.stepId, {
-          emergencyContactRelationship: values.emergencyContactRelationship,
-          emergencyContactName: "",
-          emergencyContactPhone: "",
-        });
-        
         // Navigate to doctor selection step
         router.push("/onboarding/patient/doctor-selection");
         return;
@@ -153,7 +173,7 @@ export function PatientEmergencyContactStep() {
         
         // Set error state after toast
         setError(errorMessage);
-        return;
+        throw new Error(errorMessage);
       }
       
       if (apiResponse.success) {
@@ -178,7 +198,16 @@ export function PatientEmergencyContactStep() {
           console.log(`Next step from API: ${nextStep}`);
           console.log(`Mapped route: ${nextRoute}`);
           console.log(`Navigating to: ${nextRoute}`);
-          router.push(nextRoute);
+          
+          // Debug: Check if route mapping is working
+          if (!nextRoute) {
+            console.error(`No route found for step: ${nextStep}`);
+            console.log('Available routes:', Object.keys(API_STEP_TO_ROUTE_MAP));
+            // Fallback to doctor selection
+            router.push("/onboarding/patient/doctor-selection");
+          } else {
+            router.push(nextRoute);
+          }
         } catch (saveError) {
           console.error('Error saving step:', saveError);
           const errorMessage = 'Failed to save your information. Please try again.';
@@ -192,6 +221,7 @@ export function PatientEmergencyContactStep() {
           
           // Set error state after toast
           setError(errorMessage);
+          throw new Error(errorMessage);
         }
       } else {
         // Handle API error response
@@ -206,6 +236,7 @@ export function PatientEmergencyContactStep() {
         
         // Set error state after toast
         setError(errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
@@ -239,6 +270,7 @@ export function PatientEmergencyContactStep() {
       
       // Set error state after toast
       setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
@@ -261,7 +293,14 @@ export function PatientEmergencyContactStep() {
       title="Who should we contact in case of emergency?"
       description="Please provide an emergency contact person we can reach if needed."
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit)()}
+      onNext={async () => {
+        try {
+          await form.handleSubmit(handleSubmit)();
+        } catch (error) {
+          // Error is already handled in handleSubmit, just re-throw for PatientStepShell
+          throw error;
+        }
+      }}
       nextLabel="Continue"
       isSubmitting={isLoading}
       isNextDisabled={!isValid}

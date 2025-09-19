@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FormProvider, useForm, useFormState } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,6 +15,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { VisitType } from "@/lib/types/api";
 
 const visitTypeSchema = z.object({
   visitType: z.string().min(1, "Please select a visit type"),
@@ -22,20 +23,7 @@ const visitTypeSchema = z.object({
 
 type FormValues = z.infer<typeof visitTypeSchema>;
 
-const visitTypeOptions = [
-  {
-    value: "InPerson",
-    label: "In-person visit",
-    description: "Visit our clinic in person",
-    visit_type_id: 1, // Walking visit ID
-  },
-  {
-    value: "Virtual",
-    label: "Virtual/Telehealth visit",
-    description: "Video consultation from home",
-    visit_type_id: 2, // Virtual visit ID
-  },
-];
+// Visit types will be loaded dynamically from API
 
 export function PatientVisitTypeStep() {
   const router = useRouter();
@@ -43,6 +31,9 @@ export function PatientVisitTypeStep() {
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [visitTypes, setVisitTypes] = useState<VisitType[]>([]);
+  const [isLoadingVisitTypes, setIsLoadingVisitTypes] = useState<boolean>(true);
+  const [visitTypesError, setVisitTypesError] = useState<string | null>(null);
   
   // Get step configuration
   const stepData = getStepComponentData("visitType");
@@ -54,14 +45,55 @@ export function PatientVisitTypeStep() {
     }
   }, [state]);
 
+  // Load visit types from API
+  React.useEffect(() => {
+    const loadVisitTypes = async () => {
+      try {
+        setIsLoadingVisitTypes(true);
+        setVisitTypesError(null);
+        
+        const response = await patientService.getVisitTypesList();
+        
+        if (response.success && response.data) {
+          setVisitTypes(response.data);
+          console.log("Visit types loaded successfully:", response.data);
+        } else {
+          setVisitTypesError(response.message || "Failed to load visit types");
+          console.error("Failed to load visit types:", response.message);
+        }
+      } catch (error) {
+        console.error("Error loading visit types:", error);
+        setVisitTypesError("Failed to load visit types. Please try again.");
+      } finally {
+        setIsLoadingVisitTypes(false);
+      }
+    };
+
+    loadVisitTypes();
+  }, []);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(visitTypeSchema),
     mode: "onChange",
     reValidateMode: "onChange",
     defaultValues: {
-      visitType: (state?.draft?.visitType as string) || "",
+      visitType: "",
     },
   });
+
+  // Reset form values when state updates (after API call)
+  useEffect(() => {
+    if (state?.draft) {
+      // Convert visit type ID back to string for form
+      const visitTypeId = state.draft.visitTypeId ? state.draft.visitTypeId.toString() : "";
+      form.reset({
+        visitType: visitTypeId,
+      });
+      console.log("PatientVisitTypeStep: Form reset with state data:", {
+        visitType: visitTypeId,
+      });
+    }
+  }, [state?.draft, form]);
 
   const handleSubmit = async (values: FormValues) => {
     if (!phoneNumber) {
@@ -73,16 +105,16 @@ export function PatientVisitTypeStep() {
       setError(null);
       console.log("Visit type submitted:", values);
       
-      // Find the selected visit type option to get the ID
-      const selectedOption = visitTypeOptions.find(option => option.value === values.visitType);
-      if (!selectedOption) {
+      // Find the selected visit type to get the ID
+      const selectedVisitType = visitTypes.find(vt => vt.id.toString() === values.visitType);
+      if (!selectedVisitType) {
         console.error("Invalid visit type selected");
         return;
       }
       
       // Prepare visit type data for API
       const visitTypeData = {
-        visit_type_id: selectedOption.visit_type_id,
+        visit_type_id: selectedVisitType.id,
       };
       
       let apiResponse;
@@ -102,45 +134,20 @@ export function PatientVisitTypeStep() {
         
         // Set error state after toast
         setError(errorMessage);
-        return;
+        throw new Error(errorMessage);
       }
       
       if (apiResponse.success) {
         console.log("Visit type saved successfully:", apiResponse);
         
-        try {
-          // Save to centralized state
-          await saveStep(stepData.stepId, {
-            visitType: values.visitType,
-            visitTypeId: selectedOption.visit_type_id,
-            currentStep: apiResponse.data.current_step,
-            status: apiResponse.data.status,
-            guestPatientId: apiResponse.data.guest_patient_id,
-            appointmentId: apiResponse.data.appointment_id,
-          });
-          
-          // Navigate to next step based on API response (no success toast)
-          const nextStep = apiResponse.data.current_step;
-          const nextRoute = getRouteFromApiStep(nextStep);
-          console.log(`Visit type API response:`, apiResponse);
-          console.log(`Next step from API: ${nextStep}`);
-          console.log(`Mapped route: ${nextRoute}`);
-          console.log(`Navigating to: ${nextRoute}`);
-          router.push(nextRoute);
-        } catch (saveError) {
-          console.error('Error saving step:', saveError);
-          const errorMessage = 'Failed to save your information. Please try again.';
-          
-          // Show error toast IMMEDIATELY
-          toast({
-            variant: "error",
-            title: "Save Error",
-            description: errorMessage,
-          });
-          
-          // Set error state after toast
-          setError(errorMessage);
-        }
+        // Navigate to next step based on API response (no success toast)
+        const nextStep = apiResponse.data.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep);
+        console.log(`Visit type API response:`, apiResponse);
+        console.log(`Next step from API: ${nextStep}`);
+        console.log(`Mapped route: ${nextRoute}`);
+        console.log(`Navigating to: ${nextRoute}`);
+        router.push(nextRoute);
       } else {
         // Handle API error response
         const errorMessage = apiResponse.message || "Failed to save visit type information";
@@ -154,6 +161,7 @@ export function PatientVisitTypeStep() {
         
         // Set error state after toast
         setError(errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
@@ -187,6 +195,7 @@ export function PatientVisitTypeStep() {
       
       // Set error state after toast
       setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
@@ -214,7 +223,14 @@ export function PatientVisitTypeStep() {
       title="What type of visit would you prefer?"
       description="Choose the type of appointment that works best for you."
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit)()}
+      onNext={async () => {
+        try {
+          await form.handleSubmit(handleSubmit)();
+        } catch (error) {
+          // Error is already handled in handleSubmit, just re-throw for PatientStepShell
+          throw error;
+        }
+      }}
       nextLabel="Continue"
       isSubmitting={isLoading}
       isNextDisabled={!isFormValid}
@@ -232,41 +248,66 @@ export function PatientVisitTypeStep() {
             </div>
           )}
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {visitTypeOptions.map((option) => (
-              <label key={option.value} className="block cursor-pointer">
-                <input
-                  {...form.register("visitType", {
-                    required: "Please select a visit type",
-                  })}
-                  type="radio"
-                  value={option.value}
-                  className="sr-only"
-                />
-                <Card
-                  className={cn(
-                    "transition-all duration-200 border-2 py-6 h-full",
-                    selectedVisitType === option.value
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50 hover:shadow-sm",
-                  )}
-                >
-                  <CardContent className="flex flex-col justify-center h-full">
-                    <div className="space-y-2 text-center">
-                      <span className="text-lg font-medium text-foreground block">
-                        {option.label}
-                      </span>
-                      {option.description && (
-                        <span className="text-sm text-muted-foreground block">
-                          {option.description}
+          {/* Loading State */}
+          {isLoadingVisitTypes && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <p className="text-sm text-muted-foreground">Loading visit types...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {visitTypesError && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium">{visitTypesError}</p>
+            </div>
+          )}
+
+          {/* Visit Types Grid */}
+          {!isLoadingVisitTypes && !visitTypesError && visitTypes.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {visitTypes.map((visitType) => (
+                <label key={visitType.id} className="block cursor-pointer">
+                  <input
+                    {...form.register("visitType", {
+                      required: "Please select a visit type",
+                    })}
+                    type="radio"
+                    value={visitType.id.toString()}
+                    className="sr-only"
+                  />
+                  <Card
+                    className={cn(
+                      "transition-all duration-200 border-2 py-6 h-full",
+                      selectedVisitType === visitType.id.toString()
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50 hover:shadow-sm",
+                    )}
+                  >
+                    <CardContent className="flex flex-col justify-center h-full">
+                      <div className="space-y-2 text-center">
+                        <span className="text-lg font-medium text-foreground block capitalize">
+                          {visitType.name}
                         </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </label>
-            ))}
-          </div>
+                        {/* <span className="text-sm text-muted-foreground block">
+                          Duration: {visitType.duration} minutes
+                        </span> */}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* No Visit Types Available */}
+          {!isLoadingVisitTypes && !visitTypesError && visitTypes.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No visit types available at the moment.</p>
+            </div>
+          )}
 
           <AnimatePresence>
             {fieldError && (

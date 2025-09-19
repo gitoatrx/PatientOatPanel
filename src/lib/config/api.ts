@@ -15,10 +15,16 @@ export const API_CONFIG = {
     ADDRESS: '/clinic/onboarding/address',
     PERSONAL_INFO_STEP1: '/clinic/onboarding/personal-info/step1',
     PERSONAL_INFO_STEP2: '/clinic/onboarding/personal-info/step2',
+    PERSONAL_INFO_STEP3: '/clinic/onboarding/personal-info/step3',
     PERSONAL_INFO_STEP4: '/clinic/onboarding/personal-info/step4',
-    VISIT_TYPE: '/clinic/onboarding/visit-type',
-    EMERGENCY_CONTACT: '/clinic/onboarding/emergency-contact',
-    HEALTH_CONCERNS_LIST: '/clinic/onboarding/health-concerns/list',
+  VISIT_TYPE: '/clinic/onboarding/visit-type',
+  VISIT_TYPES_LIST: '/clinic/onboarding/visit-types',
+  PROVIDERS_LIST: '/clinic/onboarding/providers',
+  PROVIDER_SELECTION: '/clinic/onboarding/provider',
+  EMERGENCY_CONTACT: '/clinic/onboarding/emergency-contact',
+  HEALTH_CONCERNS_LIST: '/clinic/onboarding/health-concerns/list',
+  AVAILABLE_SLOTS_PROVIDER: '/clinic/onboarding/available-slots-provider',
+  AVAILABLE_SLOTS: '/clinic/onboarding/available-slots',
   },
   
   // Request Configuration
@@ -71,7 +77,9 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
   'health_concern': '/onboarding/patient/health-concern', // Fallback
   'visit_type': '/onboarding/patient/visit-type',
   'emergency_contact': '/onboarding/patient/emergency-contact',
+  'provider': '/onboarding/patient/doctor-selection', // API returns 'provider'
   'doctor_selection': '/onboarding/patient/doctor-selection',
+  'appointment': '/onboarding/patient/appointment-datetime', // API returns 'appointment'
   'appointment_datetime': '/onboarding/patient/appointment-datetime',
   'review': '/onboarding/patient/review',
   'confirmation': '/onboarding/patient/confirmation',

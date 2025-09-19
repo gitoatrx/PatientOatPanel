@@ -7,7 +7,7 @@ import { PatientStepShell } from "./PatientStepShell";
 import { FormInput } from "@/components/ui/form-input";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
@@ -94,10 +94,24 @@ export function PatientHealthCardStep() {
     mode: "onChange",
     reValidateMode: "onChange",
     defaultValues: { 
-      hasHealthCard: (state?.draft?.hasHealthCard as string) || "", 
-      healthCardNumber: (state?.draft?.healthCardNumber as string) || "" 
+      hasHealthCard: "", 
+      healthCardNumber: "" 
     },
   });
+
+  // Reset form values when state updates (after API call)
+  useEffect(() => {
+    if (state?.draft) {
+      form.reset({
+        hasHealthCard: (state.draft.hasHealthCard as string) || "",
+        healthCardNumber: (state.draft.healthCardNumber as string) || "",
+      });
+      console.log("PatientHealthCardStep: Form reset with state data:", {
+        hasHealthCard: state.draft.hasHealthCard,
+        healthCardNumber: state.draft.healthCardNumber,
+      });
+    }
+  }, [state?.draft, form]);
 
   const handleSubmit = async (values: FormValues) => {
     if (!phoneNumber) {
@@ -109,8 +123,14 @@ export function PatientHealthCardStep() {
       setError(null);
       console.log("Health card submitted:", values);
       
-      // Determine health card number - send empty string if no health card
-      const healthCardNumber = values.hasHealthCard === "yes" ? values.healthCardNumber : undefined;
+      // Determine health card number - send empty string if no health card, otherwise send the number
+      const healthCardNumber = values.hasHealthCard === "yes" ? values.healthCardNumber : "";
+      
+      console.log("Health card values:", values);
+      console.log("hasHealthCard:", values.hasHealthCard);
+      console.log("healthCardNumber from form:", values.healthCardNumber);
+      console.log("Final healthCardNumber to send:", healthCardNumber);
+      console.log("healthCardNumber type:", typeof healthCardNumber);
       
       let apiResponse;
       try {
@@ -136,16 +156,6 @@ export function PatientHealthCardStep() {
         console.log("Health card saved successfully:", apiResponse);
         
         try {
-          // Save to centralized state
-          await saveStep(stepData.stepId, {
-            hasHealthCard: values.hasHealthCard,
-            healthCardNumber: values.healthCardNumber,
-            currentStep: apiResponse.data.current_step,
-            status: apiResponse.data.status,
-            guestPatientId: apiResponse.data.guest_patient_id,
-            appointmentId: apiResponse.data.appointment_id,
-          });
-          
           // Navigate to next step based on API response (no success toast)
           const nextStep = apiResponse.data.current_step;
           const nextRoute = getRouteFromApiStep(nextStep);
@@ -272,7 +282,14 @@ export function PatientHealthCardStep() {
       title="Do you have a health card?"
       description="This helps us process your appointments and insurance claims."
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit)()}
+      onNext={async () => {
+        try {
+          await form.handleSubmit(handleSubmit)();
+        } catch (error) {
+          // Error is already handled in handleSubmit, just re-throw for PatientStepShell
+          throw error;
+        }
+      }}
       nextLabel="Continue"
       isSubmitting={isLoading}
       isNextDisabled={!isValid}

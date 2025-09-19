@@ -111,33 +111,42 @@ export function PatientPhoneStep() {
       } catch (apiError) {
         console.error('API call failed:', apiError);
         setError('Network error. Please check your connection and try again.');
-        return;
+        throw new Error('Network error. Please check your connection and try again.');
       }
       
+      // Always save phone number locally, regardless of OTP API response
+      try {
+        console.log("PatientPhoneStep: Saving phone number locally:", formattedPhone);
+        
+        // Save phone number directly to localStorage for immediate access
+        localStorage.setItem('patient-phone-number', formattedPhone);
+        console.log("PatientPhoneStep: Phone number saved to localStorage");
+        
+        // Also save to state through saveStep
+        const saveResult = await saveStep(stepData.stepId, {
+          phone: formattedPhone,
+        });
+        console.log("PatientPhoneStep: Phone number saved to state:", saveResult);
+        
+        // Wait a moment for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (saveError) {
+        console.error('Error saving phone number:', saveError);
+        // Continue anyway - we still want to navigate to OTP step
+      }
+      
+      // Always navigate to OTP verification step, regardless of API response
       if (otpResponse && otpResponse.success) {
-        // Save phone to centralized state
-        try {
-          await saveStep(stepData.stepId, {
-            phone: formattedPhone,
-          });
-          
-          // Navigate to OTP verification step
-          router.push("/onboarding/patient/verify-otp");
-        } catch (saveError) {
-          console.error('Error saving step:', saveError);
-          setError('Failed to save your information. Please try again.');
-        }
-      } else if (otpResponse) {
-        // Handle specific error types
-        if (otpResponse.error?.type === 'validation') {
-          setError(`Please check your phone number: ${otpResponse.error.message}`);
-        } else if (otpResponse.error?.type === 'rate_limit') {
-          setError('Too many attempts. Please wait a moment before trying again.');
-        } else {
-          setError(otpResponse.message || 'Failed to send OTP');
-        }
+        console.log("PatientPhoneStep: OTP sent successfully, navigating to verification");
+        router.push("/onboarding/patient/verify-otp");
       } else {
-        setError('Failed to send verification code. Please try again.');
+        // OTP API failed, but we still navigate to OTP step so user can try again
+        console.log("PatientPhoneStep: OTP API failed, but navigating to verification step anyway");
+        if (otpResponse) {
+          console.log("PatientPhoneStep: OTP API error:", otpResponse.message);
+        }
+        router.push("/onboarding/patient/verify-otp");
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
@@ -151,8 +160,12 @@ export function PatientPhoneStep() {
         } else {
           setError(`Error: ${err.message}`);
         }
+        // Re-throw the error so PatientStepShell can catch it and handle animation
+        throw err;
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        const errorMsg = 'An unexpected error occurred. Please try again.';
+        setError(errorMsg);
+        throw new Error(errorMsg);
       }
     }
   };
@@ -173,7 +186,14 @@ export function PatientPhoneStep() {
       title="What's your phone number?"
       description="We'll use this to contact you about your appointments."
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit)()}
+      onNext={async () => {
+        try {
+          await form.handleSubmit(handleSubmit)();
+        } catch (error) {
+          // Error is already handled in handleSubmit, just re-throw for PatientStepShell
+          throw error;
+        }
+      }}
       nextLabel="Send Verification Code"
       isSubmitting={isLoading}
       isNextDisabled={!isValid || isLoading}

@@ -85,105 +85,87 @@ export function PatientStepShell({
   useEffect(() => {
     if (!contentRef.current) return;
     
-    // GSAP ANIMATION COMMENTED OUT FOR TESTING
-    // try {
-    //   const ctx = gsap.context(() => {
-    //     // Simple, smooth fade-up animation without double rendering
-    //     gsap.fromTo(
-    //       contentRef.current,
-    //       { opacity: 0, y: 20 },
-    //       {
-    //         opacity: 1,
-    //         y: 0,
-    //         duration: 0.8,
-    //         ease: "power3.out",
-    //         force3D: true,
-    //       },
-    //     );
-    //   }, contentRef);
-    //   return () => ctx.revert();
-    // } catch (error) {
-    //   // Fallback: just show content without animation if GSAP fails
-    //   console.warn('GSAP animation failed, showing content without animation:', error);
-    //   if (contentRef.current) {
-    //     contentRef.current.style.opacity = '1';
-    //     contentRef.current.style.transform = 'translateY(0)';
-    //   }
-    // }
+    // Add subtle fade-up animation using CSS transitions
+    const element = contentRef.current;
     
-    // SIMPLE FALLBACK: Just show content without animation
-    if (contentRef.current) {
-      contentRef.current.style.opacity = '1';
-      contentRef.current.style.transform = 'translateY(0)';
-    }
+    // Set initial state
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(20px)';
+    element.style.transition = 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+    
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      element.style.opacity = '1';
+      element.style.transform = 'translateY(0)';
+    });
+    
+    // Cleanup function
+    return () => {
+      if (element) {
+        element.style.transition = '';
+      }
+    };
   }, [title, description, progressPercent]);
 
   // Memoize event handlers to prevent serialization issues
-  const handleBack = useCallback(() => {
+  const handleBack = useCallback(async () => {
     if (onBack) {
-      // GSAP ANIMATION COMMENTED OUT FOR TESTING
-      // Add smooth fade-out animation before navigation
-      // if (contentRef.current) {
-      //   gsap.context(() => {
-      //     gsap.to(contentRef.current, {
-      //       opacity: 0,
-      //       y: 20,
-      //       duration: 0.6,
-      //       ease: "power3.in",
-      //       force3D: true,
-      //       onComplete: () => {
-      //         onBack();
-      //       },
-      //     });
-      //   }, contentRef);
-      // } else {
-      //   onBack();
-      // }
-      
-      // SIMPLE FALLBACK: Call onBack directly without animation
-      onBack();
+      // Add subtle fade-out animation before navigation
+      if (contentRef.current) {
+        const element = contentRef.current;
+        element.style.transition = 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+        element.style.opacity = '0';
+        element.style.transform = 'translateY(-10px)';
+        
+        // Call onBack after animation completes
+        setTimeout(async () => {
+          try {
+            await onBack();
+            // If onBack succeeds, the page will navigate away
+          } catch (error) {
+            console.error("Error in onBack callback:", error);
+            // Restore content with fade-in animation if navigation fails
+            element.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+            element.style.opacity = '1';
+            element.style.transform = 'translateY(0)';
+          }
+        }, 300);
+      } else {
+        await onBack();
+      }
     }
   }, [onBack]);
 
   const handleNext = useCallback(async () => {
     if (onNext) {
       try {
-        // GSAP ANIMATION COMMENTED OUT FOR TESTING
-        // Add smooth fade-out animation before navigation
-        // if (contentRef.current) {
-        //   gsap.context(() => {
-        //     gsap.to(contentRef.current, {
-        //       opacity: 0,
-        //       y: 20,
-        //       duration: 0.6,
-        //       ease: "power3.in",
-        //       force3D: true,
-        //       onComplete: () => {
-        //         try {
-        //           onNext();
-        //         } catch (error) {
-        //           console.error("Error in onNext callback:", error);
-        //           // Restore opacity if navigation fails
-        //           gsap.to(contentRef.current, {
-        //             opacity: 1,
-        //             y: 0,
-        //             duration: 0.3,
-        //             ease: "power3.out",
-        //           });
-        //         }
-        //       },
-        //     });
-        //   }, contentRef);
-        // } else {
-        //   onNext();
-        // }
-        
-        // SIMPLE FALLBACK: Call onNext directly without animation
-        onNext();
+        // Add subtle fade-out animation before navigation
+        if (contentRef.current) {
+          const element = contentRef.current;
+          element.style.transition = 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+          element.style.opacity = '0';
+          element.style.transform = 'translateY(-10px)';
+          
+          // Call onNext after animation completes
+          setTimeout(async () => {
+            try {
+              await onNext();
+              // If onNext succeeds, the page will navigate away
+            } catch (error) {
+              console.error("Error in onNext callback:", error);
+              // Restore content with fade-in animation if navigation fails
+              element.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+              element.style.opacity = '1';
+              element.style.transform = 'translateY(0)';
+            }
+          }, 300);
+        } else {
+          await onNext();
+        }
       } catch (error) {
         console.error("Error in handleNext:", error);
         // Fallback: call onNext without animation
-        onNext();
+        await onNext();
       }
     }
   }, [onNext]);
@@ -302,7 +284,6 @@ export function PatientStepShell({
           key={`${title}-${progressPercent}`}
           className="space-y-1 bg-background"
           ref={contentRef}
-          style={{ opacity: 1 }} // GSAP COMMENTED OUT - Show content immediately
         >
           {title && description && (
             <div className="space-y-1">

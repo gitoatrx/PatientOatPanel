@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
-import { getRouteFromApiStep } from "@/lib/config/api";
+// Removed unused imports for progress API
 
 const otpSchema = z.object({
   otp: z
@@ -31,9 +31,37 @@ export function PatientOtpVerificationStep() {
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [countdown, setCountdown] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
   
-  // Get step configuration
-  const stepData = getStepComponentData("verifyOtp");
+  // Get step configuration with error handling
+  let stepData;
+  try {
+    stepData = getStepComponentData("verifyOtp");
+    console.log("PatientOtpVerificationStep: Step data loaded:", stepData);
+  } catch (error) {
+    console.error("PatientOtpVerificationStep: Error loading step data:", error);
+    stepData = {
+      stepId: 2,
+      stepName: "verifyOtp",
+      stepTitle: "Verify OTP",
+      stepRoute: "/onboarding/patient/verify-otp",
+      apiStepName: "VERIFY_OTP",
+      progressPercent: Math.round((2 / 15) * 100),
+      currentStep: 2,
+      totalSteps: 15,
+      isAccessible: true,
+    };
+  }
+  
+  // Debug logging
+  console.log("PatientOtpVerificationStep: Component rendered", {
+    state: state,
+    isLoading: isLoading,
+    phoneNumber: phoneNumber,
+    isInitialized: isInitialized,
+    stepData: stepData
+  });
   
   const form = useForm<FormValues>({
     resolver: zodResolver(otpSchema),
@@ -43,19 +71,64 @@ export function PatientOtpVerificationStep() {
   });
 
   useEffect(() => {
-    // Get phone number from context state
-    if (state?.draft?.phone) {
-      setPhoneNumber(state.draft.phone as string);
+    try {
+      console.log("PatientOtpVerificationStep: useEffect triggered with state:", state);
+      
+      // Get phone number from context state first
+      if (state?.draft?.phone) {
+        setPhoneNumber(state.draft.phone as string);
+        console.log("PatientOtpVerificationStep: Phone number loaded from state:", state.draft.phone);
+      } else {
+        console.log("PatientOtpVerificationStep: No phone number in state, checking localStorage");
+        
+        // First try to get phone number from direct localStorage key
+        try {
+          const directPhoneNumber = localStorage.getItem('patient-phone-number');
+          if (directPhoneNumber) {
+            setPhoneNumber(directPhoneNumber);
+            console.log("PatientOtpVerificationStep: Phone number loaded from direct localStorage:", directPhoneNumber);
+          } else {
+            console.log("PatientOtpVerificationStep: No direct phone number in localStorage, checking state");
+            
+            // No fallback to patient-onboarding-state - using direct localStorage only
+            console.log("PatientOtpVerificationStep: No phone number found in direct localStorage");
+          }
+        } catch (error) {
+          console.error("Error loading phone number from localStorage:", error);
+        }
+      }
+      
+      // Mark as initialized
+      setIsInitialized(true);
+      console.log("PatientOtpVerificationStep: Component initialized successfully");
+    } catch (error) {
+      console.error("PatientOtpVerificationStep: Error during initialization:", error);
+      setError("Failed to initialize OTP verification. Please refresh the page.");
+      setIsInitialized(true); // Still mark as initialized to show error
     }
   }, [state]);
 
   const handleSubmit = async (values: FormValues) => {
     if (!phoneNumber) {
       console.error("No phone number found");
+      const errorMessage = "Phone number not found. Please go back and enter your phone number again.";
+      setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Phone Number Missing",
+        description: errorMessage,
+      });
+      return;
+    }
+
+    // Prevent multiple API calls
+    if (isVerifying) {
+      console.log("OTP verification already in progress, ignoring duplicate call");
       return;
     }
 
     try {
+      setIsVerifying(true);
       setError(null);
       console.log("Verifying OTP:", values.otp);
       
@@ -85,83 +158,58 @@ export function PatientOtpVerificationStep() {
       if (verifyResponse.success) {
         console.log("OTP verification successful:", verifyResponse);
         
+        // Show success toast
+        toast({
+          variant: "success",
+          title: "Phone Verified Successfully!",
+          description: "Your phone number has been verified. Loading your progress...",
+        });
+        
+        // Call progress API to get the current step where user left off
         try {
-          // Call progress API to get current step after successful OTP verification
-          console.log("Getting onboarding progress after OTP verification...");
+          console.log("OTP verification successful, fetching progress to determine next step");
+          const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
           
-          let progressResponse;
-          try {
-            progressResponse = await patientService.getOnboardingProgress(phoneNumber);
-          } catch (progressApiError) {
-            console.error('Progress API call failed:', progressApiError);
-            // Fallback to verification response data if progress API fails
-            progressResponse = null;
-          }
-          
-          if (progressResponse && progressResponse.success) {
-            console.log("Progress API response:", progressResponse);
+          if (progressResponse.success && progressResponse.data) {
+            const currentStep = progressResponse.data.current_step;
+            console.log("Progress API response - current step:", currentStep);
             
-            // Show success toast
-            toast({
-              variant: "success",
-              title: "Phone Verified Successfully!",
-              description: "Your phone number has been verified. Redirecting to next step...",
-            });
+            // Map API step names to correct routes
+            const stepRouteMapping: Record<string, string> = {
+              'personal_info_step1': '/onboarding/patient/personal',
+              'personal': '/onboarding/patient/personal',
+              'gender': '/onboarding/patient/gender',
+              'date_of_birth': '/onboarding/patient/date-of-birth',
+              'email': '/onboarding/patient/email',
+              'address': '/onboarding/patient/address',
+              'health_concern': '/onboarding/patient/health-concern',
+              'visit_type': '/onboarding/patient/visit-type',
+              'emergency_contact': '/onboarding/patient/emergency-contact',
+              'doctor_selection': '/onboarding/patient/doctor-selection',
+              'provider_selection': '/onboarding/patient/doctor-selection',
+              'appointment_datetime': '/onboarding/patient/appointment-datetime',
+              'appointment_date': '/onboarding/patient/appointment-datetime',
+              'review': '/onboarding/patient/review',
+              'confirmation': '/onboarding/patient/confirmation',
+            };
             
-            // Save OTP verification and progress data to centralized state
-            await saveStep(stepData.stepId, {
-              otpVerified: true,
-              otp: values.otp,
-              otpVerifiedAt: verifyResponse.data.otp_verified_at,
-              currentStep: progressResponse.data.current_step,
-              status: progressResponse.data.status,
-              guestPatientId: progressResponse.data.guest_patient_id,
-              appointmentId: progressResponse.data.appointment_id,
-            });
-            
-            // Navigate to next step based on progress API response
-            const nextStep = progressResponse.data.current_step;
-            const nextRoute = getRouteFromApiStep(nextStep);
-            console.log(`Navigating to step: ${nextStep} -> ${nextRoute}`);
-            router.push(nextRoute);
+            // Navigate to the step where user left off
+            if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
+              const targetRoute = stepRouteMapping[currentStep] || `/onboarding/patient/${currentStep}`;
+              console.log("Navigating to step where user left off:", currentStep, "→", targetRoute);
+              router.push(targetRoute);
+            } else {
+              // If no valid current step, go to health card as default
+              console.log("No valid current step found, defaulting to health card step");
+              router.push("/onboarding/patient/health-card");
+            }
           } else {
-            console.error('Progress API failed or unavailable, using verification response:', progressResponse?.message);
-            
-            // Show success toast for fallback case
-            toast({
-              variant: "success",
-              title: "Phone Verified Successfully!",
-              description: "Your phone number has been verified. Continuing to next step...",
-            });
-            
-            // Fallback to verification response data
-            await saveStep(stepData.stepId, {
-              otpVerified: true,
-              otp: values.otp,
-              otpVerifiedAt: verifyResponse.data.otp_verified_at,
-              currentStep: verifyResponse.data.current_step,
-              status: verifyResponse.data.status,
-              guestPatientId: verifyResponse.data.guest_patient_id,
-            });
-            
-            const nextStep = verifyResponse.data.current_step;
-            const nextRoute = getRouteFromApiStep(nextStep);
-            console.log(`Fallback navigation to step: ${nextStep} -> ${nextRoute}`);
-            router.push(nextRoute);
+            console.error("Progress API failed, defaulting to health card step");
+            router.push("/onboarding/patient/health-card");
           }
-        } catch (saveError) {
-          console.error('Error saving step:', saveError);
-          const errorMessage = 'Failed to save your information. Please try again.';
-          
-          // Show error toast IMMEDIATELY
-          toast({
-            variant: "error",
-            title: "Save Error",
-            description: errorMessage,
-          });
-          
-          // Set error state after toast
-          setError(errorMessage);
+        } catch (progressError) {
+          console.error("Error fetching progress, defaulting to health card step:", progressError);
+          router.push("/onboarding/patient/health-card");
         }
       } else {
         // Handle specific error types based on response message
@@ -224,6 +272,9 @@ export function PatientOtpVerificationStep() {
       
       // Set error state after toast
       setError(errorMessage);
+    } finally {
+      // Always reset the verifying state
+      setIsVerifying(false);
     }
   };
 
@@ -236,10 +287,24 @@ export function PatientOtpVerificationStep() {
   const handleResendOtp = async () => {
     if (!phoneNumber) {
       console.error("No phone number found for resending OTP");
+      const errorMessage = "Phone number not found. Please go back and enter your phone number again.";
+      setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Phone Number Missing",
+        description: errorMessage,
+      });
+      return;
+    }
+
+    // Prevent multiple resend calls
+    if (isVerifying) {
+      console.log("OTP verification in progress, cannot resend");
       return;
     }
 
     try {
+      setIsVerifying(true);
       setError(null);
       console.log("Resending OTP to:", phoneNumber);
       
@@ -291,6 +356,9 @@ export function PatientOtpVerificationStep() {
       
       // Set error state after toast
       setError(errorMessage);
+    } finally {
+      // Always reset the verifying state
+      setIsVerifying(false);
     }
   };
 
@@ -299,19 +367,89 @@ export function PatientOtpVerificationStep() {
     control: form.control,
   });
 
+  // Early return for critical errors
+  if (!stepData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center">
+          <h1 className="text-xl font-semibold text-foreground mb-2">Configuration Error</h1>
+          <p className="text-muted-foreground mb-4">Failed to load step configuration</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state while initializing
+  if (!isInitialized) {
+    return (
+      <PatientStepShell
+        title="Loading..."
+        description="Initializing OTP verification..."
+        useCard={false}
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
+  // Show error state if initialization failed
+  if (error && !phoneNumber) {
+    return (
+      <PatientStepShell
+        title="Error"
+        description="Failed to load OTP verification"
+        useCard={false}
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+      >
+        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-sm text-destructive font-medium">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-2 text-sm text-primary hover:underline"
+          >
+            Refresh page
+          </button>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
   return (
     <PatientStepShell
       title="Verify your phone number"
-      description={`We sent a 6-digit code to ${phoneNumber}. Please enter it below.`}
+      description={`We sent a 6-digit code to ${phoneNumber || 'your phone'}. Please enter it below.`}
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit)()}
+      onNext={async () => {
+        try {
+          await form.handleSubmit(handleSubmit)();
+        } catch (error) {
+          // Error is already handled in handleSubmit, just re-throw for PatientStepShell
+          throw error;
+        }
+      }}
       nextLabel="Verify & Continue"
-      isSubmitting={isLoading}
-      isNextDisabled={!isValid || isLoading}
+      isSubmitting={isVerifying}
+      isNextDisabled={!isValid || isVerifying}
       useCard={false}
-      progressPercent={Math.round((2 / 15) * 100)}
-      currentStep={2}
-      totalSteps={15}
+      progressPercent={stepData.progressPercent}
+      currentStep={stepData.currentStep}
+      totalSteps={stepData.totalSteps}
     >
       <FormProvider {...form}>
         <div className="max-w-xl mx-auto space-y-6">
@@ -336,7 +474,7 @@ export function PatientOtpVerificationStep() {
               <button
                 type="button"
                 onClick={handleResendOtp}
-                disabled={countdown > 0 || isLoading}
+                        disabled={countdown > 0 || isVerifying}
                 className="text-sm text-primary hover:text-primary/80 disabled:text-muted-foreground disabled:cursor-not-allowed"
               >
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend code"}

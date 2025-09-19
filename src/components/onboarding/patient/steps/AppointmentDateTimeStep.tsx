@@ -1,24 +1,27 @@
 "use client";
-import React, { useState, useMemo, memo } from "react";
+import React, { useState, useMemo, memo, useEffect } from "react";
 import { Clock, Calendar, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFormContext } from "react-hook-form";
 import { useEnterKey } from "@/lib/hooks/useEnterKey";
-import {
-  createVancouverDateFromString,
-  toVancouverDateString,
-  generateVancouverDates,
-  generateVancouverTimeSlots,
-  formatVancouverDateForDisplay,
-  formatVancouverDayForDisplay,
-  isVancouverToday,
-  isPastVancouverBusinessHours,
-} from "@/lib/utils/date-time-utils";
+// Date utility imports removed - using string-based dates to avoid timezone issues
+import { patientService } from "@/lib/services/patientService";
+import { AvailableDate } from "@/lib/types/api";
+
+// Interface for the component's internal date format - using strings to avoid timezone issues
+interface ComponentDate {
+  value: string; // ISO date string (YYYY-MM-DD)
+  label: string; // Display label (e.g., "Sep 22, Mon")
+  formatted_date: string; // API formatted date
+  day_name: string; // Day name from API
+  day_short: string; // Short day name from API
+}
 
 interface AppointmentDateTimeStepProps {
   onNext: () => void;
   getPersonalizedLabel: (step: number) => string;
+  providerId?: number;
 }
 
 // Enhanced animation variants for step transitions
@@ -75,26 +78,24 @@ const itemVariants = {
   },
 };
 
-// Use the reusable Vancouver date generation function
-const generateMockDates = () => generateVancouverDates();
+// Mock data generation removed - only using real API data now
 
-// Use the reusable Vancouver time slots generation function
-const generateTimeSlotsForDate = (selectedDate: Date) => {
-  // If it's today and past business hours, return empty array
-  if (isVancouverToday(selectedDate) && isPastVancouverBusinessHours(selectedDate)) {
-    return [];
-  }
-
-  return generateVancouverTimeSlots(selectedDate);
-};
+// Static time slots generation removed - now using API data
 
 export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   onNext,
+  providerId,
 }: AppointmentDateTimeStepProps) {
   const [currentStep, setCurrentStep] = useState(1); // 1: Date, 2: Time
   const [direction, setDirection] = useState(0);
   const [displayedDatesCount, setDisplayedDatesCount] = useState(6);
   const [displayedSlotsCount, setDisplayedSlotsCount] = useState(12);
+  const [availableDates, setAvailableDates] = useState<ComponentDate[]>([]);
+  const [isLoadingDates, setIsLoadingDates] = useState(false);
+  const [datesError, setDatesError] = useState<string | null>(null);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<{ value: string; label: string }[]>([]);
+  const [isLoadingTimeSlots, setIsLoadingTimeSlots] = useState(false);
+  const [timeSlotsError, setTimeSlotsError] = useState<string | null>(null);
 
   const {
     watch,
@@ -105,32 +106,106 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   } = useFormContext();
   const formValues = watch();
 
-  // Generate available dates
-  const availableDates = useMemo(() => generateMockDates(), []);
+  // Fetch available dates from API when providerId is available
+  useEffect(() => {
+    const fetchAvailableDates = async () => {
+      if (!providerId) {
+        // No providerId available - show error message
+        setDatesError('No provider selected. Please go back and select a provider first.');
+        setAvailableDates([]);
+        return;
+      }
 
-  // Generate time slots based on selected date
-  const availableTimeSlots = useMemo(() => {
-    const selectedDate = formValues.appointmentDate;
-    if (!selectedDate) return [];
+      setIsLoadingDates(true);
+      setDatesError(null);
 
-    // Parse the selected date string properly to avoid timezone issues
-    const date = createVancouverDateFromString(selectedDate);
+      try {
+        const response = await patientService.getAvailableSlots(providerId);
+        
+        if (response.success && response.data) {
+          console.log('Available dates API response:', response.data);
+          
+          // Convert API dates to the format expected by the component - using strings to avoid timezone issues
+          const convertedDates: ComponentDate[] = response.data.map(apiDate => ({
+            value: apiDate.date, // Keep as string (YYYY-MM-DD)
+            label: apiDate.formatted_date, // Use API formatted date directly
+            formatted_date: apiDate.formatted_date,
+            day_name: apiDate.day_name,
+            day_short: apiDate.day_short,
+          }));
+          
+          console.log('Converted dates:', convertedDates);
+          setAvailableDates(convertedDates);
+        } else {
+          console.error('Failed to fetch available dates:', response.message);
+          setDatesError(response.message || 'Failed to fetch available dates');
+          setAvailableDates([]);
+        }
+      } catch (error) {
+        console.error('Error fetching available dates:', error);
+        setDatesError('Failed to fetch available dates');
+        setAvailableDates([]);
+      } finally {
+        setIsLoadingDates(false);
+      }
+    };
 
-    // If it's today and past business hours, return empty array
-    if (isVancouverToday(date) && isPastVancouverBusinessHours(date)) {
-      return [];
-    }
+    fetchAvailableDates();
+  }, [providerId]);
 
-    return generateTimeSlotsForDate(date);
-  }, [formValues.appointmentDate]);
+  // Fetch available time slots when a date is selected
+  useEffect(() => {
+    const fetchAvailableTimeSlots = async () => {
+      const selectedDate = formValues.appointmentDate;
+      
+      if (!selectedDate || !providerId) {
+        setAvailableTimeSlots([]);
+        return;
+      }
+
+      setIsLoadingTimeSlots(true);
+      setTimeSlotsError(null);
+
+      try {
+        console.log('Fetching time slots for date:', selectedDate, 'provider:', providerId);
+        const response = await patientService.getAvailableTimeSlots(providerId, selectedDate);
+        
+        if (response.success && response.data) {
+          console.log('Time slots API response:', response.data);
+          
+          // Convert API time slots to the format expected by the component
+          // The API already provides both time and label, so we can use them directly
+          const convertedTimeSlots = response.data.map(slot => ({
+            value: slot.time, // Use the raw time format (e.g., "09:30")
+            label: slot.label, // Use the user-friendly label (e.g., "9:30 AM")
+          }));
+          
+          console.log('Converted time slots:', convertedTimeSlots);
+          setAvailableTimeSlots(convertedTimeSlots);
+        } else {
+          console.error('Failed to fetch time slots:', response);
+          setTimeSlotsError('Failed to fetch available time slots');
+          setAvailableTimeSlots([]);
+        }
+      } catch (error) {
+        console.error('Error fetching time slots:', error);
+        setTimeSlotsError('Failed to fetch available time slots');
+        setAvailableTimeSlots([]);
+      } finally {
+        setIsLoadingTimeSlots(false);
+      }
+    };
+
+    fetchAvailableTimeSlots();
+  }, [formValues.appointmentDate, providerId]);
+
+  // Time slots are now fetched from API - no need for static generation
 
   // Constants
   const DATES_TO_LOAD_MORE = 6;
   const SLOTS_TO_LOAD_MORE = 12;
 
-  // Helper functions - now using reusable Vancouver timezone functions
-  const formatDateForDisplay = formatVancouverDateForDisplay;
-  const formatDayForDisplay = formatVancouverDayForDisplay;
+  // Helper functions removed - using API data directly to avoid timezone issues
 
   // Validation function
   const validateCurrentStep = async () => {
@@ -186,13 +261,16 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   };
 
   // Handle date selection with validation
-  const handleDateSelect = async (selectedDate: Date) => {
-    // Use reusable Vancouver date string function
-    const dateString = toVancouverDateString(selectedDate);
-    setValue("appointmentDate", dateString);
+  const handleDateSelect = async (selectedDate: ComponentDate) => {
+    // Use the date string directly from the API - no timezone conversion needed
+    setValue("appointmentDate", selectedDate.value);
 
     // Validate the field
     await trigger("appointmentDate");
+
+    // Clear any existing time selection when date changes
+    setValue("appointmentTime", "");
+    clearErrors("appointmentTime");
 
     // Auto-advance to next step
     setTimeout(() => {
@@ -243,9 +321,9 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                     ? (() => {
                         // Find the date object from availableDates to get the proper label
                         const selectedDateObj = availableDates.find(
-                          date => toVancouverDateString(date.date) === formValues.appointmentDate
+                          date => date.value === formValues.appointmentDate
                         );
-                        return selectedDateObj ? selectedDateObj.label : formatDateForDisplay(createVancouverDateFromString(formValues.appointmentDate));
+                        return selectedDateObj ? selectedDateObj.label : formValues.appointmentDate;
                       })()
                     : ""}
                 </span>
@@ -316,67 +394,99 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                 animate="visible"
               >
                 <div className="space-y-4">
-                  {/* Available dates grid */}
-                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2">
-                    {displayedDates.map((date, index) => {
-                      // Use reusable Vancouver date string function
-                      const dateString = toVancouverDateString(date.date);
-                      const isSelected =
-                        formValues.appointmentDate === dateString;
+                  {/* Loading state */}
+                  {isLoadingDates && (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                      <p className="text-sm text-muted-foreground">Loading available dates...</p>
+                    </div>
+                  )}
 
-                      return (
-                        <motion.button
-                          key={dateString}
-                          type="button"
-                          onClick={() => handleDateSelect(date.date)}
-                          className={cn(
-                            "p-3 sm:p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
-                            isSelected
-                              ? "text-white border-2 border-transparent"
-                              : "border-2 border-gray-200 bg-white text-gray-700",
-                          )}
-                          style={
-                            isSelected
-                              ? {
-                                  background: "#2563eb", // blue-600 - prominent blue from your project
-                                }
-                              : {
-                                  background: "white",
-                                }
-                          }
-                          variants={itemVariants}
-                          custom={index}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.background = "#3b82f6"; // blue-500 - lighter blue for hover
-                              e.currentTarget.style.color = "white";
-                              e.currentTarget.style.borderColor = "#3b82f6"; // Maintain border color on hover
+                  {/* Error state */}
+                  {datesError && !isLoadingDates && (
+                    <div className="text-center py-8">
+                      <div className="text-red-600 text-sm mb-2">{datesError}</div>
+                      {datesError.includes('No provider selected') && (
+                        <p className="text-xs text-muted-foreground">Please go back and select a provider first</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* No available dates state */}
+                  {!isLoadingDates && !datesError && availableDates.length === 0 && (
+                    <div className="text-center py-8">
+                      <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No Available Dates</h3>
+                      <p className="text-sm text-gray-500 mb-4">
+                        There are currently no available appointment dates for this provider.
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Please try again later or contact the clinic for assistance.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Available dates grid */}
+                  {!isLoadingDates && !datesError && availableDates.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2">
+                      {displayedDates.map((date, index) => {
+                        // Use the date string directly from API - no timezone conversion needed
+                        const isSelected = formValues.appointmentDate === date.value;
+
+                        return (
+                          <motion.button
+                            key={date.value}
+                            type="button"
+                            onClick={() => handleDateSelect(date)}
+                            className={cn(
+                              "p-3 sm:p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
+                              isSelected
+                                ? "text-white border-2 border-transparent"
+                                : "border-2 border-gray-200 bg-white text-gray-700",
+                            )}
+                            style={
+                              isSelected
+                                ? {
+                                    background: "#2563eb", // blue-600 - prominent blue from your project
+                                  }
+                                : {
+                                    background: "white",
+                                  }
                             }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.background = "white";
-                              e.currentTarget.style.color = "#374151";
-                              e.currentTarget.style.borderColor = "#e5e7eb"; // Reset to gray-200 border
-                            }
-                          }}
-                        >
-                          {/* Content */}
-                          <div className="relative z-10">
-                            <div className="text-sm font-semibold">
-                              {date.label}
+                            variants={itemVariants}
+                            custom={index}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.background = "#3b82f6"; // blue-500 - lighter blue for hover
+                                e.currentTarget.style.color = "white";
+                                e.currentTarget.style.borderColor = "#3b82f6"; // Maintain border color on hover
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.background = "white";
+                                e.currentTarget.style.color = "#374151";
+                                e.currentTarget.style.borderColor = "#e5e7eb"; // Reset to gray-200 border
+                              }
+                            }}
+                          >
+                            {/* Content */}
+                            <div className="relative z-10">
+                              <div className="text-sm font-semibold">
+                                {date.label}
+                              </div>
+                              <div className="text-xs opacity-80 mt-1">
+                                {date.day_short}
+                              </div>
                             </div>
-                            <div className="text-xs opacity-80 mt-1">
-                              {formatDayForDisplay(date.date)}
-                            </div>
-                          </div>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Simplified Load More Dates Button */}
-                  {hasMoreDates && (
+                  {!isLoadingDates && !datesError && hasMoreDates && (
                     <div className="text-center pt-4 sm:pt-6">
                       <button
                         type="button"
@@ -424,10 +534,23 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                     <Calendar className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
                     <p className="text-sm">Please select a date first</p>
                   </div>
+                ) : isLoadingTimeSlots ? (
+                  <div className="text-center py-6 sm:py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                    <p className="text-sm text-muted-foreground">Loading available times...</p>
+                  </div>
+                ) : timeSlotsError ? (
+                  <div className="text-center py-6 sm:py-8 text-gray-500">
+                    <Clock className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-sm text-red-600 mb-2">{timeSlotsError}</p>
+                    <p className="text-xs text-gray-400">
+                      Please try again or select a different date
+                    </p>
+                  </div>
                 ) : availableTimeSlots.length === 0 ? (
                   <div className="text-center py-6 sm:py-8 text-gray-500">
                     <Clock className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm">No slots available for this date</p>
+                    <p className="text-sm">No time slots available for this date</p>
                     <p className="text-xs text-gray-400 mt-1">
                       Please select a different date
                     </p>
@@ -476,7 +599,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                           {/* Content */}
                           <div className="relative z-10">
                             <div className="text-xs font-semibold">
-                              {slot.value}
+                              {slot.label}
                             </div>
                           </div>
                         </motion.button>

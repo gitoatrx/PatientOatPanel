@@ -64,6 +64,34 @@ export interface OnboardingProgressResponse {
     state: {
       contact: {
         phone: string;
+        email?: string;
+      };
+      health_card?: {
+        health_card_number: string | null;
+      };
+      personal_info?: {
+        first_name: string;
+        last_name: string;
+        gender?: string;
+        date_of_birth?: string;
+        email?: string;
+      };
+      address?: {
+        address_line1: string;
+        address_line2?: string | null;
+        city: string;
+        state_province: string;
+        postal_code: string;
+        country: string;
+      };
+      visit_type?: {
+        visit_type_id: number;
+        visit_type_name: string;
+      };
+      emergency_contact?: {
+        name: string;
+        relationship: string;
+        phone: string;
       };
       otp_verified_at: string;
     };
@@ -204,6 +232,45 @@ export interface PersonalInfoStep2Response {
   };
 }
 
+export interface PersonalInfoStep3Response {
+  success: boolean;
+  message: string;
+  data: {
+    clinic_id: number;
+    phone: string;
+    current_step: string;
+    status: string;
+    otp_verified_at: string;
+    state: {
+      contact: {
+        phone: string;
+        email?: string;
+      };
+      health_card?: {
+        health_card_number: string | null;
+      };
+      personal_info?: {
+        first_name: string;
+        last_name: string;
+        gender: string;
+        date_of_birth?: string;
+        email?: string;
+      };
+      address?: {
+        address_line1: string;
+        address_line2?: string;
+        city: string;
+        state_province: string;
+        postal_code: string;
+        country: string;
+      };
+      otp_verified_at: string;
+    };
+    guest_patient_id: string | null;
+    appointment_id: string | null;
+  };
+}
+
 export interface HealthConcern {
   id: number;
   name: string;
@@ -213,6 +280,92 @@ export interface HealthConcernsListResponse {
   success: boolean;
   message: string;
   data: HealthConcern[];
+}
+
+export interface VisitType {
+  id: number;
+  name: string;
+  duration: number;
+}
+
+export interface VisitTypesListResponse {
+  success: boolean;
+  message: string;
+  data: VisitType[];
+}
+
+export interface Provider {
+  id: number;
+  first_name: string;
+  last_name: string;
+  provider_no: string;
+  specialty: string;
+}
+
+export interface ProvidersListResponse {
+  success: boolean;
+  message: string;
+  data: Provider[];
+}
+
+export interface ProviderSelectionRequest {
+  phone: string;
+  clinic_id: number;
+  provider_id: number;
+  preferred_provider_notes?: string;
+}
+
+export interface ProviderSelectionResponse {
+  success: boolean;
+  message: string;
+  data: {
+    clinic_id: number;
+    phone: string;
+    current_step: string;
+    status: string;
+    otp_verified_at: string;
+    state: {
+      contact: {
+        phone: string;
+        email?: string;
+      };
+      health_card?: {
+        health_card_number: string | null;
+      };
+      personal_info?: {
+        first_name: string;
+        last_name: string;
+        gender: string;
+        date_of_birth?: string;
+        email?: string;
+      };
+      address?: {
+        address_line1: string;
+        address_line2?: string;
+        city: string;
+        state_province: string;
+        postal_code: string;
+        country: string;
+      };
+      visit_type?: {
+        visit_type_id: number;
+        visit_type_name: string;
+      };
+      emergency_contact?: {
+        name: string;
+        relationship: string;
+        phone: string;
+      };
+      provider?: {
+        provider_id: number;
+        provider_name: string;
+        preferred_provider_notes?: string;
+      };
+      otp_verified_at: string;
+    };
+    guest_patient_id: string | null;
+    appointment_id: string | null;
+  };
 }
 
 export interface VisitTypeResponse {
@@ -295,7 +448,7 @@ export interface EmergencyContactResponse {
       emergency_contact?: {
         name: string;
         relationship: string;
-        emergency_phone: string;
+        phone: string;
       };
       otp_verified_at: string;
     };
@@ -360,6 +513,32 @@ export interface OtpVerificationResponse {
     guest_patient_id: string | null;
     appointment_id: string | null;
   };
+}
+
+// Available Slots Types
+export interface AvailableDate {
+  date: string;
+  formatted_date: string;
+  day_name: string;
+  day_short: string;
+}
+
+export interface AvailableSlotsResponse {
+  success: boolean;
+  message: string;
+  data: AvailableDate[];
+}
+
+// Available Time Slots Types
+export interface AvailableTimeSlot {
+  time: string; // Raw time format (e.g., "09:30")
+  label: string; // User-friendly format (e.g., "9:30 AM")
+}
+
+export interface AvailableTimeSlotsResponse {
+  success: boolean;
+  message: string;
+  data: AvailableTimeSlot[];
 }
 
 // Error Types for Different Scenarios

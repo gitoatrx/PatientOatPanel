@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep4Response, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse } from '@/lib/types/api';
+import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse } from '@/lib/types/api';
 import { API_CONFIG } from '@/lib/config/api';
 
 export type PatientRole = "patient";
@@ -132,11 +132,25 @@ export const patientService = {
     try {
       console.log('Saving health card for phone:', phone, 'with number:', healthCardNumber);
       
-      const response = await apiClient.post<HealthCardResponse>(API_CONFIG.ENDPOINTS.HEALTH_CARD, {
+      // Build payload conditionally - only include health_card_number if user has one
+      const payload: any = {
         clinic_id: API_CONFIG.CLINIC_ID,
         phone: phone,
-        health_card_number: healthCardNumber || '', // Send empty string if no health card
-      }, {
+      };
+      
+      // Only include health_card_number if it's not empty
+      if (healthCardNumber && healthCardNumber.trim() !== "") {
+        payload.health_card_number = healthCardNumber;
+      }
+      
+      console.log('Health card API payload:', payload);
+      console.log('health_card_number included:', 'health_card_number' in payload);
+      if ('health_card_number' in payload) {
+        console.log('health_card_number type:', typeof payload.health_card_number);
+        console.log('health_card_number value:', payload.health_card_number);
+      }
+      
+      const response = await apiClient.post<HealthCardResponse>(API_CONFIG.ENDPOINTS.HEALTH_CARD, payload, {
         showLoading: true,
         showErrorToast: true,
         showSuccessToast: false, // Success is handled by navigation
@@ -290,6 +304,49 @@ export const patientService = {
           clinic_id: API_CONFIG.CLINIC_ID,
           phone: phone,
           current_step: 'personal_info_step2',
+          status: 'error',
+          otp_verified_at: '',
+          state: {
+            contact: { phone: phone },
+            otp_verified_at: '',
+          },
+          guest_patient_id: null,
+          appointment_id: null,
+        },
+      };
+    }
+  },
+
+  // Personal Info Step 3 API (Date of Birth)
+  async savePersonalInfoStep3(phone: string, dateOfBirthData: {
+    date_of_birth: string;
+  }): Promise<PersonalInfoStep3Response> {
+    try {
+      console.log('Saving personal info step 3 for phone:', phone, 'with data:', dateOfBirthData);
+      
+      const response = await apiClient.post<PersonalInfoStep3Response>(API_CONFIG.ENDPOINTS.PERSONAL_INFO_STEP3, {
+        clinic_id: API_CONFIG.CLINIC_ID,
+        phone: phone,
+        ...dateOfBirthData,
+      }, {
+        showLoading: true,
+        showErrorToast: true,
+        showSuccessToast: false, // Success is handled by navigation
+      });
+      
+      console.log('Personal info step 3 save response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to save personal info step 3:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to save date of birth',
+        data: {
+          clinic_id: API_CONFIG.CLINIC_ID,
+          phone: phone,
+          current_step: 'personal_info_step3',
           status: 'error',
           otp_verified_at: '',
           state: {
@@ -457,6 +514,163 @@ export const patientService = {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to fetch health concerns list',
+        data: [],
+      };
+    }
+  },
+
+  async getVisitTypesList(): Promise<VisitTypesListResponse> {
+    try {
+      console.log('Fetching visit types list for clinic:', API_CONFIG.CLINIC_ID);
+      
+      const response = await apiClient.get<VisitTypesListResponse>(
+        `${API_CONFIG.ENDPOINTS.VISIT_TYPES_LIST}?clinic_id=${API_CONFIG.CLINIC_ID}`,
+        {
+          showLoading: false, // Don't show loading for this background fetch
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Visit types list response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch visit types list:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch visit types list',
+        data: [],
+      };
+    }
+  },
+
+  async getProvidersList(search?: string): Promise<ProvidersListResponse> {
+    try {
+      console.log('Fetching providers list for clinic:', API_CONFIG.CLINIC_ID, 'with search:', search);
+      
+      const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+      const response = await apiClient.get<ProvidersListResponse>(
+        `${API_CONFIG.ENDPOINTS.PROVIDERS_LIST}?clinic_id=${API_CONFIG.CLINIC_ID}${searchParam}`,
+        {
+          showLoading: false, // Don't show loading for this background fetch
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Providers list response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch providers list:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch providers list',
+        data: [],
+      };
+    }
+  },
+
+  async saveProviderSelection(phone: string, providerId: number, preferredProviderNotes?: string): Promise<ProviderSelectionResponse> {
+    try {
+      console.log('Saving provider selection for phone:', phone, 'provider ID:', providerId);
+      
+      const payload: ProviderSelectionRequest = {
+        phone: phone,
+        clinic_id: API_CONFIG.CLINIC_ID,
+        provider_id: providerId,
+      };
+      
+      if (preferredProviderNotes) {
+        payload.preferred_provider_notes = preferredProviderNotes;
+      }
+      
+      const response = await apiClient.post<ProviderSelectionResponse>(API_CONFIG.ENDPOINTS.PROVIDER_SELECTION, payload, {
+        showLoading: true,
+        showErrorToast: true,
+        showSuccessToast: false,
+      });
+      
+      console.log('Provider selection save response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to save provider selection:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to save provider selection',
+        data: {
+          clinic_id: API_CONFIG.CLINIC_ID,
+          phone: phone,
+          current_step: 'provider',
+          status: 'error',
+          otp_verified_at: '',
+          state: {
+            contact: { phone: phone },
+            otp_verified_at: '',
+          },
+          guest_patient_id: null,
+          appointment_id: null,
+        },
+      };
+    }
+  },
+
+  // Available Slots API
+  async getAvailableSlots(providerId: number): Promise<AvailableSlotsResponse> {
+    try {
+      console.log('Fetching available slots for provider:', providerId);
+      
+      const response = await apiClient.get<AvailableSlotsResponse>(
+        `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS_PROVIDER}?clinic_id=${API_CONFIG.CLINIC_ID}&provider_id=${providerId}`,
+        {
+          showLoading: false, // Don't show loading for this background fetch
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Available slots response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch available slots:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch available slots',
+        data: [],
+      };
+    }
+  },
+
+  // Available Time Slots API
+  async getAvailableTimeSlots(providerId: number, date: string): Promise<AvailableTimeSlotsResponse> {
+    try {
+      console.log('Fetching available time slots for provider:', providerId, 'on date:', date);
+      
+      const response = await apiClient.get<AvailableTimeSlotsResponse>(
+        `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS}?clinic_id=${API_CONFIG.CLINIC_ID}&provider_id=${providerId}&date=${date}`,
+        {
+          showLoading: false, // Don't show loading for this background fetch
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Available time slots response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch available time slots:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch available time slots',
         data: [],
       };
     }

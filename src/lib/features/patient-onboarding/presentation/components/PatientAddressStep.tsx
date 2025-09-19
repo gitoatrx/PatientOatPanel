@@ -7,7 +7,7 @@ import { PatientStepShell } from "./PatientStepShell";
 import { addressSchema } from "@/lib/utils/patientOnboardingValidation";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
@@ -15,32 +15,60 @@ import { getRouteFromApiStep } from "@/lib/config/api";
 
 export function PatientAddressStep() {
   const router = useRouter();
-  const { state, saveStep, isLoading } = usePatientOnboarding();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   
   // Get step configuration
   const stepData = getStepComponentData("address");
 
-  // Get phone number from state
+  // Get phone number from localStorage and fetch progress data
   React.useEffect(() => {
-    if (state?.draft?.phone) {
-      setPhoneNumber(state.draft.phone as string);
+    const savedPhone = localStorage.getItem('patient-phone-number');
+    if (savedPhone) {
+      setPhoneNumber(savedPhone);
+      fetchProgressAndPrefillForm(savedPhone);
+    } else {
+      setIsLoadingProgress(false);
     }
-  }, [state]);
+  }, []);
+
+  const fetchProgressAndPrefillForm = async (phone: string) => {
+    try {
+      setIsLoadingProgress(true);
+      const progressResponse = await patientService.getOnboardingProgress(phone);
+      
+      if (progressResponse.success && progressResponse.data?.state?.address) {
+        const address = progressResponse.data.state.address;
+        console.log('Prefilling address form with:', address);
+        
+        // Prefill form with existing data
+        form.setValue('streetAddress', address.address_line1 || '');
+        form.setValue('city', address.city || '');
+        form.setValue('province', address.state_province || '');
+        form.setValue('postalCode', address.postal_code || '');
+      }
+    } catch (error) {
+      console.error('Error fetching progress for prefill:', error);
+    } finally {
+      setIsLoadingProgress(false);
+    }
+  };
   
   const form = useForm({
     resolver: zodResolver(addressSchema),
     mode: "onChange",
     reValidateMode: "onChange",
     defaultValues: {
-      streetAddress: (state?.draft?.streetAddress as string) || "",
-      city: (state?.draft?.city as string) || "",
-      province: (state?.draft?.province as string) || "",
-      postalCode: (state?.draft?.postalCode as string) || "",
+      streetAddress: "",
+      city: "",
+      province: "",
+      postalCode: "",
     },
   });
+
+  // Form prefilling is now handled by fetchProgressAndPrefillForm
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     if (!phoneNumber) {
@@ -85,41 +113,14 @@ export function PatientAddressStep() {
       if (apiResponse.success) {
         console.log("Address saved successfully:", apiResponse);
         
-        try {
-          // Save to centralized state
-          await saveStep(stepData.stepId, {
-            streetAddress: values.streetAddress,
-            city: values.city,
-            province: values.province,
-            postalCode: values.postalCode,
-            currentStep: apiResponse.data.current_step,
-            status: apiResponse.data.status,
-            guestPatientId: apiResponse.data.guest_patient_id,
-            appointmentId: apiResponse.data.appointment_id,
-          });
-          
-          // Navigate to next step based on API response (no success toast)
-          const nextStep = apiResponse.data.current_step;
-          const nextRoute = getRouteFromApiStep(nextStep);
-          console.log(`Address API response:`, apiResponse);
-          console.log(`Next step from API: ${nextStep}`);
-          console.log(`Mapped route: ${nextRoute}`);
-          console.log(`Navigating to: ${nextRoute}`);
-          router.push(nextRoute);
-        } catch (saveError) {
-          console.error('Error saving step:', saveError);
-          const errorMessage = 'Failed to save your information. Please try again.';
-          
-          // Show error toast IMMEDIATELY
-          toast({
-            variant: "error",
-            title: "Save Error",
-            description: errorMessage,
-          });
-          
-          // Set error state after toast
-          setError(errorMessage);
-        }
+        // Navigate to next step based on API response (no success toast)
+        const nextStep = apiResponse.data.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep);
+        console.log(`Address API response:`, apiResponse);
+        console.log(`Next step from API: ${nextStep}`);
+        console.log(`Mapped route: ${nextRoute}`);
+        console.log(`Navigating to: ${nextRoute}`);
+        router.push(nextRoute);
       } else {
         // Handle API error response
         const errorMessage = apiResponse.message || "Failed to save address";
@@ -180,14 +181,42 @@ export function PatientAddressStep() {
     control: form.control,
   });
 
+  // Show loading state while fetching progress data
+  if (isLoadingProgress) {
+    return (
+      <PatientStepShell
+        title="Loading..."
+        description="Loading your information..."
+        progressPercent={Math.round((8 / 15) * 100)}
+        currentStep={8}
+        totalSteps={15}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading your information...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
   return (
     <PatientStepShell
       title="Where do you live?"
       description="We need your address for your medical records and to find nearby clinics."
       onBack={handleBack}
-      onNext={() => form.handleSubmit(handleSubmit)()}
+      onNext={async () => {
+        try {
+          await form.handleSubmit(handleSubmit)();
+        } catch (error) {
+          // Error is already handled in handleSubmit, just re-throw for PatientStepShell
+          throw error;
+        }
+      }}
       nextLabel="Continue"
-      isSubmitting={isLoading}
+      isSubmitting={form.formState.isSubmitting}
       isNextDisabled={!isValid}
       useCard={false}
       progressPercent={Math.round((8 / 15) * 100)}

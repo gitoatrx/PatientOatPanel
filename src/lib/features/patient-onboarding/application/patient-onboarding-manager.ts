@@ -2,6 +2,7 @@ import {
   PATIENT_ONBOARDING_STEPS,
   PATIENT_STEP_MAPPING,
 } from "../config/patient-onboarding-config";
+import { patientService } from "@/lib/services/patientService";
 
 export interface PatientOnboardingState {
   currentStep: number;
@@ -29,7 +30,7 @@ export interface PatientOnboardingStep {
 export class PatientOnboardingManager {
   private static instance: PatientOnboardingManager;
   private state: PatientOnboardingState | null = null;
-  private readonly STORAGE_KEY = "patient_onboarding_state";
+  // Removed STORAGE_KEY - no longer using localStorage
 
   static getInstance(): PatientOnboardingManager {
     if (!PatientOnboardingManager.instance) {
@@ -39,19 +40,8 @@ export class PatientOnboardingManager {
   }
 
   async getOnboardingState(): Promise<PatientOnboardingState> {
-    // Try to load from localStorage first
-    if (typeof window !== "undefined") {
-      try {
-        const savedState = localStorage.getItem(this.STORAGE_KEY);
-        if (savedState) {
-          this.state = JSON.parse(savedState);
-          console.log("PatientOnboardingManager: Loaded state from localStorage:", this.state);
-          return this.state!;
-        }
-      } catch (error) {
-        console.warn("PatientOnboardingManager: Failed to load state from localStorage:", error);
-      }
-    }
+    // Disabled localStorage loading - using progress API instead
+    console.log("PatientOnboardingManager: localStorage loading disabled - using progress API");
 
     // Initialize with default state for UI-only mode
     this.state = {
@@ -68,23 +58,133 @@ export class PatientOnboardingManager {
       },
     };
 
-    // Save to localStorage
-    this.saveToLocalStorage();
+    // No localStorage saving - using progress API
 
     console.log("PatientOnboardingManager: Initialized with default state:", this.state);
     return this.state;
   }
 
-  private saveToLocalStorage(): void {
-    if (typeof window !== "undefined" && this.state) {
-      try {
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.state));
-        console.log("PatientOnboardingManager: Saved state to localStorage:", this.state);
-      } catch (error) {
-        console.warn("PatientOnboardingManager: Failed to save state to localStorage:", error);
+  async loadProgressFromAPI(phone: string): Promise<void> {
+    try {
+      console.log("PatientOnboardingManager: Loading progress from API for phone:", phone);
+      
+      const progressResponse = await patientService.getOnboardingProgress(phone);
+      
+      if (progressResponse.success && progressResponse.data) {
+        const apiData = progressResponse.data;
+        console.log("PatientOnboardingManager: Received progress data from API:", apiData);
+        
+        // Update state with API data
+        if (!this.state) {
+          this.state = {
+            currentStep: 1,
+            isComplete: false,
+            draft: {},
+            isLoading: false,
+            error: null,
+            accountId: null,
+            completedSteps: [],
+            verificationStatus: {
+              isEmailVerified: false,
+              isPhoneVerified: false,
+            },
+          };
+        }
+        
+        // Map API step to frontend step number
+        const currentStepNumber = this.getStepNumberFromName(apiData.current_step);
+        this.state.currentStep = currentStepNumber;
+        
+        // Extract and populate form data from API state
+        const apiState = apiData.state;
+        const formData: Record<string, unknown> = {};
+        
+        // Contact information
+        if (apiState.contact) {
+          formData.phone = apiState.contact.phone;
+          if (apiState.contact.email) {
+            formData.email = apiState.contact.email;
+          }
+        }
+        
+        // Health card information
+        if (apiState.health_card) {
+          if (apiState.health_card.health_card_number) {
+            formData.hasHealthCard = "yes";
+            formData.healthCardNumber = apiState.health_card.health_card_number;
+          } else {
+            formData.hasHealthCard = "no";
+            formData.healthCardNumber = "";
+          }
+        }
+        
+        // Personal information
+        if (apiState.personal_info) {
+          formData.firstName = apiState.personal_info.first_name;
+          formData.lastName = apiState.personal_info.last_name;
+          if (apiState.personal_info.gender) {
+            formData.gender = apiState.personal_info.gender;
+          }
+          if (apiState.personal_info.date_of_birth) {
+            // Parse date of birth and extract day, month, year
+            const dateParts = apiState.personal_info.date_of_birth.split('-');
+            if (dateParts.length === 3) {
+              formData.birthYear = dateParts[0];
+              // Convert month from "07" to "7" to match form expectations
+              formData.birthMonth = parseInt(dateParts[1], 10).toString();
+              // Convert day from "15" to "15" (remove leading zero if any)
+              formData.birthDay = parseInt(dateParts[2], 10).toString();
+            }
+          }
+          if (apiState.personal_info.email) {
+            formData.email = apiState.personal_info.email;
+          }
+        }
+        
+        // Address information
+        if (apiState.address) {
+          formData.addressLine1 = apiState.address.address_line1;
+          formData.addressLine2 = apiState.address.address_line2;
+          formData.city = apiState.address.city;
+          formData.stateProvince = apiState.address.state_province;
+          formData.postalCode = apiState.address.postal_code;
+          formData.country = apiState.address.country;
+        }
+        
+        // Visit type information
+        if (apiState.visit_type) {
+          formData.visitType = apiState.visit_type.visit_type_id === 2 ? "InPerson" : "Virtual";
+        }
+        
+        // Emergency contact information
+        if (apiState.emergency_contact) {
+          formData.emergencyContactRelationship = apiState.emergency_contact.relationship;
+          formData.emergencyContactName = apiState.emergency_contact.name;
+          formData.emergencyContactPhone = apiState.emergency_contact.phone;
+        }
+        
+        // Update draft with API data
+        this.state.draft = { ...this.state.draft, ...formData };
+        
+        // Update verification status
+        if (apiData.otp_verified_at) {
+          this.state.verificationStatus.isPhoneVerified = true;
+        }
+        
+        // Update completion status
+        this.state.isComplete = apiData.status === "completed";
+        
+        // No localStorage saving - using progress API
+        
+        console.log("PatientOnboardingManager: Successfully loaded and merged progress data:", this.state);
       }
+    } catch (error) {
+      console.error("PatientOnboardingManager: Failed to load progress from API:", error);
+      throw error;
     }
   }
+
+  // Removed saveToLocalStorage method - no longer using localStorage
 
   async saveStep(
     step: number,
@@ -117,8 +217,7 @@ export class PatientOnboardingManager {
       // Check if onboarding is complete
       this.state.isComplete = nextStep > PATIENT_ONBOARDING_STEPS.length;
 
-      // Save to localStorage
-      this.saveToLocalStorage();
+      // No localStorage saving - using progress API
 
       // Return navigation info
       const nextStepName = this.getStepNameFromNumber(nextStep);
@@ -131,8 +230,7 @@ export class PatientOnboardingManager {
         error instanceof Error ? error.message : "Failed to save step";
       this.state.error = errorMessage;
       
-      // Save error state to localStorage for recovery
-      this.saveToLocalStorage();
+      // No localStorage saving - using progress API
       
       throw new Error(errorMessage);
     } finally {
@@ -155,8 +253,7 @@ export class PatientOnboardingManager {
       this.state.isComplete = true;
       this.state.currentStep = PATIENT_ONBOARDING_STEPS.length + 1;
       
-      // Save to localStorage
-      this.saveToLocalStorage();
+      // No localStorage saving - using progress API
       
       console.log("PatientOnboardingManager: Onboarding completed successfully");
     } catch (error) {
@@ -196,8 +293,7 @@ export class PatientOnboardingManager {
       this.state.isComplete = true;
       this.state.draft = { ...this.state.draft, ...(data as Record<string, unknown>) };
       
-      // Save to localStorage
-      this.saveToLocalStorage();
+      // No localStorage saving - using progress API
       
       return true;
     } catch (error) {
@@ -267,13 +363,7 @@ export class PatientOnboardingManager {
 
   clearState(): void {
     this.state = null;
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.removeItem(this.STORAGE_KEY);
-        console.log("PatientOnboardingManager: Cleared state from localStorage");
-      } catch (error) {
-        console.warn("PatientOnboardingManager: Failed to clear state from localStorage:", error);
-      }
-    }
+    // No localStorage clearing needed - not using localStorage anymore
+    console.log("PatientOnboardingManager: State cleared");
   }
 }

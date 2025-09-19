@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils";
 
 export type Doctor = {
   id: string;
-  name: string;
-  specialty: string;
-  rating: number; // 0-5
-  nextAvailable: string; // e.g. "Today, 3:15 PM"
+  name?: string;
+  specialty?: string;
+  rating?: number; // 0-5
+  nextAvailable?: string; // e.g. "Today, 3:15 PM"
   yearsOfExperience?: number;
   clinic?: string;
   avatarUrl?: string;
@@ -23,7 +23,10 @@ interface DoctorCardProps {
   className?: string;
 }
 
-function getInitials(name: string) {
+function getInitials(name: string | undefined | null) {
+  if (!name || typeof name !== 'string') {
+    return 'DR';
+  }
   return name
     .split(" ")
     .map((n) => n[0])
@@ -41,6 +44,12 @@ function colorFromId(id: string) {
 export function DoctorCard({ doctor, selected, onSelect, className }: DoctorCardProps) {
   const initials = getInitials(doctor.name);
   const color = colorFromId(doctor.id);
+  
+  // Safety checks for undefined fields
+  const safeName = doctor.name || 'Unknown Doctor';
+  const safeSpecialty = doctor.specialty || 'General Practice';
+  const safeNextAvailable = doctor.nextAvailable || 'Not available';
+  const safeRating = doctor.rating || 0;
 
   return (
     <motion.button
@@ -48,7 +57,7 @@ export function DoctorCard({ doctor, selected, onSelect, className }: DoctorCard
       layout
       onClick={() => onSelect?.(doctor)}
       aria-pressed={selected}
-      aria-label={`${doctor.name}, ${doctor.specialty}`}
+      aria-label={`${safeName}, ${safeSpecialty}`}
       className={cn(
         "group relative w-full text-left p-3 rounded-xl border transition-all duration-200 bg-transparent",
         selected ? "border-primary ring-1 ring-primary/30" : "border-border",
@@ -70,26 +79,26 @@ export function DoctorCard({ doctor, selected, onSelect, className }: DoctorCard
         {/* Doctor Information */}
         <div className="flex-1 min-w-0">
           <h3 className="text-base font-semibold text-foreground">
-            {doctor.name}
+            {safeName}
           </h3>
           <div className="mt-1">
-            <p className="text-xs text-muted-foreground">{doctor.specialty}</p>
+            <p className="text-xs text-muted-foreground">{safeSpecialty}</p>
           </div>
           
           {/* Availability */}
           <p
             className={cn(
               "text-xs mt-1",
-              doctor.nextAvailable.toLowerCase().includes("today")
+              safeNextAvailable.toLowerCase().includes("today")
                 ? "text-emerald-600 dark:text-emerald-400"
                 : "text-muted-foreground",
             )}
           >
-            {doctor.nextAvailable.toLowerCase().includes("today")
+            {safeNextAvailable.toLowerCase().includes("today")
               ? "Available Today"
-              : doctor.nextAvailable.toLowerCase().includes("tomorrow")
+              : safeNextAvailable.toLowerCase().includes("tomorrow")
               ? "Available Tomorrow"
-              : `Next: ${doctor.nextAvailable}`}
+              : `Next: ${safeNextAvailable}`}
           </p>
         </div>
 
