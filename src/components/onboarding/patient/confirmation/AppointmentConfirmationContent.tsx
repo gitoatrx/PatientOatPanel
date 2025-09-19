@@ -17,7 +17,13 @@ import { patientService } from "@/lib/services/patientService";
 
 export function AppointmentConfirmationContent() {
   const [showAssessment, setShowAssessment] = useState(false);
-  const [confirmationData, setConfirmationData] = useState<any>(null);
+  const [confirmationData, setConfirmationData] = useState<{
+    appointment_id: number;
+    guest_patient_id: number;
+    doctor: { name: string };
+    date: string;
+    time: string;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -208,7 +214,7 @@ export function AppointmentConfirmationContent() {
                     <div>
                       <h3 className="text-xl font-semibold text-gray-900 mb-2">Pre-Visit Health Check-in</h3>
                       <p className="text-gray-600 text-sm leading-relaxed">
-                        Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you've been feeling.
+                        Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you&apos;ve been feeling.
                       </p>
                     </div>
                     

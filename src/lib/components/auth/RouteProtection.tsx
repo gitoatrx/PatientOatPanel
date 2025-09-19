@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { hasActiveSession, getPhoneNumber } from "@/lib/utils/auth-utils";
 import { patientService } from "@/lib/services/patientService";
+import { getRouteFromApiStep, API_STEP_TO_ROUTE_MAP } from "@/lib/config/api";
 
 interface RouteProtectionProps {
   children: React.ReactNode;
@@ -42,30 +43,14 @@ export function RouteProtection({ children }: RouteProtectionProps) {
               const currentStep = progressResponse.data.current_step;
               console.log('Current step from API:', currentStep);
               
-              // Map API step names to correct routes
-              const stepRouteMapping: Record<string, string> = {
-                'personal_info_step1': '/onboarding/patient/personal',
-                'personal': '/onboarding/patient/personal',
-                'gender': '/onboarding/patient/gender',
-                'date_of_birth': '/onboarding/patient/date-of-birth',
-                'email': '/onboarding/patient/email',
-                'address': '/onboarding/patient/address',
-                'health_concern': '/onboarding/patient/health-concern',
-                'health_concerns': '/onboarding/patient/health-concern',
-                'visit_type': '/onboarding/patient/visit-type',
-                'emergency_contact': '/onboarding/patient/emergency-contact',
-                'doctor_selection': '/onboarding/patient/doctor-selection',
-                'provider_selection': '/onboarding/patient/doctor-selection',
-                'appointment_datetime': '/onboarding/patient/appointment-datetime',
-                'appointment_date': '/onboarding/patient/appointment-datetime',
-                'review': '/onboarding/patient/review',
-                'confirmation': '/onboarding/patient/confirmation',
-              };
-
               // Navigate to the step where user left off
               if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
-                const targetRoute = stepRouteMapping[currentStep] || `/onboarding/patient/${currentStep}`;
-                console.log("Redirecting verified user to:", targetRoute);
+                const targetRoute = getRouteFromApiStep(currentStep);
+                console.log("=== ROUTE PROTECTION DEBUG ===");
+                console.log("API returned current_step:", currentStep);
+                console.log("Mapped to route:", targetRoute);
+                console.log("Available mappings:", Object.keys(API_STEP_TO_ROUTE_MAP));
+                console.log("=============================");
                 router.replace(targetRoute);
                 return;
               } else {

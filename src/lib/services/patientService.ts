@@ -24,7 +24,7 @@ export const patientService = {
       });
       
       console.log('OTP send response:', response);
-      return response.data;
+      return response.data as ApiResponse<{ message: string; otpCode?: string }>;
     } catch (error) {
       console.error('Failed to send OTP:', error);
       
@@ -133,7 +133,7 @@ export const patientService = {
       console.log('Saving health card for phone:', phone, 'with number:', healthCardNumber);
       
       // Build payload conditionally - only include health_card_number if user has one
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         clinic_id: API_CONFIG.CLINIC_ID,
         phone: phone,
       };

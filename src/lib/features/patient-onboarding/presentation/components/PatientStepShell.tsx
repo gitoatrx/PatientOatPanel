@@ -78,56 +78,20 @@ export function PatientStepShell({
   const contentRef = useRef<HTMLDivElement | null>(null);
   // Removed isNavigating state for smoother navigation
 
-  useEffect(() => {
-    if (!contentRef.current) return;
-    
-    // Add subtle fade-up animation using CSS transitions
-    const element = contentRef.current;
-    
-    // Set initial state
-    element.style.opacity = '0';
-    element.style.transform = 'translateY(20px)';
-    element.style.transition = 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
-    
-    // Trigger animation on next frame
-    requestAnimationFrame(() => {
-      element.style.opacity = '1';
-      element.style.transform = 'translateY(0)';
-    });
-    
-    // Cleanup function
-    return () => {
-      if (element) {
-        element.style.transition = '';
-      }
-    };
-  }, [title, description, progressPercent]);
+  // Removed CSS transition useEffect to prevent blank UI issues
+  // Content will be visible immediately without animations
 
   // Memoize event handlers to prevent serialization issues
   const handleBack = useCallback(async () => {
     if (onBack) {
-      // Add subtle fade-out animation before navigation
-      if (contentRef.current) {
-        const element = contentRef.current;
-        element.style.transition = 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-        element.style.opacity = '0';
-        element.style.transform = 'translateY(-10px)';
-        
-        // Call onBack after animation completes
-        setTimeout(async () => {
-          try {
-            await onBack();
-            // If onBack succeeds, the page will navigate away
-          } catch (error) {
-            console.error("Error in onBack callback:", error);
-            // Restore content with fade-in animation if navigation fails
-            element.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
-            element.style.opacity = '1';
-            element.style.transform = 'translateY(0)';
-          }
-        }, 300);
-      } else {
+      try {
+        // Call onBack directly without animation to prevent blank UI on errors
         await onBack();
+        // If onBack succeeds, the page will navigate away
+      } catch (error) {
+        console.error("Error in onBack callback:", error);
+        // Error is handled by the component that calls onBack
+        // Don't try to restore content here as it can cause blank UI
       }
     }
   }, [onBack]);
@@ -135,33 +99,13 @@ export function PatientStepShell({
   const handleNext = useCallback(async () => {
     if (onNext) {
       try {
-        // Add subtle fade-out animation before navigation
-        if (contentRef.current) {
-          const element = contentRef.current;
-          element.style.transition = 'opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-          element.style.opacity = '0';
-          element.style.transform = 'translateY(-10px)';
-          
-          // Call onNext after animation completes
-          setTimeout(async () => {
-            try {
-              await onNext();
-              // If onNext succeeds, the page will navigate away
-            } catch (error) {
-              console.error("Error in onNext callback:", error);
-              // Restore content with fade-in animation if navigation fails
-              element.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
-              element.style.opacity = '1';
-              element.style.transform = 'translateY(0)';
-            }
-          }, 300);
-        } else {
-          await onNext();
-        }
-      } catch (error) {
-        console.error("Error in handleNext:", error);
-        // Fallback: call onNext without animation
+        // Call onNext directly without animation to prevent blank UI on errors
         await onNext();
+        // If onNext succeeds, the page will navigate away
+      } catch (error) {
+        console.error("Error in onNext callback:", error);
+        // Error is handled by the component that calls onNext
+        // Don't try to restore content here as it can cause blank UI
       }
     }
   }, [onNext]);

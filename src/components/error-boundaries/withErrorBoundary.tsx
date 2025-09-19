@@ -84,10 +84,7 @@ export function withErrorBoundary<P extends object>(
           <OnboardingErrorBoundary
             {...errorBoundaryProps}
             stepName={stepName}
-            userType={userType}
             onRetry={onRetry}
-            onSaveDraft={onSaveDraft}
-            onGoBack={onGoBack}
           >
             <Component {...props} />
           </OnboardingErrorBoundary>

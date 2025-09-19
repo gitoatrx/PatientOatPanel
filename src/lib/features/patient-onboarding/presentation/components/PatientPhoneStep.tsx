@@ -226,7 +226,7 @@ export function PatientPhoneStep() {
           
           {/* Info message */}
           <div className="text-sm text-muted-foreground">
-            We'll send a verification code to this number to confirm it's yours.
+            We&apos;ll send a verification code to this number to confirm it&apos;s yours.
           </div>
         </div>
       </FormProvider>

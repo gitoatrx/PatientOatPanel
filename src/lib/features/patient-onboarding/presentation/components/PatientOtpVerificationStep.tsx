@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
+import { getRouteFromApiStep } from "@/lib/config/api";
 // Removed unused imports for progress API
 
 const otpSchema = z.object({
@@ -179,28 +180,9 @@ export function PatientOtpVerificationStep() {
             const currentStep = progressResponse.data.current_step;
             console.log("Progress API response - current step:", currentStep);
             
-            // Map API step names to correct routes
-            const stepRouteMapping: Record<string, string> = {
-              'personal_info_step1': '/onboarding/patient/personal',
-              'personal': '/onboarding/patient/personal',
-              'gender': '/onboarding/patient/gender',
-              'date_of_birth': '/onboarding/patient/date-of-birth',
-              'email': '/onboarding/patient/email',
-              'address': '/onboarding/patient/address',
-              'health_concern': '/onboarding/patient/health-concern',
-              'visit_type': '/onboarding/patient/visit-type',
-              'emergency_contact': '/onboarding/patient/emergency-contact',
-              'doctor_selection': '/onboarding/patient/doctor-selection',
-              'provider_selection': '/onboarding/patient/doctor-selection',
-              'appointment_datetime': '/onboarding/patient/appointment-datetime',
-              'appointment_date': '/onboarding/patient/appointment-datetime',
-              'review': '/onboarding/patient/review',
-              'confirmation': '/onboarding/patient/confirmation',
-            };
-            
-            // Navigate to the step where user left off
+            // Navigate to the step where user left off using centralized mapping
             if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
-              const targetRoute = stepRouteMapping[currentStep] || `/onboarding/patient/${currentStep}`;
+              const targetRoute = getRouteFromApiStep(currentStep);
               console.log("Navigating to step where user left off:", currentStep, "→", targetRoute);
               router.push(targetRoute);
             } else {
@@ -489,7 +471,7 @@ export function PatientOtpVerificationStep() {
 
           {/* Info message */}
           <div className="text-sm text-muted-foreground text-center">
-            Didn't receive the code? Check your SMS messages or try resending.
+            Didn&apos;t receive the code? Check your SMS messages or try resending.
           </div>
         </div>
       </FormProvider>

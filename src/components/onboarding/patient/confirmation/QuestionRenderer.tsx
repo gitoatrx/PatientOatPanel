@@ -7,8 +7,8 @@ import { Question, QuestionOption } from "@/data/wizardQuestions";
 
 interface QuestionRendererProps {
   question: Question;
-  value: any;
-  onChange: (value: any) => void;
+  value: unknown;
+  onChange: (value: unknown) => void;
   disabled?: boolean;
   showBackButton?: boolean;
   onBack?: () => void;
@@ -84,7 +84,7 @@ export function QuestionRenderer({ question, value, onChange, disabled = false, 
   const renderTextarea = () => (
     <div className="space-y-2">
       <textarea
-        value={value || ""}
+        value={typeof value === 'string' ? value : ""}
         onChange={(e) => !disabled && onChange(e.target.value)}
         placeholder={question.placeholder}
         disabled={disabled}
@@ -95,7 +95,7 @@ export function QuestionRenderer({ question, value, onChange, disabled = false, 
       />
       {question.maxLength && (
         <div className="text-right text-xs text-gray-400">
-          {(value || "").length}/{question.maxLength}
+          {(typeof value === 'string' ? value : "").length}/{question.maxLength}
         </div>
       )}
     </div>
@@ -104,7 +104,7 @@ export function QuestionRenderer({ question, value, onChange, disabled = false, 
   const renderText = () => (
     <input
       type="text"
-      value={value || ""}
+      value={typeof value === 'string' ? value : ""}
       onChange={(e) => !disabled && onChange(e.target.value)}
       placeholder={question.placeholder}
       disabled={disabled}

@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, Method } from 'axios';
 import { ApiResponse, ApiError, ApiRequestConfig } from '@/lib/types/api';
 import { API_CONFIG } from '@/lib/config/api';
 
@@ -51,12 +51,12 @@ const createApiError = (error: AxiosError): ApiError => {
   if (error.response) {
     // Server responded with error status
     const status = error.response.status;
-    const data = error.response.data as any;
+    const data = error.response.data as Record<string, unknown>;
     
     return {
-      code: data?.code || `HTTP_${status}`,
-      message: data?.message || error.message || 'Server error',
-      details: data?.details,
+      code: (data?.code as string) || `HTTP_${status}`,
+      message: (data?.message as string) || error.message || 'Server error',
+      details: data?.details as Record<string, unknown> | undefined,
       type: getErrorType(status),
     };
   } else if (error.request) {
@@ -126,17 +126,17 @@ axiosInstance.interceptors.response.use(
 );
 
 // Generic request function
-const makeRequest = async <T = any>(
+const makeRequest = async <T = unknown>(
   method: string,
   endpoint: string,
-  data?: any,
+  data?: unknown,
   config?: ApiRequestConfig
 ): Promise<AxiosResponse<T>> => {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
   
   try {
     const response = await axiosInstance.request({
-      method: method.toLowerCase() as any,
+      method: method.toLowerCase() as Method,
       url: endpoint,
       data,
       timeout: finalConfig.timeout,
@@ -162,22 +162,22 @@ export const apiClient = {
   },
 
   // GET request
-  get: <T = any>(endpoint: string, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
+  get: <T = unknown>(endpoint: string, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
     return makeRequest<T>('GET', endpoint, undefined, config);
   },
 
   // POST request
-  post: <T = any>(endpoint: string, data?: any, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
+  post: <T = unknown>(endpoint: string, data?: unknown, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
     return makeRequest<T>('POST', endpoint, data, config);
   },
 
   // PUT request
-  put: <T = any>(endpoint: string, data?: any, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
+  put: <T = unknown>(endpoint: string, data?: unknown, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
     return makeRequest<T>('PUT', endpoint, data, config);
   },
 
   // DELETE request
-  delete: <T = any>(endpoint: string, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
+  delete: <T = unknown>(endpoint: string, config?: ApiRequestConfig): Promise<AxiosResponse<T>> => {
     return makeRequest<T>('DELETE', endpoint, undefined, config);
   },
 };

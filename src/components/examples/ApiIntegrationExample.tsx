@@ -8,7 +8,7 @@ import { patientService } from '@/lib/services/patientService';
 export function ApiIntegrationExample() {
   const [phone, setPhone] = useState('+919924237000');
   const [otp, setOtp] = useState('506691');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<{ type: string; response: unknown } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

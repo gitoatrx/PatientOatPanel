@@ -10,8 +10,8 @@ interface StepRendererProps {
   step: WizardStep;
   onNext: () => void;
   onPrev: () => void;
-  onUpdate: (data: Record<string, any>) => void;
-  initialData?: Record<string, any>;
+  onUpdate: (data: Record<string, unknown>) => void;
+  initialData?: Record<string, unknown>;
   showBackButton?: boolean;
   isLastStep?: boolean;
   onSubmit?: () => void;
@@ -29,7 +29,7 @@ export function StepRenderer({
   onSubmit,
   isStepValid
 }: StepRendererProps) {
-  const [answers, setAnswers] = useState<Record<string, any>>(initialData);
+  const [answers, setAnswers] = useState<Record<string, unknown>>(initialData);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export function StepRenderer({
     setIsLoading(false);
   }, [step.id]);
 
-  const handleAnswerChange = (questionId: string, value: any) => {
+  const handleAnswerChange = (questionId: string, value: unknown) => {
     setAnswers(prev => ({
       ...prev,
       [questionId]: value
@@ -58,7 +58,7 @@ export function StepRenderer({
       }
       
       if (question.type === 'textarea' || question.type === 'text') {
-        return answer && answer.trim().length > 0;
+        return answer && typeof answer === 'string' && answer.trim().length > 0;
       }
       
       return answer !== undefined && answer !== null && answer !== '';

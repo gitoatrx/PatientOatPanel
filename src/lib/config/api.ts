@@ -56,7 +56,7 @@ export const getApiUrl = (endpoint: string): string => {
 };
 
 // Helper function to get clinic-specific request body
-export const getClinicRequestBody = (data: Record<string, any>) => {
+export const getClinicRequestBody = (data: Record<string, unknown>) => {
   return {
     clinic_id: API_CONFIG.CLINIC_ID,
     ...data,
@@ -65,7 +65,9 @@ export const getClinicRequestBody = (data: Record<string, any>) => {
 
 // Step mapping from API response to frontend routes
 export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
-  'health_card': '/onboarding/patient/health-card',
+  'health_card': '/onboarding/patient/health-card', // API returns 'health_card'
+  'health-card': '/onboarding/patient/health-card', // Alternative step name
+  'verify_otp': '/onboarding/patient/verify-otp', // API returns 'verify_otp'
   'personal_info_step1': '/onboarding/patient/personal', // API returns 'personal_info_step1'
   'personal_info_step2': '/onboarding/patient/gender', // API returns 'personal_info_step2'
   'personal_info_step3': '/onboarding/patient/date-of-birth', // API returns 'personal_info_step3'
@@ -81,7 +83,9 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
   'visit_type': '/onboarding/patient/visit-type',
   'emergency_contact': '/onboarding/patient/emergency-contact',
   'provider': '/onboarding/patient/doctor-selection', // API returns 'provider'
+  'provider_selection': '/onboarding/patient/doctor-selection', // Alternative step name
   'appointment': '/onboarding/patient/appointment-datetime', // API returns 'appointment'
+  'appointment_datetime': '/onboarding/patient/appointment-datetime', // Alternative step name
   'review': '/onboarding/patient/review',
   'confirmation': '/onboarding/patient/confirmation',
 };

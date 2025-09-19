@@ -152,9 +152,9 @@ export class PatientOnboardingManager {
         }
         
         // Visit type information
-        if (apiState.visit_type) {
-          formData.visitType = apiState.visit_type.visit_type_id === 2 ? "InPerson" : "Virtual";
-        }
+        // if (apiState.visit_type) {
+        //   formData.visitType = apiState.visit_type.visit_type_id === 2 ? "InPerson" : "Virtual";
+        // }
         
         // Emergency contact information
         if (apiState.emergency_contact) {

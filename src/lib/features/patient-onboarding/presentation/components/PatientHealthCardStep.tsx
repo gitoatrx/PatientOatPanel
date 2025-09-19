@@ -7,9 +7,9 @@ import { PatientStepShell } from "./PatientStepShell";
 import { FormInput } from "@/components/ui/form-input";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { usePatientOnboarding } from "../context/PatientOnboardingContext";
-import { getStepComponentData } from "../../config/patient-onboarding-config";
+// import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
 
@@ -74,20 +74,14 @@ const healthCardOptions = [
 
 export function PatientHealthCardStep() {
   const router = useRouter();
-  const { state, saveStep, isLoading } = usePatientOnboarding();
+  const { isLoading, state } = usePatientOnboarding();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingProgress, setIsLoadingProgress] = useState<boolean>(true);
   
-  // Get step configuration
-  const stepData = getStepComponentData("healthCard");
-
-  // Get phone number from state
-  React.useEffect(() => {
-    if (state?.draft?.phone) {
-      setPhoneNumber(state.draft.phone as string);
-    }
-  }, [state]);
+  // Get step configuration (unused but kept for consistency)
+  // const stepData = getStepComponentData("healthCard");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(healthCardSchema),
@@ -98,6 +92,49 @@ export function PatientHealthCardStep() {
       healthCardNumber: "" 
     },
   });
+
+  const fetchProgressAndPrefillForm = useCallback(async (phone: string) => {
+    try {
+      setIsLoadingProgress(true);
+      const progressResponse = await patientService.getOnboardingProgress(phone);
+      
+      if (progressResponse.success && progressResponse.data?.state?.health_card) {
+        const healthCardData = progressResponse.data.state.health_card;
+        console.log('Prefilling health card form with:', healthCardData);
+        
+        // Prefill form with existing data
+        if (healthCardData.health_card_number) {
+          form.setValue('hasHealthCard', 'yes');
+          form.setValue('healthCardNumber', healthCardData.health_card_number);
+        } else {
+          form.setValue('hasHealthCard', 'no');
+        }
+      } else {
+        console.log('No existing health card data found, using default values');
+        // Set default values if no existing data
+        form.setValue('hasHealthCard', '');
+        form.setValue('healthCardNumber', '');
+      }
+    } catch (error) {
+      console.error('Error fetching progress data:', error);
+      // Set default values on error
+      form.setValue('hasHealthCard', '');
+      form.setValue('healthCardNumber', '');
+    } finally {
+      setIsLoadingProgress(false);
+    }
+  }, [form]);
+
+  // Get phone number from localStorage and fetch progress data
+  React.useEffect(() => {
+    const savedPhone = localStorage.getItem('patient-phone-number');
+    if (savedPhone) {
+      setPhoneNumber(savedPhone);
+      fetchProgressAndPrefillForm(savedPhone);
+    } else {
+      setIsLoadingProgress(false);
+    }
+  }, [fetchProgressAndPrefillForm]);
 
   // Reset form values when state updates (after API call)
   useEffect(() => {
@@ -276,6 +313,30 @@ export function PatientHealthCardStep() {
     const target = e.target as HTMLInputElement;
     target.value = target.value.replace(/[^0-9]/g, "");
   };
+
+  // Show loading state while fetching progress data
+  if (isLoadingProgress) {
+    return (
+      <PatientStepShell
+        title="Do you have a health card?"
+        description="This helps us process your appointments and insurance claims."
+        onBack={handleBack}
+        onNext={async () => {}}
+        nextLabel="Continue"
+        isSubmitting={true}
+        isNextDisabled={true}
+        useCard={false}
+        progressPercent={Math.round((3 / 15) * 100)}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading your information...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
 
   return (
     <PatientStepShell

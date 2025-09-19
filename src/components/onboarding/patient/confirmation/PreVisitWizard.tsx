@@ -34,7 +34,7 @@ const Progress = ({ value = 0, className = "" }: { value?: number; className?: s
 
 // Types
 interface AssessmentData {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface PreVisitWizardProps {
@@ -46,12 +46,12 @@ interface PreVisitWizardProps {
 export function PreVisitWizard({ isOpen, onClose, doctorName }: PreVisitWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [assessmentData, setAssessmentData] = useState<AssessmentData>({});
-  const [stepData, setStepData] = useState<Record<string, any>>({});
+  const [stepData, setStepData] = useState<Record<string, unknown>>({});
   const [isCurrentStepValid, setIsCurrentStepValid] = useState(false);
 
   const { steps, totalSteps } = healthCheckInWizard;
 
-  const updateStepData = useCallback((stepId: string, data: any) => {
+  const updateStepData = useCallback((stepId: string, data: unknown) => {
     setStepData(prev => ({ ...prev, [stepId]: data }));
     setAssessmentData(prev => ({ ...prev, [stepId]: data }));
   }, []);
@@ -145,7 +145,7 @@ export function PreVisitWizard({ isOpen, onClose, doctorName }: PreVisitWizardPr
           });
           setIsCurrentStepValid(isValid);
         }}
-        initialData={stepData[currentStepData.id] || {}}
+        initialData={stepData[currentStepData.id] as Record<string, unknown> | undefined}
         showBackButton={currentStep > 0}
         isLastStep={currentStep === totalSteps - 1}
         onSubmit={handleSubmit}
@@ -256,7 +256,7 @@ export function PreVisitWizard({ isOpen, onClose, doctorName }: PreVisitWizardPr
               </>
             ) : (
               <>
-                Let's Continue
+                Let&apos;s Continue
                 <ChevronRight className="w-4 h-4 ml-2" />
               </>
             )}
@@ -291,7 +291,7 @@ function IntroStep({ onNext, doctorName }: { onNext: () => void; doctorName: str
             Pre-Visit Health Check-in
           </h3>
           <p className="text-gray-600 text-base leading-relaxed max-w-md mx-auto">
-            Share a quick update with {doctorName} about how you've been feeling since your last visit.
+            Share a quick update with {doctorName} about how you&apos;ve been feeling since your last visit.
           </p>
         </div>
       </motion.div>
@@ -396,11 +396,11 @@ function SubmissionStep({ onComplete }: { onComplete: () => void }) {
           <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
             <Calendar className="h-4 w-4 text-white" />
           </div>
-          <h4 className="font-semibold text-blue-900">What's Next?</h4>
+          <h4 className="font-semibold text-blue-900">What&apos;s Next?</h4>
         </div>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Your doctor will review your information before your visit</li>
-          <li>• You'll receive a confirmation email shortly</li>
+          <li>• You&apos;ll receive a confirmation email shortly</li>
           <li>• Arrive 10 minutes early for your appointment</li>
         </ul>
       </div>
