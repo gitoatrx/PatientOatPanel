@@ -1,0 +1,275 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useForm, FormProvider } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useRouter } from "next/navigation";
+import { PatientStepShell } from "./PatientStepShell";
+import { AppointmentDateTimeStep } from "../../../../../components/onboarding/patient/steps/AppointmentDateTimeStep";
+// Removed usePatientOnboarding context - using progress API instead
+import { getStepComponentData } from "../../config/patient-onboarding-config";
+import { patientService } from "@/lib/services/patientService";
+import { useToast } from "@/components/ui/use-toast";
+import { getRouteFromApiStep } from "@/lib/config/api";
+
+// Form schema for appointment date/time
+const appointmentDateTimeSchema = z.object({
+  appointmentDate: z.string().min(1, "Please select an appointment date"),
+  appointmentTime: z.string().min(1, "Please select an appointment time"),
+});
+
+type AppointmentDateTimeFormData = z.infer<typeof appointmentDateTimeSchema>;
+
+export function PatientAppointmentDateTimeStep() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const stepData = getStepComponentData("appointmentDateTime");
+  const [providerId, setProviderId] = useState<number | undefined>(undefined);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+
+  const form = useForm<AppointmentDateTimeFormData>({
+    resolver: zodResolver(appointmentDateTimeSchema),
+    defaultValues: {
+      appointmentDate: "",
+      appointmentTime: "",
+    },
+  });
+
+  // Call progress API to get provider ID
+  useEffect(() => {
+    const fetchProgressAndProviderId = async () => {
+      try {
+        setIsLoadingProgress(true);
+        setProgressError(null);
+
+        // Get phone number from localStorage
+        const savedPhone = localStorage.getItem('patient-phone-number');
+        
+        if (!savedPhone) {
+          setProgressError('Phone number not found. Please start the onboarding process again.');
+          setIsLoadingProgress(false);
+          return;
+        }
+        
+        setPhoneNumber(savedPhone);
+
+        console.log('Fetching progress to get provider ID for phone:', savedPhone);
+        const progressResponse = await patientService.getOnboardingProgress(savedPhone);
+        
+        if (progressResponse.success && progressResponse.data) {
+          const apiData = progressResponse.data;
+          console.log('Progress API response:', apiData);
+          
+          // Extract provider ID from the API response
+          if (apiData.state?.provider?.id) {
+            const extractedProviderId = apiData.state.provider.id;
+            console.log('Extracted provider ID from progress API:', extractedProviderId);
+            setProviderId(extractedProviderId);
+          } else {
+            console.log('No provider ID found in progress API response');
+            setProgressError('No provider selected. Please go back and select a provider first.');
+          }
+
+          // Prefill appointment data if available
+          if (apiData.state?.appointment) {
+            const appointment = apiData.state.appointment;
+            console.log('Prefilling appointment form with:', appointment);
+            
+            // Use setTimeout to ensure form is ready
+            setTimeout(() => {
+              if (appointment.date) {
+                console.log('Setting appointment date:', appointment.date);
+                form.setValue('appointmentDate', appointment.date, { shouldValidate: true });
+              }
+              if (appointment.time) {
+                console.log('Setting appointment time:', appointment.time);
+                form.setValue('appointmentTime', appointment.time, { shouldValidate: true });
+              }
+            }, 100);
+          }
+        } else {
+          console.error('Progress API failed:', progressResponse.message);
+          setProgressError(progressResponse.message || 'Failed to fetch progress information');
+        }
+      } catch (error) {
+        console.error('Error fetching progress:', error);
+        setProgressError('Failed to fetch progress information');
+      } finally {
+        setIsLoadingProgress(false);
+      }
+    };
+
+    fetchProgressAndProviderId();
+  }, [form]);
+
+  // Show loading state while fetching progress
+  if (isLoadingProgress) {
+    return (
+      <PatientStepShell
+        title="Loading..."
+        description="Fetching your appointment information..."
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
+  // Show error state if progress fetch failed
+  if (progressError) {
+    return (
+      <PatientStepShell
+        title="Error"
+        description="Failed to load appointment information"
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-sm text-destructive font-medium">{progressError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-2 text-sm text-primary hover:underline"
+          >
+            Refresh page
+          </button>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
+  // Removed state null check - using progress API instead
+
+  const handleSubmit = async (data: AppointmentDateTimeFormData) => {
+    if (!phoneNumber) {
+      console.error("No phone number found");
+      setError("Phone number not found. Please start over.");
+      return;
+    }
+
+    try {
+      setError(null);
+      console.log("Appointment date/time submitted:", data);
+      
+      // Call appointment API to save the selected date and time
+      const apiResponse = await patientService.saveAppointment(phoneNumber, {
+        date: data.appointmentDate,
+        time: data.appointmentTime,
+      });
+      
+      if (apiResponse.success) {
+        console.log("Appointment saved successfully:", apiResponse);
+        
+        // Navigate to next step based on API response
+        const nextStep = apiResponse.data?.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep || 'review');
+        console.log(`Appointment API response:`, apiResponse);
+        console.log(`Next step from API: ${nextStep}`);
+        console.log(`Mapped route: ${nextRoute}`);
+        console.log(`Navigating to: ${nextRoute}`);
+        router.push(nextRoute);
+      } else {
+        // Handle API error response
+        const errorMessage = apiResponse.message || "Failed to save appointment";
+        
+        // Show error toast IMMEDIATELY
+        toast({
+          variant: "error",
+          title: "Save Failed",
+          description: errorMessage,
+        });
+        
+        // Set error state after toast
+        setError(errorMessage);
+      }
+    } catch (err) {
+      console.error('Unexpected error in handleSubmit:', err);
+      
+      // Handle different error types
+      let errorMessage = '';
+      let errorTitle = 'Unexpected Error';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network error')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+          errorTitle = 'Network Error';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+          errorTitle = 'Request Timeout';
+        } else {
+          errorMessage = `Error: ${err.message}`;
+          errorTitle = 'Error';
+        }
+      } else {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+        errorTitle = 'Unexpected Error';
+      }
+      
+      // Show error toast IMMEDIATELY
+      toast({
+        variant: "error",
+        title: errorTitle,
+        description: errorMessage,
+      });
+      
+      // Set error state after toast
+      setError(errorMessage);
+    }
+  };
+
+  const handleBack = () => {
+    router.push("/onboarding/patient/doctor-selection");
+  };
+
+  const getPersonalizedLabel = (step: number) => {
+    // Use a generic label since we don't have access to firstName from state anymore
+    return `Step ${step}`;
+  };
+
+  return (
+    <PatientStepShell
+      title="Choose Date & Time"
+      description="Select your preferred appointment date and time"
+      progressPercent={stepData.progressPercent}
+      currentStep={stepData.currentStep}
+      totalSteps={stepData.totalSteps}
+      onBack={handleBack}
+      onNext={() => form.handleSubmit(handleSubmit)()}
+      nextLabel="Continue"
+      isNextDisabled={!form.watch("appointmentDate") || !form.watch("appointmentTime")}
+      useCard={false}
+    >
+      <FormProvider {...form}>
+        <div className="max-w-2xl mx-auto space-y-6">
+          {/* Error Display */}
+          {error && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium">
+                {error}
+              </p>
+            </div>
+          )}
+          
+          <AppointmentDateTimeStep
+            onNext={() => form.handleSubmit(handleSubmit)()}
+            getPersonalizedLabel={getPersonalizedLabel}
+            providerId={providerId}
+          />
+        </div>
+      </FormProvider>
+    </PatientStepShell>
+  );
+}
