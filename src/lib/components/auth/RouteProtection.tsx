@@ -24,10 +24,16 @@ export function RouteProtection({ children }: RouteProtectionProps) {
 
       const isVerified = hasActiveSession();
       const phoneNumber = getPhoneNumber();
+      
+      console.log('RouteProtection: pathname:', pathname);
+      console.log('RouteProtection: isVerified:', isVerified);
+      console.log('RouteProtection: phoneNumber:', phoneNumber);
 
       // If user is verified and trying to access phone/OTP steps, redirect to current step
+      // But only redirect from phone step, not from verify-otp step (let them complete verification)
       if (isVerified && phoneNumber) {
-        if (pathname === '/onboarding/patient/phone' || pathname === '/onboarding/patient/verify-otp') {
+        if (pathname === '/onboarding/patient/phone') {
+          console.log('RouteProtection: User is verified, redirecting from phone step');
           try {
             console.log('User is already verified, fetching current step...');
             const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
@@ -80,8 +86,10 @@ export function RouteProtection({ children }: RouteProtectionProps) {
 
       // For all other onboarding routes, just check if user is verified
       // Don't call progress API unless we need to redirect
+      // Allow verify-otp step even if user is not verified (they're in the process of verifying)
       if (!isVerified && pathname.startsWith('/onboarding/patient/') && 
-          pathname !== '/onboarding/patient/phone') {
+          pathname !== '/onboarding/patient/phone' && 
+          pathname !== '/onboarding/patient/verify-otp') {
         console.log('User not verified, redirecting to phone step');
         router.replace('/onboarding/patient/phone');
         return;

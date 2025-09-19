@@ -108,6 +108,7 @@ export function PatientPhoneStep() {
       let otpResponse;
       try {
         otpResponse = await patientService.sendOtp(formattedPhone);
+        console.log("PatientPhoneStep: OTP API response:", otpResponse);
       } catch (apiError) {
         console.error('API call failed:', apiError);
         setError('Network error. Please check your connection and try again.');
@@ -137,6 +138,10 @@ export function PatientPhoneStep() {
       }
       
       // Always navigate to OTP verification step, regardless of API response
+      console.log("PatientPhoneStep: Checking OTP response for navigation...");
+      console.log("PatientPhoneStep: otpResponse exists:", !!otpResponse);
+      console.log("PatientPhoneStep: otpResponse.success:", otpResponse?.success);
+      
       if (otpResponse && otpResponse.success) {
         console.log("PatientPhoneStep: OTP sent successfully, navigating to verification");
         router.push("/onboarding/patient/verify-otp");
@@ -146,6 +151,7 @@ export function PatientPhoneStep() {
         if (otpResponse) {
           console.log("PatientPhoneStep: OTP API error:", otpResponse.message);
         }
+        console.log("PatientPhoneStep: About to navigate to /onboarding/patient/verify-otp");
         router.push("/onboarding/patient/verify-otp");
       }
     } catch (err) {
