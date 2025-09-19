@@ -200,14 +200,6 @@ export function AppointmentConfirmationContent() {
                     <br />
                     <span className="text-green-600 font-semibold underline">{formatDate(appt.date)}, {formatTime(appt.time)}</span>
                   </p>
-                  
-                  {/* Appointment Details */}
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div><strong>Appointment ID:</strong> {appt.appointment_id}</div>
-                      <div><strong>Patient ID:</strong> {appt.guest_patient_id}</div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Assessment CTA Card */}

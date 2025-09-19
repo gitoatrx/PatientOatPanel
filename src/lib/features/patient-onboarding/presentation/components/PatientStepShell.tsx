@@ -240,10 +240,10 @@ export function PatientStepShell({
                       variant="outline"
                       size="sm"
                       onClick={handleLogout}
-                      className="inline-flex items-center gap-1 h-8 px-3 border-border text-destructive hover:text-destructive cursor-pointer"
+                      className="inline-flex items-center gap-1 h-8 px-3 bg-red-500 border-border text-white hover:bg-red-600 hover:text-white cursor-pointer"
                       disabled={isSubmitting}
                     >
-                      <LogOut className="h-4 w-4" />
+                      <LogOut className="h-4 w-4 " />
                     </Button>
                   )}
                 </div>

@@ -33,7 +33,7 @@ export const API_CONFIG = {
   // Request Configuration
   REQUEST: {
     TIMEOUT: 5000, // 5 seconds - faster error feedback
-    RETRIES: 2, // Reduced retries for faster error feedback
+    RETRIES: 0, // Disabled retries to prevent duplicate calls
     RETRY_DELAY: 500, // 0.5 seconds - faster retry
   },
   
