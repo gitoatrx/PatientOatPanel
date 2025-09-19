@@ -9,7 +9,7 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { PatientStepShell } from "./PatientStepShell";
 import { DoctorList } from "@/components/onboarding/patient/doctor/DoctorList";
-import { usePatientOnboarding } from "../context/PatientOnboardingContext";
+// Removed usePatientOnboarding context - using progress API instead
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { Provider } from "@/lib/types/api";
@@ -36,7 +36,6 @@ type DoctorSelectionFormData = z.infer<typeof doctorSelectionSchema>;
 
 export function PatientDoctorSelectionStep() {
   const router = useRouter();
-  const { saveStep, state } = usePatientOnboarding();
   const { toast } = useToast();
   const stepData = getStepComponentData("doctorSelection");
   
@@ -46,15 +45,64 @@ export function PatientDoctorSelectionStep() {
   const [providersError, setProvidersError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
+  const [visitName, setVisitName] = useState<string>("");
+
+  // Get phone number from localStorage and fetch progress data
+  React.useEffect(() => {
+    const savedPhone = localStorage.getItem('patient-phone-number');
+    if (savedPhone) {
+      setPhoneNumber(savedPhone);
+      fetchProgressAndPrefillForm(savedPhone);
+    } else {
+      setIsLoadingProgress(false);
+    }
+  }, []);
+
+  const fetchProgressAndPrefillForm = async (phone: string) => {
+    try {
+      setIsLoadingProgress(true);
+      const progressResponse = await patientService.getOnboardingProgress(phone);
+      
+      if (progressResponse.success && progressResponse.data?.state) {
+        const state = progressResponse.data.state;
+        
+        // Extract visit_name for providers API
+        if (state.visit_type?.name) {
+          setVisitName(state.visit_type.name);
+          console.log('Visit name extracted:', state.visit_type.name);
+        }
+        
+        // Prefill form with existing provider data
+        if (state.provider?.id) {
+          const provider = state.provider;
+          console.log('Prefilling provider selection form with:', provider);
+          form.setValue('doctorId', provider.id.toString());
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching progress for prefill:', error);
+    } finally {
+      setIsLoadingProgress(false);
+    }
+  };
 
   // Load providers from API
   useEffect(() => {
     const loadProviders = async () => {
+      // Don't load providers until we have visitName
+      if (!visitName) {
+        console.log('Waiting for visit name before loading providers...');
+        return;
+      }
+
       try {
         setIsLoadingProviders(true);
         setProvidersError(null);
         
-        const response = await patientService.getProvidersList(searchTerm);
+        console.log('Loading providers with visit_name:', visitName, 'and search:', searchTerm);
+        const response = await patientService.getProvidersList(searchTerm, visitName);
         
         if (response.success && response.data) {
           setProviders(response.data);
@@ -72,13 +120,13 @@ export function PatientDoctorSelectionStep() {
     };
 
     loadProviders();
-  }, [searchTerm]);
+  }, [searchTerm, visitName]);
 
   // Initialize form hook unconditionally to preserve hooks order
   const form = useForm<DoctorSelectionFormData>({
     resolver: zodResolver(doctorSelectionSchema),
     defaultValues: {
-      doctorId: (state?.draft?.doctorId as string) || "",
+      doctorId: "",
     },
   });
 
@@ -95,40 +143,10 @@ export function PatientDoctorSelectionStep() {
     }));
   };
 
-  // Add null check for state
-  if (!state) {
-    return (
-      <div className="max-w-2xl mx-auto space-y-2">
-        <div className="space-y-3">
-          {[...Array(3)].map((_, index) => (
-            <div key={index} className="animate-pulse">
-              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
-                {/* Avatar Skeleton */}
-                <div className="size-12 bg-muted rounded-full"></div>
-                
-                {/* Content Skeleton */}
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
-                  <div className="h-3 bg-muted rounded w-1/3"></div>
-                </div>
-                
-                {/* Selector Skeleton */}
-                <div className="size-6 bg-muted rounded-full"></div>
-              </div>
-            </div>
-          ))}
-          <div className="flex items-center justify-center mt-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Removed state null check - using progress API instead
 
   const handleSubmit = async (data: DoctorSelectionFormData) => {
-    if (!state?.draft?.phone) {
+    if (!phoneNumber) {
       console.error("No phone number found");
       setError("Phone number not found. Please start over.");
       return;
@@ -138,7 +156,7 @@ export function PatientDoctorSelectionStep() {
       setError(null);
       console.log("Provider selection submitted:", data);
       
-      const phoneNumber = state.draft.phone as string;
+      // Use the phoneNumber state that was fetched from localStorage
       const providerId = parseInt(data.doctorId);
       
       // Call provider selection API
@@ -207,6 +225,27 @@ export function PatientDoctorSelectionStep() {
   const handleBack = () => {
     router.push("/onboarding/patient/emergency-contact");
   };
+
+  // Show loading state while fetching progress data
+  if (isLoadingProgress) {
+    return (
+      <PatientStepShell
+        title="Loading..."
+        description="Loading your information..."
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading your information...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
 
   return (
     <PatientStepShell

@@ -126,13 +126,18 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
           console.log('Available dates API response:', response.data);
           
           // Convert API dates to the format expected by the component - using strings to avoid timezone issues
-          const convertedDates: ComponentDate[] = response.data.map(apiDate => ({
-            value: apiDate.date, // Keep as string (YYYY-MM-DD)
-            label: apiDate.formatted_date, // Use API formatted date directly
-            formatted_date: apiDate.formatted_date,
-            day_name: apiDate.day_name,
-            day_short: apiDate.day_short,
-          }));
+          const convertedDates: ComponentDate[] = response.data.map(apiDate => {
+            // Remove year from the formatted date for display
+            const labelWithoutYear = apiDate.formatted_date.replace(/,?\s*\d{4}$/, '');
+            
+            return {
+              value: apiDate.date, // Keep as string (YYYY-MM-DD)
+              label: labelWithoutYear, // Remove year from display
+              formatted_date: apiDate.formatted_date,
+              day_name: apiDate.day_name,
+              day_short: apiDate.day_short,
+            };
+          });
           
           console.log('Converted dates:', convertedDates);
           setAvailableDates(convertedDates);

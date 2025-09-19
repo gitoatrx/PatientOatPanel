@@ -6,10 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { PatientStepShell } from "./PatientStepShell";
-import { AppointmentDateTimeStep } from "@/components/onboarding/patient/steps/AppointmentDateTimeStep";
-import { usePatientOnboarding } from "../context/PatientOnboardingContext";
+import { AppointmentDateTimeStep } from "../../../../../components/onboarding/patient/steps/AppointmentDateTimeStep";
+// Removed usePatientOnboarding context - using progress API instead
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
+import { useToast } from "@/components/ui/use-toast";
+import { getRouteFromApiStep } from "@/lib/config/api";
 
 // Form schema for appointment date/time
 const appointmentDateTimeSchema = z.object({
@@ -21,17 +23,19 @@ type AppointmentDateTimeFormData = z.infer<typeof appointmentDateTimeSchema>;
 
 export function PatientAppointmentDateTimeStep() {
   const router = useRouter();
-  const { saveStep, state } = usePatientOnboarding();
+  const { toast } = useToast();
   const stepData = getStepComponentData("appointmentDateTime");
   const [providerId, setProviderId] = useState<number | undefined>(undefined);
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   const [progressError, setProgressError] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<AppointmentDateTimeFormData>({
     resolver: zodResolver(appointmentDateTimeSchema),
     defaultValues: {
-      appointmentDate: (state?.draft?.appointmentDate as string) || "",
-      appointmentTime: (state?.draft?.appointmentTime as string) || "",
+      appointmentDate: "",
+      appointmentTime: "",
     },
   });
 
@@ -42,17 +46,19 @@ export function PatientAppointmentDateTimeStep() {
         setIsLoadingProgress(true);
         setProgressError(null);
 
-        // Get phone number from state or localStorage
-        const phoneNumber = state?.draft?.phone as string || localStorage.getItem('patient-phone-number');
+        // Get phone number from localStorage
+        const savedPhone = localStorage.getItem('patient-phone-number');
         
-        if (!phoneNumber) {
+        if (!savedPhone) {
           setProgressError('Phone number not found. Please start the onboarding process again.');
           setIsLoadingProgress(false);
           return;
         }
+        
+        setPhoneNumber(savedPhone);
 
-        console.log('Fetching progress to get provider ID for phone:', phoneNumber);
-        const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
+        console.log('Fetching progress to get provider ID for phone:', savedPhone);
+        const progressResponse = await patientService.getOnboardingProgress(savedPhone);
         
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
@@ -67,6 +73,24 @@ export function PatientAppointmentDateTimeStep() {
             console.log('No provider ID found in progress API response');
             setProgressError('No provider selected. Please go back and select a provider first.');
           }
+
+          // Prefill appointment data if available
+          if (apiData.state?.appointment) {
+            const appointment = apiData.state.appointment;
+            console.log('Prefilling appointment form with:', appointment);
+            
+            // Use setTimeout to ensure form is ready
+            setTimeout(() => {
+              if (appointment.date) {
+                console.log('Setting appointment date:', appointment.date);
+                form.setValue('appointmentDate', appointment.date, { shouldValidate: true });
+              }
+              if (appointment.time) {
+                console.log('Setting appointment time:', appointment.time);
+                form.setValue('appointmentTime', appointment.time, { shouldValidate: true });
+              }
+            }, 100);
+          }
         } else {
           console.error('Progress API failed:', progressResponse.message);
           setProgressError(progressResponse.message || 'Failed to fetch progress information');
@@ -80,7 +104,7 @@ export function PatientAppointmentDateTimeStep() {
     };
 
     fetchProgressAndProviderId();
-  }, [state?.draft?.phone]);
+  }, [form]);
 
   // Show loading state while fetching progress
   if (isLoadingProgress) {
@@ -127,17 +151,82 @@ export function PatientAppointmentDateTimeStep() {
     );
   }
 
-  // Add null check for state
-  if (!state) {
-    return <div>Loading...</div>;
-  }
+  // Removed state null check - using progress API instead
 
   const handleSubmit = async (data: AppointmentDateTimeFormData) => {
+    if (!phoneNumber) {
+      console.error("No phone number found");
+      setError("Phone number not found. Please start over.");
+      return;
+    }
+
     try {
-      await saveStep(stepData.stepId, data);
-      router.push("/onboarding/patient/review");
-    } catch (error) {
-      console.error("Error saving appointment date/time:", error);
+      setError(null);
+      console.log("Appointment date/time submitted:", data);
+      
+      // Call appointment API to save the selected date and time
+      const apiResponse = await patientService.saveAppointment(phoneNumber, {
+        date: data.appointmentDate,
+        time: data.appointmentTime,
+      });
+      
+      if (apiResponse.success) {
+        console.log("Appointment saved successfully:", apiResponse);
+        
+        // Navigate to next step based on API response
+        const nextStep = apiResponse.data?.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep || 'review');
+        console.log(`Appointment API response:`, apiResponse);
+        console.log(`Next step from API: ${nextStep}`);
+        console.log(`Mapped route: ${nextRoute}`);
+        console.log(`Navigating to: ${nextRoute}`);
+        router.push(nextRoute);
+      } else {
+        // Handle API error response
+        const errorMessage = apiResponse.message || "Failed to save appointment";
+        
+        // Show error toast IMMEDIATELY
+        toast({
+          variant: "error",
+          title: "Save Failed",
+          description: errorMessage,
+        });
+        
+        // Set error state after toast
+        setError(errorMessage);
+      }
+    } catch (err) {
+      console.error('Unexpected error in handleSubmit:', err);
+      
+      // Handle different error types
+      let errorMessage = '';
+      let errorTitle = 'Unexpected Error';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network error')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+          errorTitle = 'Network Error';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+          errorTitle = 'Request Timeout';
+        } else {
+          errorMessage = `Error: ${err.message}`;
+          errorTitle = 'Error';
+        }
+      } else {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+        errorTitle = 'Unexpected Error';
+      }
+      
+      // Show error toast IMMEDIATELY
+      toast({
+        variant: "error",
+        title: errorTitle,
+        description: errorMessage,
+      });
+      
+      // Set error state after toast
+      setError(errorMessage);
     }
   };
 
@@ -146,8 +235,8 @@ export function PatientAppointmentDateTimeStep() {
   };
 
   const getPersonalizedLabel = (step: number) => {
-    const firstName = state.draft?.firstName || "there";
-    return `${firstName}, step ${step}`;
+    // Use a generic label since we don't have access to firstName from state anymore
+    return `Step ${step}`;
   };
 
   return (
@@ -165,6 +254,15 @@ export function PatientAppointmentDateTimeStep() {
     >
       <FormProvider {...form}>
         <div className="max-w-2xl mx-auto space-y-6">
+          {/* Error Display */}
+          {error && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium">
+                {error}
+              </p>
+            </div>
+          )}
+          
           <AppointmentDateTimeStep
             onNext={() => form.handleSubmit(handleSubmit)()}
             getPersonalizedLabel={getPersonalizedLabel}

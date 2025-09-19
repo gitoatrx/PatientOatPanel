@@ -27,23 +27,48 @@ type FormValues = z.infer<typeof visitTypeSchema>;
 
 export function PatientVisitTypeStep() {
   const router = useRouter();
-  const { state, saveStep, isLoading } = usePatientOnboarding();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [visitTypes, setVisitTypes] = useState<VisitType[]>([]);
   const [isLoadingVisitTypes, setIsLoadingVisitTypes] = useState<boolean>(true);
   const [visitTypesError, setVisitTypesError] = useState<string | null>(null);
+  const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   
   // Get step configuration
   const stepData = getStepComponentData("visitType");
 
-  // Get phone number from state
+  // Get phone number from localStorage and fetch progress data
   React.useEffect(() => {
-    if (state?.draft?.phone) {
-      setPhoneNumber(state.draft.phone as string);
+    const savedPhone = localStorage.getItem('patient-phone-number');
+    if (savedPhone) {
+      setPhoneNumber(savedPhone);
+      fetchProgressAndPrefillForm(savedPhone);
+    } else {
+      setIsLoadingProgress(false);
     }
-  }, [state]);
+  }, []);
+
+  const fetchProgressAndPrefillForm = async (phone: string) => {
+    try {
+      setIsLoadingProgress(true);
+      const progressResponse = await patientService.getOnboardingProgress(phone);
+      
+      if (progressResponse.success && progressResponse.data?.state?.visit_type) {
+        const visitType = progressResponse.data.state.visit_type;
+        console.log('Prefilling visit type form with:', visitType);
+        
+        // Prefill form with existing data
+        if (visitType.id) {
+          form.setValue('visitType', visitType.id.toString());
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching progress for prefill:', error);
+    } finally {
+      setIsLoadingProgress(false);
+    }
+  };
 
   // Load visit types from API
   React.useEffect(() => {
@@ -81,19 +106,7 @@ export function PatientVisitTypeStep() {
     },
   });
 
-  // Reset form values when state updates (after API call)
-  useEffect(() => {
-    if (state?.draft) {
-      // Convert visit type ID back to string for form
-      const visitTypeId = state.draft.visitTypeId ? state.draft.visitTypeId.toString() : "";
-      form.reset({
-        visitType: visitTypeId,
-      });
-      console.log("PatientVisitTypeStep: Form reset with state data:", {
-        visitType: visitTypeId,
-      });
-    }
-  }, [state?.draft, form]);
+  // Form prefilling is now handled by fetchProgressAndPrefillForm
 
   const handleSubmit = async (values: FormValues) => {
     if (!phoneNumber) {
@@ -218,6 +231,27 @@ export function PatientVisitTypeStep() {
 
   const enterKeyHandler = useEnterKey(() => form.handleSubmit(handleSubmit)());
 
+  // Show loading state while fetching progress data
+  if (isLoadingProgress) {
+    return (
+      <PatientStepShell
+        title="Loading..."
+        description="Loading your information..."
+        progressPercent={Math.round((10 / 15) * 100)}
+        currentStep={10}
+        totalSteps={15}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading your information...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
   return (
     <PatientStepShell
       title="What type of visit would you prefer?"
@@ -232,7 +266,7 @@ export function PatientVisitTypeStep() {
         }
       }}
       nextLabel="Continue"
-      isSubmitting={isLoading}
+      isSubmitting={form.formState.isSubmitting}
       isNextDisabled={!isFormValid}
       useCard={false}
       progressPercent={Math.round((10 / 15) * 100)}

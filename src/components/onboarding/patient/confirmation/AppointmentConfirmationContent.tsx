@@ -12,19 +12,71 @@ import {
 } from "lucide-react";
 import { AiAssessmentChat } from "./AiAssessmentChat";
 import { Button } from "@/components/ui/button";
-import { mockAssessmentData } from "@/data/mockAssessmentData";
+import { patientService } from "@/lib/services/patientService";
 
 
 export function AppointmentConfirmationContent() {
   const [showAssessment, setShowAssessment] = useState(false);
+  const [confirmationData, setConfirmationData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const appt = mockAssessmentData.appointmentData;
+  // Fetch confirmation data from API
+  useEffect(() => {
+    const fetchConfirmationData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-  const handleStartAssessment = () => {
-    // Navigate to the health check-in route
-    router.push('/onboarding/patient/health-checkin');
-  };
+        // Get phone number from localStorage
+        const savedPhone = localStorage.getItem('patient-phone-number');
+        
+        if (!savedPhone) {
+          setError('Phone number not found. Please start the onboarding process again.');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('Fetching confirmation data for phone:', savedPhone);
+        const progressResponse = await patientService.getOnboardingProgress(savedPhone);
+        
+        if (progressResponse.success && progressResponse.data) {
+          const apiData = progressResponse.data;
+          console.log('Confirmation API response:', apiData);
+          
+          // Extract confirmation data from the API response
+          if (apiData.state?.confirmation && apiData.state?.appointment && apiData.state?.provider) {
+            const confirmation = {
+              appointment_id: apiData.state.confirmation.appointment_id,
+              guest_patient_id: apiData.state.confirmation.guest_patient_id,
+              date: apiData.state.appointment.date,
+              time: apiData.state.appointment.time,
+              doctor: {
+                name: `Dr. ${apiData.state.provider.first_name} ${apiData.state.provider.last_name}`,
+                specialty: 'Family Medicine' // Default specialty since not in API
+              }
+            };
+            
+            setConfirmationData(confirmation);
+            console.log('Set confirmation data:', confirmation);
+          } else {
+            setError('Confirmation data not found. Please try again.');
+          }
+        } else {
+          console.error('Confirmation API failed:', progressResponse.message);
+          setError(progressResponse.message || 'Failed to fetch confirmation information');
+        }
+      } catch (error) {
+        console.error('Error fetching confirmation data:', error);
+        setError('Failed to fetch confirmation information');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchConfirmationData();
+  }, []);
 
   // Only prevent body scroll when chat modal is open (not for wizard)
   useEffect(() => {
@@ -39,6 +91,92 @@ export function AppointmentConfirmationContent() {
       document.body.style.overflow = 'unset';
     };
   }, [showAssessment]);
+
+  // Format date from API response (YYYY-MM-DD)
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Not specified";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Format time from API response (HH:MM)
+  const formatTime = (timeString: string) => {
+    if (!timeString) return "Not specified";
+    try {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes);
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return timeString;
+    }
+  };
+
+  const handleStartAssessment = () => {
+    // Navigate to the health check-in route
+    router.push('/onboarding/patient/health-checkin');
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Loading confirmation...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">{error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show confirmation content
+  if (!confirmationData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-500 mb-4">No confirmation data available</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const appt = confirmationData;
 
 
   return (
@@ -60,8 +198,16 @@ export function AppointmentConfirmationContent() {
                   <p className="text-xl text-gray-700 leading-relaxed">
                     Your follow-up appointment with <span className="text-green-600 font-semibold">{appt.doctor.name}</span> has been scheduled for
                     <br />
-                    <span className="text-green-600 font-semibold underline">{appt.date}, {appt.time}</span>
+                    <span className="text-green-600 font-semibold underline">{formatDate(appt.date)}, {formatTime(appt.time)}</span>
                   </p>
+                  
+                  {/* Appointment Details */}
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div><strong>Appointment ID:</strong> {appt.appointment_id}</div>
+                      <div><strong>Patient ID:</strong> {appt.guest_patient_id}</div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Assessment CTA Card */}

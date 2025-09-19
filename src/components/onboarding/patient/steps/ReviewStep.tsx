@@ -70,8 +70,12 @@ export const ReviewStep = memo(function ReviewStep({
         return "In-person visit";
       case "Either":
         return "Either option works for me";
+      case "video calling":
+        return "Video calling";
+      case "in-person":
+        return "In-person visit";
       default:
-        return "Not selected";
+        return visitType || "Not selected";
     }
   };
 
@@ -114,8 +118,13 @@ export const ReviewStep = memo(function ReviewStep({
     return specialty ? specialty.label : concern;
   };
 
-  const getDoctorName = (doctorId: string) => {
-    // Mock doctor data - in real app, this would come from an API
+  const getDoctorName = (doctorName: string) => {
+    // If doctorName is provided (from API), use it directly
+    if (doctorName && doctorName.trim() !== "") {
+      return `Dr. ${doctorName}`;
+    }
+    
+    // Fallback to mock data for backward compatibility
     const doctors = [
       { id: "dr-smith", name: "Dr. Sarah Smith", specialty: "Family Medicine" },
       { id: "dr-johnson", name: "Dr. Michael Johnson", specialty: "Internal Medicine" },
@@ -125,7 +134,7 @@ export const ReviewStep = memo(function ReviewStep({
       { id: "dr-miller", name: "Dr. James Miller", specialty: "Orthopedics" },
     ];
     
-    const doctor = doctors.find(d => d.id === doctorId);
+    const doctor = doctors.find(d => d.id === doctorName);
     return doctor ? `${doctor.name} - ${doctor.specialty}` : "No doctor selected";
   };
 

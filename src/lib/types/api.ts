@@ -85,13 +85,33 @@ export interface OnboardingProgressResponse {
         country: string;
       };
       visit_type?: {
-        visit_type_id: number;
-        visit_type_name: string;
+        id: number;
+        name: string;
+        duration: number;
       };
       emergency_contact?: {
         name: string;
         relationship: string;
         phone: string;
+      };
+      health_concerns?: {
+        selected_ids: number[];
+        selected_labels: string[];
+        free_text: string[];
+      };
+      provider?: {
+        id: number;
+        last_name: string;
+        first_name: string;
+        provider_no: string;
+      };
+      appointment?: {
+        date: string;
+        time: string;
+      };
+      confirmation?: {
+        appointment_id: number;
+        guest_patient_id: number;
       };
       otp_verified_at: string;
     };

@@ -23,6 +23,9 @@ export const API_CONFIG = {
   PROVIDER_SELECTION: '/clinic/onboarding/provider',
   EMERGENCY_CONTACT: '/clinic/onboarding/emergency-contact',
   HEALTH_CONCERNS_LIST: '/clinic/onboarding/health-concerns/list',
+  HEALTH_CONCERN: '/clinic/onboarding/health-concerns',
+  APPOINTMENT: '/clinic/onboarding/appointment',
+  CONFIRM_APPOINTMENT: '/clinic/onboarding/confirm',
   AVAILABLE_SLOTS_PROVIDER: '/clinic/onboarding/available-slots-provider',
   AVAILABLE_SLOTS: '/clinic/onboarding/available-slots',
   },
@@ -63,11 +66,11 @@ export const getClinicRequestBody = (data: Record<string, any>) => {
 // Step mapping from API response to frontend routes
 export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
   'health_card': '/onboarding/patient/health-card',
-  'personal_info': '/onboarding/patient/personal', // API returns 'personal_info'
   'personal_info_step1': '/onboarding/patient/personal', // API returns 'personal_info_step1'
   'personal_info_step2': '/onboarding/patient/gender', // API returns 'personal_info_step2'
   'personal_info_step3': '/onboarding/patient/date-of-birth', // API returns 'personal_info_step3'
-  'personal_info_step4': '/onboarding/patient/address', // API returns 'personal_info_step4'
+  'personal_info_step4': '/onboarding/patient/email', // API returns 'personal_info_step4' - should go to email first
+  'personal_info_step5': '/onboarding/patient/address', // API returns 'personal_info_step5' - should go to address after email
   'personal': '/onboarding/patient/personal', // Fallback
   'gender': '/onboarding/patient/gender',
   'date_of_birth': '/onboarding/patient/date-of-birth',
@@ -78,9 +81,7 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
   'visit_type': '/onboarding/patient/visit-type',
   'emergency_contact': '/onboarding/patient/emergency-contact',
   'provider': '/onboarding/patient/doctor-selection', // API returns 'provider'
-  'doctor_selection': '/onboarding/patient/doctor-selection',
   'appointment': '/onboarding/patient/appointment-datetime', // API returns 'appointment'
-  'appointment_datetime': '/onboarding/patient/appointment-datetime',
   'review': '/onboarding/patient/review',
   'confirmation': '/onboarding/patient/confirmation',
 };

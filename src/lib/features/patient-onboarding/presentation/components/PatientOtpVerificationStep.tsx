@@ -158,6 +158,11 @@ export function PatientOtpVerificationStep() {
       if (verifyResponse.success) {
         console.log("OTP verification successful:", verifyResponse);
         
+        // Save OTP verification status to localStorage
+        localStorage.setItem('patient-otp-verified', 'true');
+        localStorage.setItem('patient-otp-verified-at', new Date().toISOString());
+        console.log("OTP verification status saved to localStorage");
+        
         // Show success toast
         toast({
           variant: "success",

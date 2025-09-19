@@ -179,49 +179,22 @@ export function PatientEmergencyContactStep() {
       if (apiResponse.success) {
         console.log("Emergency contact saved successfully:", apiResponse);
         
-        try {
-          // Save to centralized state
-          await saveStep(stepData.stepId, {
-            emergencyContactRelationship: values.emergencyContactRelationship,
-            emergencyContactName: values.emergencyContactName,
-            emergencyContactPhone: values.emergencyContactPhone,
-            currentStep: apiResponse.data.current_step,
-            status: apiResponse.data.status,
-            guestPatientId: apiResponse.data.guest_patient_id,
-            appointmentId: apiResponse.data.appointment_id,
-          });
-          
-          // Navigate to next step based on API response (no success toast)
-          const nextStep = apiResponse.data.current_step;
-          const nextRoute = getRouteFromApiStep(nextStep);
-          console.log(`Emergency contact API response:`, apiResponse);
-          console.log(`Next step from API: ${nextStep}`);
-          console.log(`Mapped route: ${nextRoute}`);
-          console.log(`Navigating to: ${nextRoute}`);
-          
-          // Debug: Check if route mapping is working
-          if (!nextRoute) {
-            console.error(`No route found for step: ${nextStep}`);
-            console.log('Available routes:', Object.keys(API_STEP_TO_ROUTE_MAP));
-            // Fallback to doctor selection
-            router.push("/onboarding/patient/doctor-selection");
-          } else {
-            router.push(nextRoute);
-          }
-        } catch (saveError) {
-          console.error('Error saving step:', saveError);
-          const errorMessage = 'Failed to save your information. Please try again.';
-          
-          // Show error toast IMMEDIATELY
-          toast({
-            variant: "error",
-            title: "Save Error",
-            description: errorMessage,
-          });
-          
-          // Set error state after toast
-          setError(errorMessage);
-          throw new Error(errorMessage);
+        // Navigate to next step based on API response (no success toast)
+        const nextStep = apiResponse.data.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep);
+        console.log(`Emergency contact API response:`, apiResponse);
+        console.log(`Next step from API: ${nextStep}`);
+        console.log(`Mapped route: ${nextRoute}`);
+        console.log(`Navigating to: ${nextRoute}`);
+        
+        // Debug: Check if route mapping is working
+        if (!nextRoute) {
+          console.error(`No route found for step: ${nextStep}`);
+          console.log('Available routes:', Object.keys(API_STEP_TO_ROUTE_MAP));
+          // Fallback to doctor selection
+          router.push("/onboarding/patient/doctor-selection");
+        } else {
+          router.push(nextRoute);
         }
       } else {
         // Handle API error response
@@ -288,6 +261,27 @@ export function PatientEmergencyContactStep() {
   const formValues = form.watch();
   const selectedRelationship = formValues.emergencyContactRelationship;
 
+  // Show loading state while fetching progress data
+  if (isLoadingProgress) {
+    return (
+      <PatientStepShell
+        title="Loading..."
+        description="Loading your information..."
+        progressPercent={Math.round((11 / 15) * 100)}
+        currentStep={11}
+        totalSteps={15}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading your information...</p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
+
   return (
     <PatientStepShell
       title="Who should we contact in case of emergency?"
@@ -302,7 +296,7 @@ export function PatientEmergencyContactStep() {
         }
       }}
       nextLabel="Continue"
-      isSubmitting={isLoading}
+      isSubmitting={form.formState.isSubmitting}
       isNextDisabled={!isValid}
       useCard={false}
       progressPercent={Math.round((11 / 15) * 100)}

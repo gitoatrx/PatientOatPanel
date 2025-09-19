@@ -9,6 +9,7 @@ import { ChevronLeft, LogOut } from "lucide-react";
 import { BimbleLogoIcon } from "@/../public/icons/icons";
 // import { gsap } from "gsap"; // COMMENTED OUT FOR TESTING
 import { BaseErrorBoundary } from "@/components/error-boundaries/BaseErrorBoundary";
+import { hasActiveSession, logout } from "@/lib/utils/auth-utils";
 // Removed tokenStorage import - not needed in UI-only mode
 
 interface PatientStepShellProps {
@@ -59,15 +60,10 @@ export function PatientStepShell({
 }: PatientStepShellProps) {
   const [hasUserToken, setHasUserToken] = useState(false);
 
-  // Check for patient token on mount
+  // Check for active session on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const hasOnboardingToken = !!localStorage.getItem(
-        "bimble_patient_onboarding_access_token",
-      );
-      // In UI-only mode, no token checking
-      const hasRegularToken = false;
-      setHasUserToken(hasOnboardingToken || hasRegularToken);
+      setHasUserToken(hasActiveSession());
     }
   }, []);
 
@@ -176,32 +172,15 @@ export function PatientStepShell({
       return;
     }
 
-    // Default patient logout behavior
+    // Use our auth utility to logout
+    logout();
+    
+    // Redirect to phone step after logout
     if (typeof window !== "undefined") {
-      // Clear patient tokens from both localStorage and cookies
-      localStorage.removeItem("bimble_patient_onboarding_access_token");
-      localStorage.removeItem("bimble_patient_onboarding_refresh_token");
-      localStorage.removeItem("bimble_patient_access_token");
-      localStorage.removeItem("bimble_patient_refresh_token");
-      localStorage.removeItem("bimble_patient_account_id");
-      localStorage.removeItem("bimble_access_token");
-      localStorage.removeItem("bimble_refresh_token");
-
-      // Clear cookies
-      document.cookie =
-        "bimble_patient_onboarding_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie =
-        "bimble_patient_onboarding_refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie =
-        "bimble_patient_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie =
-        "bimble_patient_refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie =
-        "bimble_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie =
-        "bimble_refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      window.location.href = "/onboarding/patient/phone";
     }
-    console.log("Logout clicked - redirect to login page");
+    
+    console.log("Logout clicked - redirect to phone step");
   }, [onLogout]);
 
   return (

@@ -546,13 +546,14 @@ export const patientService = {
     }
   },
 
-  async getProvidersList(search?: string): Promise<ProvidersListResponse> {
+  async getProvidersList(search?: string, visitName?: string): Promise<ProvidersListResponse> {
     try {
-      console.log('Fetching providers list for clinic:', API_CONFIG.CLINIC_ID, 'with search:', search);
+      console.log('Fetching providers list for clinic:', API_CONFIG.CLINIC_ID, 'with search:', search, 'and visit_name:', visitName);
       
       const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+      const visitNameParam = visitName ? `&visit_name=${encodeURIComponent(visitName)}` : '';
       const response = await apiClient.get<ProvidersListResponse>(
-        `${API_CONFIG.ENDPOINTS.PROVIDERS_LIST}?clinic_id=${API_CONFIG.CLINIC_ID}${searchParam}`,
+        `${API_CONFIG.ENDPOINTS.PROVIDERS_LIST}?clinic_id=${API_CONFIG.CLINIC_ID}${searchParam}${visitNameParam}`,
         {
           showLoading: false, // Don't show loading for this background fetch
           showErrorToast: false, // Handle errors in component
@@ -672,6 +673,110 @@ export const patientService = {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to fetch available time slots',
         data: [],
+      };
+    }
+  },
+
+  // Save Health Concern API
+  async saveHealthConcern(phone: string, healthConcernData: {
+    selected_concern_ids: number[];
+    other_concerns: string[];
+  }): Promise<ApiResponse<{ current_step: string }>> {
+    try {
+      console.log('Saving health concern for phone:', phone, 'with data:', healthConcernData);
+      
+      const response = await apiClient.post<ApiResponse<{ current_step: string }>>(
+        API_CONFIG.ENDPOINTS.HEALTH_CONCERN,
+        {
+          phone,
+          clinic_id: API_CONFIG.CLINIC_ID,
+          ...healthConcernData,
+        },
+        {
+          showLoading: true,
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Health concern save response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to save health concern:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to save health concern',
+        data: { current_step: 'health_concern' },
+      };
+    }
+  },
+
+  // Save Appointment API
+  async saveAppointment(phone: string, appointmentData: {
+    date: string;
+    time: string;
+  }): Promise<ApiResponse<{ current_step: string }>> {
+    try {
+      console.log('Saving appointment for phone:', phone, 'with data:', appointmentData);
+      
+      const response = await apiClient.post<ApiResponse<{ current_step: string }>>(
+        API_CONFIG.ENDPOINTS.APPOINTMENT,
+        {
+          phone,
+          clinic_id: API_CONFIG.CLINIC_ID,
+          ...appointmentData,
+        },
+        {
+          showLoading: true,
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Appointment save response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to save appointment:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to save appointment',
+        data: { current_step: 'appointment' },
+      };
+    }
+  },
+
+  // Confirm Appointment API
+  async confirmAppointment(phone: string): Promise<ApiResponse<{ appointment_id: number; confirmation_number: string }>> {
+    try {
+      console.log('Confirming appointment for phone:', phone);
+      
+      const response = await apiClient.post<ApiResponse<{ appointment_id: number; confirmation_number: string }>>(
+        API_CONFIG.ENDPOINTS.CONFIRM_APPOINTMENT,
+        {
+          phone,
+          clinic_id: API_CONFIG.CLINIC_ID,
+        },
+        {
+          showLoading: true,
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+      
+      console.log('Appointment confirmation response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to confirm appointment:', error);
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to confirm appointment',
+        data: { appointment_id: 0, confirmation_number: '' },
       };
     }
   },
