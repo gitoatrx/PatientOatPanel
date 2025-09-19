@@ -52,7 +52,6 @@ const createApiError = (error: AxiosError): ApiError => {
     // Server responded with error status
     const status = error.response.status;
     const data = error.response.data as Record<string, unknown>;
-    
     return {
       code: (data?.code as string) || `HTTP_${status}`,
       message: (data?.message as string) || error.message || 'Server error',
