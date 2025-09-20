@@ -12,6 +12,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 // import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { RadioOptionSkeleton } from "@/components/ui/skeleton-loaders";
 
 const healthCardSchema = z
   .object({
@@ -328,10 +329,15 @@ export function PatientHealthCardStep() {
         useCard={false}
         progressPercent={Math.round((3 / 15) * 100)}
       >
-        <div className="flex items-center justify-center py-8">
+        <div className="space-y-6">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your information...</p>
+            <p className="text-sm text-muted-foreground mb-6">Loading your information...</p>
+          </div>
+          
+          {/* Health Card Options Skeleton */}
+          <div className="space-y-3">
+            <RadioOptionSkeleton />
+            <RadioOptionSkeleton />
           </div>
         </div>
       </PatientStepShell>

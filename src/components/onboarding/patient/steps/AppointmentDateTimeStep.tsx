@@ -8,6 +8,7 @@ import { useEnterKey } from "@/lib/hooks/useEnterKey";
 // Date utility imports removed - using string-based dates to avoid timezone issues
 import { patientService } from "@/lib/services/patientService";
 import { AvailableDate } from "@/lib/types/api";
+import { DateGridSkeleton, TimeSlotsGridSkeleton } from "@/components/ui/skeleton-loaders";
 
 // Interface for the component's internal date format - using strings to avoid timezone issues
 interface ComponentDate {
@@ -96,6 +97,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   const [availableTimeSlots, setAvailableTimeSlots] = useState<{ value: string; label: string }[]>([]);
   const [isLoadingTimeSlots, setIsLoadingTimeSlots] = useState(false);
   const [timeSlotsError, setTimeSlotsError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null); // Track selected date independently
 
   const {
     watch,
@@ -105,6 +107,13 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
     clearErrors, // Add this line
   } = useFormContext();
   const formValues = watch();
+
+  // Sync selected date with form state
+  useEffect(() => {
+    if (formValues.appointmentDate && formValues.appointmentDate !== selectedDate) {
+      setSelectedDate(formValues.appointmentDate);
+    }
+  }, [formValues.appointmentDate, selectedDate]);
 
   // Fetch available dates from API when providerId is available
   useEffect(() => {
@@ -247,8 +256,29 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
   const enterKeyHandler = useEnterKey(handleNext);
 
-  // Get displayed dates and slots
-  const displayedDates = availableDates.slice(0, displayedDatesCount);
+  // Get displayed dates and slots with smart pagination
+  const getDisplayedDates = () => {
+    if (!selectedDate) {
+      // If no date is selected, show the first batch
+      return availableDates.slice(0, displayedDatesCount);
+    }
+    
+    // Find the index of the selected date
+    const selectedIndex = availableDates.findIndex(date => date.value === selectedDate);
+    
+    if (selectedIndex === -1) {
+      // Selected date not found, show first batch
+      return availableDates.slice(0, displayedDatesCount);
+    }
+    
+    // Ensure selected date is visible by adjusting the slice
+    const startIndex = Math.max(0, selectedIndex - Math.floor(displayedDatesCount / 2));
+    const endIndex = Math.min(availableDates.length, startIndex + displayedDatesCount);
+    
+    return availableDates.slice(startIndex, endIndex);
+  };
+  
+  const displayedDates = getDisplayedDates();
   const hasMoreDates = displayedDatesCount < availableDates.length;
   const displayedTimeSlots = availableTimeSlots.slice(0, displayedSlotsCount);
   const hasMoreSlots = displayedSlotsCount < availableTimeSlots.length;
@@ -266,9 +296,10 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   };
 
   // Handle date selection with validation
-  const handleDateSelect = async (selectedDate: ComponentDate) => {
+  const handleDateSelect = async (dateToSelect: ComponentDate) => {
     // Use the date string directly from the API - no timezone conversion needed
-    setValue("appointmentDate", selectedDate.value);
+    setValue("appointmentDate", dateToSelect.value);
+    setSelectedDate(dateToSelect.value); // Update local state
 
     // Validate the field
     await trigger("appointmentDate");
@@ -304,6 +335,33 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
   const handleLoadMoreSlots = () => {
     setDisplayedSlotsCount((prev) => prev + SLOTS_TO_LOAD_MORE);
+  };
+
+  // Date navigation functions
+  const handlePreviousDates = () => {
+    if (selectedDate) {
+      const selectedIndex = availableDates.findIndex(date => date.value === selectedDate);
+      if (selectedIndex > 0) {
+        const previousDate = availableDates[selectedIndex - 1];
+        handleDateSelect(previousDate);
+      }
+    } else if (availableDates.length > 0) {
+      // If no date selected, select the first available date
+      handleDateSelect(availableDates[0]);
+    }
+  };
+
+  const handleNextDates = () => {
+    if (selectedDate) {
+      const selectedIndex = availableDates.findIndex(date => date.value === selectedDate);
+      if (selectedIndex < availableDates.length - 1) {
+        const nextDate = availableDates[selectedIndex + 1];
+        handleDateSelect(nextDate);
+      }
+    } else if (availableDates.length > 0) {
+      // If no date selected, select the first available date
+      handleDateSelect(availableDates[0]);
+    }
   };
 
   return (
@@ -400,12 +458,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
               >
                 <div className="space-y-4">
                   {/* Loading state */}
-                  {isLoadingDates && (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                      <p className="text-sm text-muted-foreground">Loading available dates...</p>
-                    </div>
-                  )}
+                  {isLoadingDates && <DateGridSkeleton count={10} />}
 
                   {/* Error state */}
                   {datesError && !isLoadingDates && (
@@ -435,8 +488,8 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                   {!isLoadingDates && !datesError && availableDates.length > 0 && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2">
                       {displayedDates.map((date, index) => {
-                        // Use the date string directly from API - no timezone conversion needed
-                        const isSelected = formValues.appointmentDate === date.value;
+                        // Use the selectedDate state for more reliable selection tracking
+                        const isSelected = selectedDate === date.value || formValues.appointmentDate === date.value;
 
                         return (
                           <motion.button
@@ -540,10 +593,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                     <p className="text-sm">Please select a date first</p>
                   </div>
                 ) : isLoadingTimeSlots ? (
-                  <div className="text-center py-6 sm:py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                    <p className="text-sm text-muted-foreground">Loading available times...</p>
-                  </div>
+                  <TimeSlotsGridSkeleton count={8} />
                 ) : timeSlotsError ? (
                   <div className="text-center py-6 sm:py-8 text-gray-500">
                     <Clock className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />

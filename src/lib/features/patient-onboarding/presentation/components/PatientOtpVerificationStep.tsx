@@ -184,7 +184,14 @@ export function PatientOtpVerificationStep() {
             if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
               const targetRoute = getRouteFromApiStep(currentStep);
               console.log("Navigating to step where user left off:", currentStep, "→", targetRoute);
-              router.push(targetRoute);
+              
+              // Special handling for completed step
+              if (currentStep === 'completed') {
+                console.log("Onboarding is completed, redirecting to confirmation page");
+                router.push("/onboarding/patient/confirmation");
+              } else {
+                router.push(targetRoute);
+              }
             } else {
               // If no valid current step, go to health card as default
               console.log("No valid current step found, defaulting to health card step");

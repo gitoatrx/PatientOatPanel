@@ -15,6 +15,7 @@ import { patientService } from "@/lib/services/patientService";
 import { Provider } from "@/lib/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { DoctorListSkeleton } from "@/components/ui/skeleton-loaders";
 
 // Doctor data interface
 interface Doctor {
@@ -277,32 +278,7 @@ export function PatientDoctorSelectionStep() {
           )}
 
           {/* Loading State with Skeleton */}
-          {isLoadingProviders && (
-            <div className="space-y-3">
-              {[...Array(3)].map((_, index) => (
-                <div key={index} className="animate-pulse">
-                  <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
-                    {/* Avatar Skeleton */}
-                    <div className="size-12 bg-muted rounded-full"></div>
-                    
-                    {/* Content Skeleton */}
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-muted rounded w-3/4"></div>
-                      <div className="h-3 bg-muted rounded w-1/2"></div>
-                      <div className="h-3 bg-muted rounded w-1/3"></div>
-                    </div>
-                    
-                    {/* Selector Skeleton */}
-                    <div className="size-6 bg-muted rounded-full"></div>
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center justify-center mt-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
-                <p className="text-sm text-muted-foreground">Loading providers...</p>
-              </div>
-            </div>
-          )}
+          {isLoadingProviders && <DoctorListSkeleton count={4} />}
 
           {/* Error State */}
           {providersError && (
