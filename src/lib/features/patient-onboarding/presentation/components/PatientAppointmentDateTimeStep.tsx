@@ -12,6 +12,7 @@ import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { useToast } from "@/components/ui/use-toast";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { DoctorListSkeleton, DateGridSkeleton, SectionHeaderSkeleton } from "@/components/ui/skeleton-loaders";
 
 // Form schema for appointment date/time
 const appointmentDateTimeSchema = z.object({
@@ -117,10 +118,17 @@ export function PatientAppointmentDateTimeStep() {
         totalSteps={stepData.totalSteps}
         useCard={false}
       >
-        <div className="flex items-center justify-center py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-            <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="space-y-6">
+          {/* Doctor Selection Skeleton */}
+          <div className="space-y-4">
+            <SectionHeaderSkeleton />
+            <DoctorListSkeleton count={3} />
+          </div>
+
+          {/* Date & Time Selection Skeleton */}
+          <div className="border-t border-border/30 pt-6 space-y-4">
+            <SectionHeaderSkeleton />
+            <DateGridSkeleton count={10} />
           </div>
         </div>
       </PatientStepShell>

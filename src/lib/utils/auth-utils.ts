@@ -52,3 +52,5 @@ export const logout = (): void => {
 export const hasActiveSession = (): boolean => {
   return isOtpVerified() && getPhoneNumber() !== null;
 };
+
+

@@ -51,7 +51,14 @@ export function RouteProtection({ children }: RouteProtectionProps) {
                 console.log("Mapped to route:", targetRoute);
                 console.log("Available mappings:", Object.keys(API_STEP_TO_ROUTE_MAP));
                 console.log("=============================");
-                router.replace(targetRoute);
+                
+                // Special handling for completed step
+                if (currentStep === 'completed') {
+                  console.log("Onboarding is completed, redirecting to confirmation page");
+                  router.replace("/onboarding/patient/confirmation");
+                } else {
+                  router.replace(targetRoute);
+                }
                 return;
               } else {
                 // If no valid current step, go to health card as default

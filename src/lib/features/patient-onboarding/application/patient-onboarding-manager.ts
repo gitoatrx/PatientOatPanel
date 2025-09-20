@@ -95,6 +95,12 @@ export class PatientOnboardingManager {
         const currentStepNumber = this.getStepNumberFromName(apiData.current_step);
         this.state.currentStep = currentStepNumber;
         
+        // Special handling for completed step
+        if (apiData.current_step === 'completed') {
+          this.state.isComplete = true;
+          console.log("PatientOnboardingManager: Onboarding is completed");
+        }
+        
         // Extract and populate form data from API state
         const apiState = apiData.state;
         const formData: Record<string, unknown> = {};
@@ -338,6 +344,12 @@ export class PatientOnboardingManager {
   }
 
   private getStepNumberFromName(stepName: string): number {
+    // Special handling for completed step
+    if (stepName === 'completed') {
+      console.log("PatientOnboardingManager: Converting completed step to confirmation step (15)");
+      return 15; // Return confirmation step number
+    }
+    
     // Convert API step name to frontend step number
     const stepEntry = Object.entries(PATIENT_STEP_MAPPING).find(
       ([, name]) => name === stepName,

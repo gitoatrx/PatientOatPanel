@@ -88,6 +88,7 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
   'appointment_datetime': '/onboarding/patient/appointment-datetime', // Alternative step name
   'review': '/onboarding/patient/review',
   'confirmation': '/onboarding/patient/confirmation',
+  'completed': '/onboarding/patient/confirmation', // API returns 'completed' when onboarding is complete
 };
 
 // Helper function to get frontend route from API step
