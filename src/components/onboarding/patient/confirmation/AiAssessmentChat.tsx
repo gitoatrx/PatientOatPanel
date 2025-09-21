@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { X, Mic, MicOff, Send, Loader2, Phone, PhoneOff, Volume2, VolumeX } from "lucide-react";
 import { BimbleLogoIcon } from "@/components/icons";
+import { FollowupQuestion } from "@/lib/types/api";
 
 // Type declarations for Web Speech API
 declare global {
@@ -71,22 +72,27 @@ interface ChatMessage {
 }
 
 interface AiAssessmentChatProps {
-  isOpen: boolean;
   onClose: () => void;
+  doctorName: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  followupQuestions?: FollowupQuestion[];
   isEmbedded?: boolean;
 }
 
 export function AiAssessmentChat({
-  isOpen,
   onClose,
+  doctorName,
+  appointmentDate,
+  appointmentTime,
+  followupQuestions = [],
   isEmbedded = false,
 }: AiAssessmentChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "1",
       type: "ai",
-      content:
-        "Hi! 👋 I'm your clinical assistant. Your appointment with Dr. Sarah Johnson is confirmed for September 15, 2025 at 2:30 PM at Downtown Medical Center. You can chat with me by text or use Call Mode for voice conversation.",
+      content: `Hi! 👋 I'm your clinical assistant. Your appointment with ${doctorName} is confirmed for ${appointmentDate} at ${appointmentTime} at OAT Clinic. You can chat with me by text or use Call Mode for voice conversation.${followupQuestions.length > 0 ? ` I have ${followupQuestions.length} personalized questions to help prepare for your visit.` : ''}`,
       timestamp: new Date(),
     },
   ]);
@@ -94,10 +100,14 @@ export function AiAssessmentChat({
   const [isRecording, setIsRecording] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  
+
   // Call mode states
   const [callMode, setCallMode] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+
+  // Follow-up questions state
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
   const [micOn, setMicOn] = useState(false);
   const [sttStatus, setSttStatus] = useState("");
   const [sttCommitted, setSttCommitted] = useState("");
@@ -109,7 +119,7 @@ export function AiAssessmentChat({
   const audioRef = useRef<HTMLAudioElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  
+
   // Speech recognition and TTS refs
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -126,18 +136,18 @@ export function AiAssessmentChat({
   const stopSpeaking = useCallback(() => {
     try {
       window.speechSynthesis.cancel();
-    } catch {}
+    } catch { }
     if (currentAudioRef.current) {
       try {
         currentAudioRef.current.pause();
-      } catch {}
+      } catch { }
       currentAudioRef.current.src = "";
       currentAudioRef.current = null;
     }
     if (currentAudioUrlRef.current) {
       try {
         URL.revokeObjectURL(currentAudioUrlRef.current);
-      } catch {}
+      } catch { }
       currentAudioUrlRef.current = null;
     }
   }, []);
@@ -145,7 +155,7 @@ export function AiAssessmentChat({
   const speak = useCallback((text: string): Promise<void> => {
     if (!voiceOn) return Promise.resolve();
     stopSpeaking();
-    
+
     return new Promise(async (resolve) => {
       try {
         // Try custom TTS endpoint first
@@ -154,7 +164,7 @@ export function AiAssessmentChat({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text })
         });
-        
+
         if (response.ok) {
           const blob = await response.blob();
           currentAudioUrlRef.current = URL.createObjectURL(blob);
@@ -169,7 +179,7 @@ export function AiAssessmentChat({
       } catch (error) {
         console.error("TTS endpoint failed:", error);
       }
-      
+
       // Fallback to browser TTS
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "en-US";
@@ -194,16 +204,16 @@ export function AiAssessmentChat({
       setSttStatus("Speech recognition not supported (use Chrome).");
       return null;
     }
-    
+
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.continuous = true;
     recognition.interimResults = true;
-    
+
     recognition.onstart = () => {
       setSttStatus(callMode ? "Call Mode: listening…" : "Listening…");
     };
-    
+
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalHit = false;
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -216,10 +226,10 @@ export function AiAssessmentChat({
           setSttInterim(transcript + " ");
         }
       }
-      
+
       const combinedText = (sttCommitted + sttInterim).trim();
       setInputText(combinedText);
-      
+
       if (callMode && finalHit) {
         if (autoSendTimerRef.current) {
           clearTimeout(autoSendTimerRef.current);
@@ -235,22 +245,22 @@ export function AiAssessmentChat({
         }, 500);
       }
     };
-    
+
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setSttStatus("Mic error: " + (event.error || "unknown"));
     };
-    
+
     recognition.onend = () => {
       setSttStatus(micOn ? (callMode ? "Reconnecting mic…" : "Reconnecting…") : "");
       if (micOn) {
         setTimeout(() => {
           try {
             recognition.start();
-          } catch {}
+          } catch { }
         }, 120);
       }
     };
-    
+
     return recognition;
   }, [callMode, micOn, sttCommitted, sttInterim]);
 
@@ -260,32 +270,32 @@ export function AiAssessmentChat({
       recognitionRef.current = initRecognition();
     }
     if (!recognitionRef.current) return;
-    
+
     if (!callMode) {
       resumeVoiceOnStopRef.current = voiceOn;
       setVoiceOn(false);
       stopSpeaking();
     }
-    
+
     setMicOn(true);
     setSttCommitted("");
     setSttInterim("");
     setSttStatus("Starting mic…");
-    
+
     try {
       recognitionRef.current.start();
-    } catch {}
+    } catch { }
   }, [micOn, callMode, voiceOn, stopSpeaking, initRecognition]);
 
   const stopMic = useCallback(() => {
     if (!micOn) return;
     setMicOn(false);
     setSttStatus("");
-    
+
     try {
       recognitionRef.current?.stop();
-    } catch {}
-    
+    } catch { }
+
     if (!callMode) {
       setVoiceOn(resumeVoiceOnStopRef.current);
     }
@@ -296,7 +306,7 @@ export function AiAssessmentChat({
     setVoiceOn(true);
     stopSpeaking();
     startMic();
-    
+
     const callStartMessage: ChatMessage = {
       id: `call-start-${Date.now()}`,
       type: "ai",
@@ -311,7 +321,7 @@ export function AiAssessmentChat({
     stopMic();
     setVoiceOn(false);
     stopSpeaking();
-    
+
     const callEndMessage: ChatMessage = {
       id: `call-end-${Date.now()}`,
       type: "ai",
@@ -332,12 +342,12 @@ export function AiAssessmentChat({
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-        } catch {}
+        } catch { }
       }
-      
+
       // Cleanup audio
       stopSpeaking();
-      
+
       // Cleanup timers
       if (autoSendTimerRef.current) {
         clearTimeout(autoSendTimerRef.current);
@@ -363,9 +373,9 @@ export function AiAssessmentChat({
       const response = await fetch("http://127.0.0.1:3012/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          messages: [{ role: "user", content: "Hello, I'm ready to start our conversation." }], 
-          summary: null 
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Hello, I'm ready to start our conversation." }],
+          summary: null
         })
       });
 
@@ -380,7 +390,7 @@ export function AiAssessmentChat({
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
 
         for (const line of chunk.split("\n")) {
@@ -388,7 +398,7 @@ export function AiAssessmentChat({
           if (!line.startsWith("data: ")) continue;
           const jsonLine = line.replace(/^data:\s*/, "");
           if (!jsonLine) continue;
-          
+
           try {
             const evt = JSON.parse(jsonLine);
 
@@ -411,7 +421,7 @@ export function AiAssessmentChat({
                     : msg
                 )
               );
-              
+
               // Only speak in call mode
               if (callMode) {
                 speak(assistant)
@@ -428,11 +438,11 @@ export function AiAssessmentChat({
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === initialMessage.id
-            ? { 
-                ...msg, 
-                content: "⚠️ Failed to start conversation",
-                isStreaming: false 
-              }
+            ? {
+              ...msg,
+              content: "⚠️ Failed to start conversation",
+              isStreaming: false
+            }
             : msg
         )
       );
@@ -448,11 +458,31 @@ export function AiAssessmentChat({
       const timer = setTimeout(() => {
         startInitialChat();
       }, 1000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [isOpen, messages.length, startInitialChat]);
 
+  // Handle follow-up questions
+  const handleFollowupQuestion = useCallback((question: FollowupQuestion) => {
+    const questionMessage: ChatMessage = {
+      id: `question-${question.id}`,
+      type: "ai",
+      content: `**Question ${currentQuestionIndex + 1}:** ${question.text}${question.hint ? `\n\n*Hint: ${question.hint}*` : ''}`,
+      timestamp: new Date(),
+      isTyping: false,
+    };
+
+    setMessages((prev) => [...prev, questionMessage]);
+  }, [currentQuestionIndex]);
+
+  // Process follow-up questions when they're available
+  useEffect(() => {
+    if (followupQuestions.length > 0 && currentQuestionIndex < followupQuestions.length) {
+      const currentQuestion = followupQuestions[currentQuestionIndex];
+      handleFollowupQuestion(currentQuestion);
+    }
+  }, [followupQuestions, currentQuestionIndex, handleFollowupQuestion]);
 
   const sendMessage = useCallback(async (content: string, fromCall = false) => {
     if (!content.trim()) return;
@@ -493,11 +523,11 @@ export function AiAssessmentChat({
       const response = await fetch("http://127.0.0.1:3012/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: [...messages, userMessage].map(msg => ({
             role: msg.type === "user" ? "user" : "assistant",
             content: msg.content
-          })), 
+          })),
           summary: null // Add summary state if needed
         })
       });
@@ -509,7 +539,7 @@ export function AiAssessmentChat({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistant = "";
-      
+
       // Set a timeout to clear streaming state if no data is received
       timeoutId = setTimeout(() => {
         if (!hasReceivedData) {
@@ -526,7 +556,7 @@ export function AiAssessmentChat({
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
 
         for (const line of chunk.split("\n")) {
@@ -534,7 +564,7 @@ export function AiAssessmentChat({
           if (!line.startsWith("data: ")) continue;
           const jsonLine = line.replace(/^data:\s*/, "");
           if (!jsonLine) continue;
-          
+
           try {
             const evt = JSON.parse(jsonLine);
 
@@ -579,11 +609,11 @@ export function AiAssessmentChat({
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === aiMessage.id
-                    ? { 
-                        ...msg, 
-                        content: `⚠️ ${evt.error}`,
-                        isStreaming: false 
-                      }
+                    ? {
+                      ...msg,
+                      content: `⚠️ ${evt.error}`,
+                      isStreaming: false
+                    }
                     : msg
                 )
               );
@@ -598,11 +628,11 @@ export function AiAssessmentChat({
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === aiMessage.id
-            ? { 
-                ...msg, 
-                content: "⚠️ Network error",
-                isStreaming: false 
-              }
+            ? {
+              ...msg,
+              content: "⚠️ Network error",
+              isStreaming: false
+            }
             : msg
         )
       );
@@ -647,7 +677,7 @@ export function AiAssessmentChat({
 
         // In real implementation, send audio to backend for ASR
         console.log("Audio recorded:", audioUrl);
-        
+
         // TODO: Send audio to backend for speech-to-text conversion
         // For now, just log the audio blob
       };
@@ -686,11 +716,10 @@ export function AiAssessmentChat({
               {/* Call Mode Controls */}
               <button
                 onClick={() => setVoiceOn(!voiceOn)}
-                className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${
-                  voiceOn 
-                    ? "bg-slate-600 hover:bg-slate-700" 
+                className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${voiceOn
+                    ? "bg-slate-600 hover:bg-slate-700"
                     : "bg-slate-500 hover:bg-slate-600"
-                }`}
+                  }`}
               >
                 {voiceOn ? (
                   <>
@@ -704,14 +733,13 @@ export function AiAssessmentChat({
                   </>
                 )}
               </button>
-              
+
               <button
                 onClick={micOn ? stopMic : startMic}
-                className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${
-                  micOn 
-                    ? "bg-slate-600 hover:bg-slate-700" 
+                className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${micOn
+                    ? "bg-slate-600 hover:bg-slate-700"
                     : "bg-slate-500 hover:bg-slate-600"
-                }`}
+                  }`}
               >
                 {micOn ? (
                   <>
@@ -725,8 +753,8 @@ export function AiAssessmentChat({
                   </>
                 )}
               </button>
-              
-              
+
+
               {onClose && (
                 <button
                   onClick={onClose}
@@ -742,9 +770,9 @@ export function AiAssessmentChat({
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4">
           {messages.map((message) => (
-            <ChatMessageComponent 
-              key={message.id} 
-              message={message} 
+            <ChatMessageComponent
+              key={message.id}
+              message={message}
               onRetry={retryMessage}
             />
           ))}
@@ -811,11 +839,10 @@ export function AiAssessmentChat({
             <button
               type="button"
               onClick={callMode ? endCall : startCall}
-              className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-200 flex-shrink-0 ${
-                callMode
+              className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-200 flex-shrink-0 ${callMode
                   ? "bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg"
                   : "bg-green-500 hover:bg-green-600 text-white hover:shadow-md"
-              }`}
+                }`}
               disabled={isConnecting}
             >
               {callMode ? (
@@ -853,7 +880,7 @@ export function AiAssessmentChat({
         </div>
 
         {/* Hidden Audio Element */}
-        <audio ref={audioRef} onEnded={() => {}} onError={() => {}} />
+        <audio ref={audioRef} onEnded={() => { }} onError={() => { }} />
       </div>
     );
   }
@@ -883,11 +910,10 @@ export function AiAssessmentChat({
             {/* Call Mode Controls */}
             <button
               onClick={() => setVoiceOn(!voiceOn)}
-              className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${
-                voiceOn 
-                  ? "bg-slate-600 hover:bg-slate-700" 
+              className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${voiceOn
+                  ? "bg-slate-600 hover:bg-slate-700"
                   : "bg-slate-500 hover:bg-slate-600"
-              }`}
+                }`}
             >
               {voiceOn ? (
                 <>
@@ -901,14 +927,13 @@ export function AiAssessmentChat({
                 </>
               )}
             </button>
-            
+
             <button
               onClick={micOn ? stopMic : startMic}
-              className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${
-                micOn 
-                  ? "bg-slate-600 hover:bg-slate-700" 
+              className={`px-3 py-1.5 rounded-lg text-white text-sm transition-colors ${micOn
+                  ? "bg-slate-600 hover:bg-slate-700"
                   : "bg-slate-500 hover:bg-slate-600"
-              }`}
+                }`}
             >
               {micOn ? (
                 <>
@@ -922,14 +947,14 @@ export function AiAssessmentChat({
                 </>
               )}
             </button>
-            
+
             <button
               onClick={() => setInputText("I'm a 45-year-old male with back pain for the last 2 days.")}
               className="px-3 py-1.5 rounded-lg bg-slate-600 hover:bg-slate-700 text-white text-sm transition-colors"
             >
               Prefill Back Pain Case
             </button>
-            
+
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -940,39 +965,39 @@ export function AiAssessmentChat({
         </div>
       </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((message) => (
-            <ChatMessageComponent 
-              key={message.id} 
-              message={message} 
-              onRetry={retryMessage}
-            />
-          ))}
-          {isConnecting && (
-            <div className="flex items-center gap-2 text-gray-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Connecting to clinical assistant...</span>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {messages.map((message) => (
+          <ChatMessageComponent
+            key={message.id}
+            message={message}
+            onRetry={retryMessage}
+          />
+        ))}
+        {isConnecting && (
+          <div className="flex items-center gap-2 text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Connecting to clinical assistant...</span>
+          </div>
+        )}
+        {isTyping && (
+          <div className="flex gap-3 justify-start">
+            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+              <BimbleLogoIcon width={32} height={32} />
             </div>
-          )}
-          {isTyping && (
-            <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-                <BimbleLogoIcon width={32} height={32} />
-              </div>
-              <div className="bg-gray-100 px-4 py-3 rounded-2xl">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  <span className="text-sm text-gray-500">Clinical Assistant is typing...</span>
-                </div>
+            <div className="bg-gray-100 px-4 py-3 rounded-2xl">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                <span className="text-sm text-gray-500">Clinical Assistant is typing...</span>
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-        {/* Quick Actions */}
-        {/* {messages.length >= 2 && !messages.some(m => m.type === "user" && (m.content.toLowerCase().includes("start") || m.content.toLowerCase().includes("yes") || m.content.toLowerCase().includes("skip"))) && (
+      {/* Quick Actions */}
+      {/* {messages.length >= 2 && !messages.some(m => m.type === "user" && (m.content.toLowerCase().includes("start") || m.content.toLowerCase().includes("yes") || m.content.toLowerCase().includes("skip"))) && (
           <div className="p-3 sm:p-6 border-t border-gray-200 bg-gray-50">
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
@@ -994,76 +1019,75 @@ export function AiAssessmentChat({
           </div>
         )} */}
 
-        {/* Input Area */}
-        <div className="p-3 sm:p-6 border-t border-gray-200 bg-white">
-          <form onSubmit={handleSubmit} className="flex items-center gap-2 sm:gap-3">
-            <div className="flex-1 relative">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={callMode ? "In Call Mode just talk..." : "Ask me anything about your appointment..."}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white transition-colors text-sm sm:text-base"
-                disabled={isConnecting}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={callMode ? endCall : startCall}
-              className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-200 flex-shrink-0 ${
-                callMode
-                  ? "bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg"
-                  : "bg-green-500 hover:bg-green-600 text-white hover:shadow-md"
-              }`}
+      {/* Input Area */}
+      <div className="p-3 sm:p-6 border-t border-gray-200 bg-white">
+        <form onSubmit={handleSubmit} className="flex items-center gap-2 sm:gap-3">
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder={callMode ? "In Call Mode just talk..." : "Ask me anything about your appointment..."}
+              className="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white transition-colors text-sm sm:text-base"
               disabled={isConnecting}
-            >
-              {callMode ? (
-                <PhoneOff className="h-4 w-4 sm:h-5 sm:w-5" />
-              ) : (
-                <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
-              )}
-            </button>
+            />
+          </div>
 
-            <button
-              type="submit"
-              disabled={!inputText.trim() || isConnecting}
-              className="p-2 sm:p-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg sm:rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md flex-shrink-0"
-            >
-              <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={callMode ? endCall : startCall}
+            className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-200 flex-shrink-0 ${callMode
+                ? "bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg"
+                : "bg-green-500 hover:bg-green-600 text-white hover:shadow-md"
+              }`}
+            disabled={isConnecting}
+          >
+            {callMode ? (
+              <PhoneOff className="h-4 w-4 sm:h-5 sm:w-5" />
+            ) : (
+              <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
+            )}
+          </button>
 
-          {/* STT Status */}
-          {sttStatus && (
-            <div className="mt-2 sm:mt-3 flex items-center gap-2 text-blue-600 px-1">
-              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-600 rounded-full animate-pulse"></div>
-              <span className="text-xs sm:text-sm italic">{sttStatus}</span>
-            </div>
-          )}
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isConnecting}
+            className="p-2 sm:p-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg sm:rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md flex-shrink-0"
+          >
+            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+          </button>
+        </form>
 
-          {(isRecording || micOn) && !sttStatus && (
-            <div className="mt-2 sm:mt-3 flex items-center gap-2 text-red-500 px-1">
-              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-xs sm:text-sm">
-                {callMode ? "Call Mode: listening..." : "Listening... Click to stop"}
-              </span>
-            </div>
-          )}
-        </div>
+        {/* STT Status */}
+        {sttStatus && (
+          <div className="mt-2 sm:mt-3 flex items-center gap-2 text-blue-600 px-1">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-600 rounded-full animate-pulse"></div>
+            <span className="text-xs sm:text-sm italic">{sttStatus}</span>
+          </div>
+        )}
 
-        {/* Hidden Audio Element */}
-        <audio ref={audioRef} onEnded={() => {}} onError={() => {}} />
+        {(isRecording || micOn) && !sttStatus && (
+          <div className="mt-2 sm:mt-3 flex items-center gap-2 text-red-500 px-1">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-xs sm:text-sm">
+              {callMode ? "Call Mode: listening..." : "Listening... Click to stop"}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Hidden Audio Element */}
+      <audio ref={audioRef} onEnded={() => { }} onError={() => { }} />
+    </div>
   );
 }
 
 // Chat Message Component
-function ChatMessageComponent({ 
-  message, 
-  onRetry 
-}: { 
+function ChatMessageComponent({
+  message,
+  onRetry
+}: {
   message: ChatMessage;
   onRetry?: () => void;
 }) {
@@ -1078,11 +1102,10 @@ function ChatMessageComponent({
         className={`max-w-[85%] sm:max-w-[80%] ${message.type === "user" ? "order-first" : ""}`}
       >
         <div
-          className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl ${
-            message.type === "user"
+          className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl ${message.type === "user"
               ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
               : "bg-gray-100 text-gray-900"
-          }`}
+            }`}
         >
           {message.isStreaming ? (
             <div className="flex items-center gap-2">

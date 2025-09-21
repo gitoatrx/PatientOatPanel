@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import {
   CheckCircle,
   Clock,
-  Share2,
-  CalendarPlus,
   ShieldCheck,
   ChevronRight,
 } from "lucide-react";
 import { AiAssessmentChat } from "./AiAssessmentChat";
+import { AddToCalendar } from "./AddToCalendar";
+import { ShareAppointment } from "./ShareAppointment";
 import { Button } from "@/components/ui/button";
 import { patientService } from "@/lib/services/patientService";
+import { FollowupQuestion } from "@/lib/types/api";
+import { API_CONFIG } from "@/lib/config/api";
 
 
 export function AppointmentConfirmationContent() {
@@ -24,7 +26,9 @@ export function AppointmentConfirmationContent() {
     date: string;
     time: string;
   } | null>(null);
+  const [followupQuestions, setFollowupQuestions] = useState<FollowupQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -37,7 +41,7 @@ export function AppointmentConfirmationContent() {
 
         // Get phone number from localStorage
         const savedPhone = localStorage.getItem('patient-phone-number');
-        
+
         if (!savedPhone) {
           setError('Phone number not found. Please start the onboarding process again.');
           setIsLoading(false);
@@ -46,11 +50,11 @@ export function AppointmentConfirmationContent() {
 
         console.log('Fetching confirmation data for phone:', savedPhone);
         const progressResponse = await patientService.getOnboardingProgress(savedPhone);
-        
+
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
           console.log('Confirmation API response:', apiData);
-          
+
           // Extract confirmation data from the API response
           if (apiData.state?.confirmation && apiData.state?.appointment && apiData.state?.provider) {
             const confirmation = {
@@ -63,7 +67,7 @@ export function AppointmentConfirmationContent() {
                 specialty: 'Family Medicine' // Default specialty since not in API
               }
             };
-            
+
             setConfirmationData(confirmation);
             console.log('Set confirmation data:', confirmation);
           } else {
@@ -131,8 +135,87 @@ export function AppointmentConfirmationContent() {
     }
   };
 
-  const handleStartAssessment = () => {
-    // Navigate to the health check-in route
+  // Generate follow-up questions using the two-step API process
+  const generateFollowupQuestions = async () => {
+    if (!confirmationData) {
+      console.error('No confirmation data available');
+      return;
+    }
+
+    try {
+      setIsGeneratingQuestions(true);
+      console.log('Starting follow-up questions generation...');
+
+      // Step 1: Get the token
+      console.log('Step 1: Getting follow-ups token...');
+      const tokenResponse = await patientService.getFollowupsToken(
+        API_CONFIG.CLINIC_ID,
+        confirmationData.appointment_id
+      );
+
+      console.log('Token response received:', tokenResponse);
+
+      // Handle direct token response format: {"token":"..."}
+      let token: string;
+      if (tokenResponse && typeof tokenResponse === 'object' && 'token' in tokenResponse) {
+        token = tokenResponse.token as string;
+      } else if (tokenResponse && tokenResponse.success && tokenResponse.data?.token) {
+        token = tokenResponse.data.token;
+      } else {
+        console.error('Failed to get follow-ups token:', tokenResponse);
+        throw new Error('Failed to get follow-ups token: Invalid response format');
+      }
+
+      if (!token) {
+        console.error('No token found in response:', tokenResponse);
+        throw new Error('Failed to get follow-ups token: No token in response');
+      }
+      console.log('Step 1 completed: Token received:', token);
+
+      // Step 2: Get the questions using the token
+      console.log('Step 2: Getting follow-up questions...');
+      const questionsResponse = await patientService.getFollowupQuestions(
+        API_CONFIG.CLINIC_ID,
+        confirmationData.appointment_id,
+        token
+      );
+
+      console.log('Questions response received:', questionsResponse);
+
+      // Handle direct questions response format: {"questions": [...], "answers": []}
+      let questions;
+      if (questionsResponse && typeof questionsResponse === 'object' && 'questions' in questionsResponse) {
+        questions = questionsResponse.questions;
+      } else if (questionsResponse && questionsResponse.success && questionsResponse.data?.questions) {
+        questions = questionsResponse.data.questions;
+      } else {
+        console.error('Failed to get follow-up questions:', questionsResponse);
+        throw new Error('Failed to get follow-up questions: Invalid response format');
+      }
+
+      if (!questions || !Array.isArray(questions)) {
+        console.error('No questions found in response:', questionsResponse);
+        throw new Error('Failed to get follow-up questions: No questions in response');
+      }
+
+      console.log('Step 2 completed: Questions received:', questions);
+      setFollowupQuestions(questions);
+      console.log('Follow-up questions generated successfully:', questions.length, 'questions');
+
+    } catch (error) {
+      console.error('Error generating follow-up questions:', error);
+      // Don't throw the error, just log it and continue
+      // The user can still proceed with the assessment
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
+  };
+
+  const handleStartAssessment = async () => {
+    // First generate the follow-up questions
+    await generateFollowupQuestions();
+
+    // Then navigate to the health check-in route
     router.push('/onboarding/patient/health-checkin');
   };
 
@@ -189,68 +272,85 @@ export function AppointmentConfirmationContent() {
     <div className="bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="max-w-lg mx-auto">
-              {/* Header */}
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
-                </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Appointment Confirmed!</h1>
-                <p className="text-lg text-gray-600">Your appointment has been successfully booked</p>
-              </div>
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Appointment Confirmed!</h1>
+            <p className="text-lg text-gray-600">Your appointment has been successfully booked</p>
+          </div>
 
-              <div className="space-y-8">
-                {/* Simple Confirmation Message */}
-                <div className="text-center">
-                  <p className="text-xl text-gray-700 leading-relaxed">
-                    Your follow-up appointment with <span className="text-green-600 font-semibold">{appt.doctor.name}</span> has been scheduled for
-                    <br />
-                    <span className="text-green-600 font-semibold underline">{formatDate(appt.date)}, {formatTime(appt.time)}</span>
+          <div className="space-y-8">
+            {/* Simple Confirmation Message */}
+            <div className="text-center">
+              <p className="text-xl text-gray-700 leading-relaxed">
+                Your follow-up appointment with <span className="text-green-600 font-semibold">{appt.doctor.name}</span> has been scheduled for
+                <br />
+                <span className="text-green-600 font-semibold underline">{formatDate(appt.date)}, {formatTime(appt.time)}</span>
+              </p>
+            </div>
+
+            {/* Assessment CTA Card */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="text-center space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Pre-Visit Health Check-in</h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you&apos;ve been feeling.
                   </p>
                 </div>
 
-                {/* Assessment CTA Card */}
-                <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                  <div className="text-center space-y-4">
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">Pre-Visit Health Check-in</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">
-                        Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you&apos;ve been feeling.
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4" />
-                        <span>2-3 minutes</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Secure & Private</span>
-                      </div>
-                    </div>
-                    
-                    <Button 
-                      onClick={handleStartAssessment} 
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-medium"
-                    >
-                      Start Health Check-in
-                      <ChevronRight className="w-4 h-4 ml-2" />
-                    </Button>
+                <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4" />
+                    <span>2-3 minutes</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Secure & Private</span>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button variant="default" className="flex-1 h-12 text-base font-medium">
-                    <CalendarPlus className="w-5 h-5 mr-2" /> Add to Calendar
-                  </Button>
-                  <Button variant="outline" className="flex-1 h-12 text-base font-medium">
-                    <Share2 className="w-5 h-5 mr-2" /> Share Appointment
-                  </Button>
-                </div>
+                <Button
+                  onClick={handleStartAssessment}
+                  disabled={isGeneratingQuestions}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingQuestions ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Generating Questions...
+                    </>
+                  ) : (
+                    <>
+                      Start Health Check-in
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
               </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <AddToCalendar appointment={appt} className="flex-1" />
+              <ShareAppointment appointment={appt} className="flex-1" />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* AI Assessment Chat Modal */}
+      {showAssessment && (
+        <AiAssessmentChat
+          onClose={() => setShowAssessment(false)}
+          doctorName={appt.doctor.name}
+          appointmentDate={formatDate(appt.date)}
+          appointmentTime={formatTime(appt.time)}
+          followupQuestions={followupQuestions}
+        />
+      )}
     </div>
   );
 }

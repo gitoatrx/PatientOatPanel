@@ -2,10 +2,10 @@
 export const API_CONFIG = {
   // Base URL for the OATRX API
   BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cloud.oatrx.ca/api/v1',
-  
+
   // Static clinic ID as requested
   CLINIC_ID: 4,
-  
+
   // API Endpoints - OTP operations and progress tracking
   ENDPOINTS: {
     SEND_OTP: '/clinic/onboarding/send-otp',
@@ -17,26 +17,26 @@ export const API_CONFIG = {
     PERSONAL_INFO_STEP2: '/clinic/onboarding/personal-info/step2',
     PERSONAL_INFO_STEP3: '/clinic/onboarding/personal-info/step3',
     PERSONAL_INFO_STEP4: '/clinic/onboarding/personal-info/step4',
-  VISIT_TYPE: '/clinic/onboarding/visit-type',
-  VISIT_TYPES_LIST: '/clinic/onboarding/visit-types',
-  PROVIDERS_LIST: '/clinic/onboarding/providers',
-  PROVIDER_SELECTION: '/clinic/onboarding/provider',
-  EMERGENCY_CONTACT: '/clinic/onboarding/emergency-contact',
-  HEALTH_CONCERNS_LIST: '/clinic/onboarding/health-concerns/list',
-  HEALTH_CONCERN: '/clinic/onboarding/health-concerns',
-  APPOINTMENT: '/clinic/onboarding/appointment',
-  CONFIRM_APPOINTMENT: '/clinic/onboarding/confirm',
-  AVAILABLE_SLOTS_PROVIDER: '/clinic/onboarding/available-slots-provider',
-  AVAILABLE_SLOTS: '/clinic/onboarding/available-slots',
+    VISIT_TYPE: '/clinic/onboarding/visit-type',
+    VISIT_TYPES_LIST: '/clinic/onboarding/visit-types',
+    PROVIDERS_LIST: '/clinic/onboarding/providers',
+    PROVIDER_SELECTION: '/clinic/onboarding/provider',
+    EMERGENCY_CONTACT: '/clinic/onboarding/emergency-contact',
+    HEALTH_CONCERNS_LIST: '/clinic/onboarding/health-concerns/list',
+    HEALTH_CONCERN: '/clinic/onboarding/health-concerns',
+    APPOINTMENT: '/clinic/onboarding/appointment',
+    CONFIRM_APPOINTMENT: '/clinic/onboarding/confirm',
+    AVAILABLE_SLOTS_PROVIDER: '/clinic/onboarding/available-slots-provider',
+    AVAILABLE_SLOTS: '/clinic/onboarding/available-slots',
   },
-  
+
   // Request Configuration
   REQUEST: {
-    TIMEOUT: 5000, // 5 seconds - faster error feedback
+    TIMEOUT: 180000, // 180 seconds - extended timeout for complex operations
     RETRIES: 0, // Disabled retries to prevent duplicate calls
     RETRY_DELAY: 500, // 0.5 seconds - faster retry
   },
-  
+
   // Error Messages
   ERROR_MESSAGES: {
     NETWORK_ERROR: 'Network error. Please check your connection.',

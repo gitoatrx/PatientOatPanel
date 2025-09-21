@@ -130,15 +130,15 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
       try {
         const response = await patientService.getAvailableSlots(providerId);
-        
+
         if (response.success && response.data) {
           console.log('Available dates API response:', response.data);
-          
+
           // Convert API dates to the format expected by the component - using strings to avoid timezone issues
           const convertedDates: ComponentDate[] = response.data.map(apiDate => {
             // Remove year from the formatted date for display
             const labelWithoutYear = apiDate.formatted_date.replace(/,?\s*\d{4}$/, '');
-            
+
             return {
               value: apiDate.date, // Keep as string (YYYY-MM-DD)
               label: labelWithoutYear, // Remove year from display
@@ -147,7 +147,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
               day_short: apiDate.day_short,
             };
           });
-          
+
           console.log('Converted dates:', convertedDates);
           setAvailableDates(convertedDates);
         } else {
@@ -171,7 +171,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   useEffect(() => {
     const fetchAvailableTimeSlots = async () => {
       const selectedDate = formValues.appointmentDate;
-      
+
       if (!selectedDate || !providerId) {
         setAvailableTimeSlots([]);
         return;
@@ -183,17 +183,17 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
       try {
         console.log('Fetching time slots for date:', selectedDate, 'provider:', providerId);
         const response = await patientService.getAvailableTimeSlots(providerId, selectedDate);
-        
+
         if (response.success && response.data) {
           console.log('Time slots API response:', response.data);
-          
+
           // Convert API time slots to the format expected by the component
           // The API already provides both time and label, so we can use them directly
           const convertedTimeSlots = response.data.map(slot => ({
             value: slot.time, // Use the raw time format (e.g., "09:30")
             label: slot.label, // Use the user-friendly label (e.g., "9:30 AM")
           }));
-          
+
           console.log('Converted time slots:', convertedTimeSlots);
           setAvailableTimeSlots(convertedTimeSlots);
         } else {
@@ -251,6 +251,13 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
           }
         }
       }
+    } else {
+      // If validation fails, trigger the specific field that's missing
+      if (currentStep === 1 && !formValues.appointmentDate) {
+        await trigger("appointmentDate");
+      } else if (currentStep === 2 && !formValues.appointmentTime) {
+        await trigger("appointmentTime");
+      }
     }
   };
 
@@ -262,22 +269,22 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
       // If no date is selected, show the first batch
       return availableDates.slice(0, displayedDatesCount);
     }
-    
+
     // Find the index of the selected date
     const selectedIndex = availableDates.findIndex(date => date.value === selectedDate);
-    
+
     if (selectedIndex === -1) {
       // Selected date not found, show first batch
       return availableDates.slice(0, displayedDatesCount);
     }
-    
+
     // Ensure selected date is visible by adjusting the slice
     const startIndex = Math.max(0, selectedIndex - Math.floor(displayedDatesCount / 2));
     const endIndex = Math.min(availableDates.length, startIndex + displayedDatesCount);
-    
+
     return availableDates.slice(startIndex, endIndex);
   };
-  
+
   const displayedDates = getDisplayedDates();
   const hasMoreDates = displayedDatesCount < availableDates.length;
   const displayedTimeSlots = availableTimeSlots.slice(0, displayedSlotsCount);
@@ -382,12 +389,12 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                 <span className="font-medium text-foreground truncate">
                   {formValues.appointmentDate
                     ? (() => {
-                        // Find the date object from availableDates to get the proper label
-                        const selectedDateObj = availableDates.find(
-                          date => date.value === formValues.appointmentDate
-                        );
-                        return selectedDateObj ? selectedDateObj.label : formValues.appointmentDate;
-                      })()
+                      // Find the date object from availableDates to get the proper label
+                      const selectedDateObj = availableDates.find(
+                        date => date.value === formValues.appointmentDate
+                      );
+                      return selectedDateObj ? selectedDateObj.label : formValues.appointmentDate;
+                    })()
                     : ""}
                 </span>
                 <button
@@ -421,18 +428,48 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
       {/* Error Messages */}
       {(errors.appointmentDate || errors.appointmentTime) && (
-        <div className="space-y-2">
+        <motion.div
+          className="space-y-3"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: 0.3,
+            type: "spring",
+            stiffness: 300,
+            damping: 20
+          }}
+        >
           {errors.appointmentDate && (
-            <div className="text-red-600 text-sm">
-              {errors.appointmentDate.message?.toString()}
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="text-red-800 font-medium text-sm">
+                    {errors.appointmentDate.message?.toString()}
+                  </p>
+                  <p className="text-red-600 text-xs mt-1">
+                    Choose a date from the available options below
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           {errors.appointmentTime && (
-            <div className="text-red-600 text-sm">
-              {errors.appointmentTime.message?.toString()}
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="text-red-800 font-medium text-sm">
+                    {errors.appointmentTime.message?.toString()}
+                  </p>
+                  <p className="text-red-600 text-xs mt-1">
+                    Choose a time from the available slots below
+                  </p>
+                </div>
+              </div>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Step Content */}
@@ -505,11 +542,11 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                             style={
                               isSelected
                                 ? {
-                                    background: "#2563eb", // blue-600 - prominent blue from your project
-                                  }
+                                  background: "#2563eb", // blue-600 - prominent blue from your project
+                                }
                                 : {
-                                    background: "white",
-                                  }
+                                  background: "white",
+                                }
                             }
                             variants={itemVariants}
                             custom={index}
@@ -628,11 +665,11 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                           style={
                             formValues.appointmentTime === slot.value
                               ? {
-                                  background: "#16a34a", // green-600 - different color for time slots
-                                }
+                                background: "#16a34a", // green-600 - different color for time slots
+                              }
                               : {
-                                  background: "white",
-                                }
+                                background: "white",
+                              }
                           }
                           variants={itemVariants}
                           custom={index}

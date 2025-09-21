@@ -2,6 +2,7 @@ import { useFormContext, type RegisterOptions } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getPhonePlaceholder, getPhoneHelperText } from "@/lib/constants/country-codes";
 
 export interface FormPhoneInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange"> {
@@ -104,7 +105,7 @@ export function FormPhoneInput({
           className,
         )}
         aria-describedby={errorId}
-        placeholder="(555) 123-4567"
+        placeholder={getPhonePlaceholder()}
       />
       <AnimatePresence>
         {fieldError && (

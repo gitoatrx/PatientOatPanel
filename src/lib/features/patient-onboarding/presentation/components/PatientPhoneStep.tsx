@@ -10,6 +10,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { useState } from "react";
+import { formatPhoneWithCountryCode } from "@/lib/constants/country-codes";
 
 const phoneSchema = z.object({
   phone: z
@@ -82,7 +83,7 @@ export function PatientPhoneStep() {
   const router = useRouter();
   const { state, saveStep, isLoading } = usePatientOnboarding();
   const [error, setError] = useState<string | null>(null);
-  
+
   // Get step configuration
   const stepData = getStepComponentData("phone");
 
@@ -90,20 +91,20 @@ export function PatientPhoneStep() {
     resolver: zodResolver(phoneSchema),
     mode: "onChange",
     reValidateMode: "onChange",
-    defaultValues: { 
-      phone: (state?.draft?.phone as string) || "" 
+    defaultValues: {
+      phone: (state?.draft?.phone as string) || ""
     },
   });
 
   const handleSubmit = async (values: FormValues) => {
     try {
       setError(null);
-      
-      // Format phone number for API (ensure it has + prefix)
-      const formattedPhone = values.phone.startsWith('+') ? values.phone : `+${values.phone}`;
-      
+
+      // Format phone number for API with environment-based country code
+      const formattedPhone = formatPhoneWithCountryCode(values.phone);
+
       console.log("Sending OTP to phone:", formattedPhone);
-      
+
       // Call OTP API with additional error handling
       let otpResponse;
       try {
@@ -114,34 +115,34 @@ export function PatientPhoneStep() {
         setError('Network error. Please check your connection and try again.');
         throw new Error('Network error. Please check your connection and try again.');
       }
-      
+
       // Always save phone number locally, regardless of OTP API response
       try {
         console.log("PatientPhoneStep: Saving phone number locally:", formattedPhone);
-        
+
         // Save phone number directly to localStorage for immediate access
         localStorage.setItem('patient-phone-number', formattedPhone);
         console.log("PatientPhoneStep: Phone number saved to localStorage");
-        
+
         // Also save to state through saveStep
         const saveResult = await saveStep(stepData.stepId, {
           phone: formattedPhone,
         });
         console.log("PatientPhoneStep: Phone number saved to state:", saveResult);
-        
+
         // Wait a moment for state to update
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
       } catch (saveError) {
         console.error('Error saving phone number:', saveError);
         // Continue anyway - we still want to navigate to OTP step
       }
-      
+
       // Always navigate to OTP verification step, regardless of API response
       console.log("PatientPhoneStep: Checking OTP response for navigation...");
       console.log("PatientPhoneStep: otpResponse exists:", !!otpResponse);
       console.log("PatientPhoneStep: otpResponse.success:", otpResponse?.success);
-      
+
       if (otpResponse && otpResponse.success) {
         console.log("PatientPhoneStep: OTP sent successfully, navigating to verification");
         router.push("/onboarding/patient/verify-otp");
@@ -156,7 +157,7 @@ export function PatientPhoneStep() {
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
-      
+
       // Handle different error types
       if (err instanceof Error) {
         if (err.message.includes('Network error')) {
@@ -223,11 +224,6 @@ export function PatientPhoneStep() {
             label="Phone Number"
             placeholder="Enter your phone number"
           />
-          
-          {/* Info message */}
-          <div className="text-sm text-muted-foreground">
-            We&apos;ll send a verification code to this number to confirm it&apos;s yours.
-          </div>
         </div>
       </FormProvider>
     </PatientStepShell>

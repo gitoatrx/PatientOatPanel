@@ -12,6 +12,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { getFormattedPhoneFromStorage } from "@/lib/constants/country-codes";
 // Removed unused imports for progress API
 
 const otpSchema = z.object({
@@ -34,7 +35,7 @@ export function PatientOtpVerificationStep() {
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  
+
   // Get step configuration with error handling
   let stepData;
   try {
@@ -54,7 +55,7 @@ export function PatientOtpVerificationStep() {
       isAccessible: true,
     };
   }
-  
+
   // Debug logging
   console.log("PatientOtpVerificationStep: Component rendered", {
     state: state,
@@ -63,7 +64,7 @@ export function PatientOtpVerificationStep() {
     isInitialized: isInitialized,
     stepData: stepData
   });
-  
+
   const form = useForm<FormValues>({
     resolver: zodResolver(otpSchema),
     mode: "onChange",
@@ -74,23 +75,23 @@ export function PatientOtpVerificationStep() {
   useEffect(() => {
     try {
       console.log("PatientOtpVerificationStep: useEffect triggered with state:", state);
-      
+
       // Get phone number from context state first
       if (state?.draft?.phone) {
         setPhoneNumber(state.draft.phone as string);
         console.log("PatientOtpVerificationStep: Phone number loaded from state:", state.draft.phone);
       } else {
         console.log("PatientOtpVerificationStep: No phone number in state, checking localStorage");
-        
-        // First try to get phone number from direct localStorage key
+
+        // First try to get phone number from direct localStorage key with proper formatting
         try {
-          const directPhoneNumber = localStorage.getItem('patient-phone-number');
+          const directPhoneNumber = getFormattedPhoneFromStorage();
           if (directPhoneNumber) {
             setPhoneNumber(directPhoneNumber);
             console.log("PatientOtpVerificationStep: Phone number loaded from direct localStorage:", directPhoneNumber);
           } else {
             console.log("PatientOtpVerificationStep: No direct phone number in localStorage, checking state");
-            
+
             // No fallback to patient-onboarding-state - using direct localStorage only
             console.log("PatientOtpVerificationStep: No phone number found in direct localStorage");
           }
@@ -98,7 +99,7 @@ export function PatientOtpVerificationStep() {
           console.error("Error loading phone number from localStorage:", error);
         }
       }
-      
+
       // Mark as initialized
       setIsInitialized(true);
       console.log("PatientOtpVerificationStep: Component initialized successfully");
@@ -132,10 +133,10 @@ export function PatientOtpVerificationStep() {
       setIsVerifying(true);
       setError(null);
       console.log("Verifying OTP:", values.otp);
-      
+
       // Show immediate feedback that verification is in progress
       console.log("Starting OTP verification...");
-      
+
       let verifyResponse;
       try {
         // Verify OTP with API
@@ -143,48 +144,48 @@ export function PatientOtpVerificationStep() {
       } catch (apiError) {
         console.error('API call failed:', apiError);
         const errorMessage = 'Network error. Please check your connection and try again.';
-        
+
         // Show error toast IMMEDIATELY
         toast({
           variant: "error",
           title: "Network Error",
           description: errorMessage,
         });
-        
+
         // Set error state after toast
         setError(errorMessage);
         return;
       }
-      
+
       if (verifyResponse.success) {
         console.log("OTP verification successful:", verifyResponse);
-        
+
         // Save OTP verification status to localStorage
         localStorage.setItem('patient-otp-verified', 'true');
         localStorage.setItem('patient-otp-verified-at', new Date().toISOString());
         console.log("OTP verification status saved to localStorage");
-        
+
         // Show success toast
         toast({
           variant: "success",
           title: "Phone Verified Successfully!",
           description: "Your phone number has been verified. Loading your progress...",
         });
-        
+
         // Call progress API to get the current step where user left off
         try {
           console.log("OTP verification successful, fetching progress to determine next step");
           const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
-          
+
           if (progressResponse.success && progressResponse.data) {
             const currentStep = progressResponse.data.current_step;
             console.log("Progress API response - current step:", currentStep);
-            
+
             // Navigate to the step where user left off using centralized mapping
             if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
               const targetRoute = getRouteFromApiStep(currentStep);
               console.log("Navigating to step where user left off:", currentStep, "→", targetRoute);
-              
+
               // Special handling for completed step
               if (currentStep === 'completed') {
                 console.log("Onboarding is completed, redirecting to confirmation page");
@@ -209,7 +210,7 @@ export function PatientOtpVerificationStep() {
         // Handle specific error types based on response message
         let errorMessage = '';
         let errorTitle = 'Verification Failed';
-        
+
         if (verifyResponse.message?.includes('Invalid') || verifyResponse.message?.includes('incorrect')) {
           errorMessage = 'Invalid verification code. Please check and try again.';
           errorTitle = 'Invalid Code';
@@ -223,24 +224,24 @@ export function PatientOtpVerificationStep() {
           errorMessage = verifyResponse.message || "OTP verification failed";
           errorTitle = 'Verification Failed';
         }
-        
+
         // Show error toast IMMEDIATELY
         toast({
           variant: "error",
           title: errorTitle,
           description: errorMessage,
         });
-        
+
         // Set error state after toast
         setError(errorMessage);
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
-      
+
       // Handle different error types
       let errorMessage = '';
       let errorTitle = 'Unexpected Error';
-      
+
       if (err instanceof Error) {
         if (err.message.includes('Network error')) {
           errorMessage = 'Network error. Please check your connection and try again.';
@@ -256,14 +257,14 @@ export function PatientOtpVerificationStep() {
         errorMessage = 'An unexpected error occurred. Please try again.';
         errorTitle = 'Unexpected Error';
       }
-      
+
       // Show error toast IMMEDIATELY
       toast({
         variant: "error",
         title: errorTitle,
         description: errorMessage,
       });
-      
+
       // Set error state after toast
       setError(errorMessage);
     } finally {
@@ -301,10 +302,10 @@ export function PatientOtpVerificationStep() {
       setIsVerifying(true);
       setError(null);
       console.log("Resending OTP to:", phoneNumber);
-      
+
       // Resend OTP
       const response = await patientService.sendOtp(phoneNumber);
-      
+
       if (response.success) {
         // Show success toast
         toast({
@@ -312,7 +313,7 @@ export function PatientOtpVerificationStep() {
           title: "Code Sent!",
           description: "A new verification code has been sent to your phone.",
         });
-        
+
         // Start countdown timer
         setCountdown(60);
         const timer = setInterval(() => {
@@ -326,28 +327,28 @@ export function PatientOtpVerificationStep() {
         }, 1000);
       } else {
         const errorMessage = response.message || 'Failed to resend code';
-        
+
         // Show error toast IMMEDIATELY
         toast({
           variant: "error",
           title: "Resend Failed",
           description: errorMessage,
         });
-        
+
         // Set error state after toast
         setError(errorMessage);
       }
     } catch (err) {
       console.error('Error resending OTP:', err);
       const errorMessage = 'Failed to resend code. Please try again.';
-      
+
       // Show error toast IMMEDIATELY
       toast({
         variant: "error",
         title: "Resend Failed",
         description: errorMessage,
       });
-      
+
       // Set error state after toast
       setError(errorMessage);
     } finally {
@@ -463,12 +464,12 @@ export function PatientOtpVerificationStep() {
               maxLength={6}
               className="text-center text-2xl tracking-widest"
             />
-            
+
             <div className="text-center">
               <button
                 type="button"
                 onClick={handleResendOtp}
-                        disabled={countdown > 0 || isVerifying}
+                disabled={countdown > 0 || isVerifying}
                 className="text-sm text-primary hover:text-primary/80 disabled:text-muted-foreground disabled:cursor-not-allowed"
               >
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend code"}

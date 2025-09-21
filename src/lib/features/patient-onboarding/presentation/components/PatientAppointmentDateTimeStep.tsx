@@ -5,6 +5,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { PatientStepShell } from "./PatientStepShell";
 import { AppointmentDateTimeStep } from "../../../../../components/onboarding/patient/steps/AppointmentDateTimeStep";
 // Removed usePatientOnboarding context - using progress API instead
@@ -16,8 +17,8 @@ import { DoctorListSkeleton, DateGridSkeleton, SectionHeaderSkeleton } from "@/c
 
 // Form schema for appointment date/time
 const appointmentDateTimeSchema = z.object({
-  appointmentDate: z.string().min(1, "Please select an appointment date"),
-  appointmentTime: z.string().min(1, "Please select an appointment time"),
+  appointmentDate: z.string().min(1, "Please select a date to continue"),
+  appointmentTime: z.string().min(1, "Please select a time to continue"),
 });
 
 type AppointmentDateTimeFormData = z.infer<typeof appointmentDateTimeSchema>;
@@ -49,22 +50,22 @@ export function PatientAppointmentDateTimeStep() {
 
         // Get phone number from localStorage
         const savedPhone = localStorage.getItem('patient-phone-number');
-        
+
         if (!savedPhone) {
           setProgressError('Phone number not found. Please start the onboarding process again.');
           setIsLoadingProgress(false);
           return;
         }
-        
+
         setPhoneNumber(savedPhone);
 
         console.log('Fetching progress to get provider ID for phone:', savedPhone);
         const progressResponse = await patientService.getOnboardingProgress(savedPhone);
-        
+
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
           console.log('Progress API response:', apiData);
-          
+
           // Extract provider ID from the API response
           if (apiData.state?.provider?.id) {
             const extractedProviderId = apiData.state.provider.id;
@@ -79,7 +80,7 @@ export function PatientAppointmentDateTimeStep() {
           if (apiData.state?.appointment) {
             const appointment = apiData.state.appointment;
             console.log('Prefilling appointment form with:', appointment);
-            
+
             // Use setTimeout to ensure form is ready
             setTimeout(() => {
               if (appointment.date) {
@@ -168,19 +169,29 @@ export function PatientAppointmentDateTimeStep() {
       return;
     }
 
+    // Validate that both date and time are selected
+    if (!data.appointmentDate || !data.appointmentTime) {
+      const missingFields = [];
+      if (!data.appointmentDate) missingFields.push("date");
+      if (!data.appointmentTime) missingFields.push("time");
+
+      setError(`Please select ${missingFields.join(" and ")} to continue.`);
+      return;
+    }
+
     try {
       setError(null);
       console.log("Appointment date/time submitted:", data);
-      
+
       // Call appointment API to save the selected date and time
       const apiResponse = await patientService.saveAppointment(phoneNumber, {
         date: data.appointmentDate,
         time: data.appointmentTime,
       });
-      
+
       if (apiResponse.success) {
         console.log("Appointment saved successfully:", apiResponse);
-        
+
         // Navigate to next step based on API response
         const nextStep = apiResponse.data?.current_step;
         const nextRoute = getRouteFromApiStep(nextStep || 'review');
@@ -192,24 +203,24 @@ export function PatientAppointmentDateTimeStep() {
       } else {
         // Handle API error response
         const errorMessage = apiResponse.message || "Failed to save appointment";
-        
+
         // Show error toast IMMEDIATELY
         toast({
           variant: "error",
           title: "Save Failed",
           description: errorMessage,
         });
-        
+
         // Set error state after toast
         setError(errorMessage);
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
-      
+
       // Handle different error types
       let errorMessage = '';
       let errorTitle = 'Unexpected Error';
-      
+
       if (err instanceof Error) {
         if (err.message.includes('Network error')) {
           errorMessage = 'Network error. Please check your connection and try again.';
@@ -225,14 +236,14 @@ export function PatientAppointmentDateTimeStep() {
         errorMessage = 'An unexpected error occurred. Please try again.';
         errorTitle = 'Unexpected Error';
       }
-      
+
       // Show error toast IMMEDIATELY
       toast({
         variant: "error",
         title: errorTitle,
         description: errorMessage,
       });
-      
+
       // Set error state after toast
       setError(errorMessage);
     }
@@ -264,13 +275,33 @@ export function PatientAppointmentDateTimeStep() {
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Error Display */}
           {error && (
-            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-              <p className="text-sm text-destructive font-medium">
-                {error}
-              </p>
-            </div>
+            <motion.div
+              className="p-4 bg-red-50 border border-red-200 rounded-lg"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.3,
+                type: "spring",
+                stiffness: 300,
+                damping: 20
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-red-600 text-xs font-bold">!</span>
+                </div>
+                <div>
+                  <p className="text-red-800 font-medium text-sm">
+                    {error}
+                  </p>
+                  <p className="text-red-600 text-xs mt-1">
+                    Please make your selection below to continue
+                  </p>
+                </div>
+              </div>
+            </motion.div>
           )}
-          
+
           <AppointmentDateTimeStep
             onNext={() => form.handleSubmit(handleSubmit)()}
             getPersonalizedLabel={getPersonalizedLabel}

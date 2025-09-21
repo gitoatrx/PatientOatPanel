@@ -561,10 +561,23 @@ export interface AvailableTimeSlotsResponse {
   data: AvailableTimeSlot[];
 }
 
+// Follow-up Questions Types
+export interface FollowupQuestion {
+  id: string;
+  hint: string | null;
+  text: string;
+  type: 'single_select' | 'multiple_select' | 'text' | 'number' | 'date' | 'boolean';
+  source: string;
+  options: string[];
+  asked_at: string;
+  priority: number;
+  red_flag: boolean;
+}
+
 // Error Types for Different Scenarios
 export const API_ERROR_TYPES = {
   VALIDATION: 'validation',
-  NETWORK: 'network', 
+  NETWORK: 'network',
   SERVER: 'server',
   AUTHENTICATION: 'authentication',
   AUTHORIZATION: 'authorization',
