@@ -5,9 +5,9 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/use-toast";
 
 export const metadata: Metadata = {
-  title: "123Walkin Clinic - OAT RX",
+  title: "123Walkin Clinic - OATRx",
   description:
-    "123Walkin Clinic - OAT RX is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
+    "123Walkin Clinic - OATRx is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
 };
 
 export default function RootLayout({
