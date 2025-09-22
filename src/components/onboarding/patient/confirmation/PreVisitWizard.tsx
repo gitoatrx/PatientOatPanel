@@ -71,7 +71,13 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
       id: question.id,
       title: question.text,
       text: question.text,
-      type: 'single_choice' as const, // Use single_choice for single_select questions
+      type: question.type === 'single_select' ? 'single_choice' as const : 
+            question.type === 'multiple_select' ? 'multiple_choice' as const :
+            question.type === 'text' ? 'text' as const :
+            question.type === 'number' ? 'text' as const :
+            question.type === 'date' ? 'text' as const :
+            question.type === 'boolean' ? 'single_choice' as const :
+            'single_choice' as const,
       required: true,
       options: (question.options || []).map((option, optionIndex) => ({
         id: `${question.id}_option_${optionIndex}`,
@@ -79,7 +85,8 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
         value: option,
         description: undefined
       })),
-      hint: question.hint
+      hint: question.hint,
+      placeholder: question.type === 'text' || question.type === 'number' ? 'Please enter your answer...' : undefined
     }]
   }));
 
