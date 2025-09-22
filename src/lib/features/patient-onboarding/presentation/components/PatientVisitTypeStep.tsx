@@ -56,7 +56,6 @@ export function PatientVisitTypeStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.visit_type) {
         const visitType = progressResponse.data.state.visit_type;
-        console.log('Prefilling visit type form with:', visitType);
         
         // Prefill form with existing data
         if (visitType.id) {
@@ -81,7 +80,6 @@ export function PatientVisitTypeStep() {
         
         if (response.success && response.data) {
           setVisitTypes(response.data);
-          console.log("Visit types loaded successfully:", response.data);
         } else {
           setVisitTypesError(response.message || "Failed to load visit types");
           console.error("Failed to load visit types:", response.message);
@@ -116,7 +114,6 @@ export function PatientVisitTypeStep() {
 
     try {
       setError(null);
-      console.log("Visit type submitted:", values);
       
       // Find the selected visit type to get the ID
       const selectedVisitType = visitTypes.find(vt => vt.id.toString() === values.visitType);
@@ -151,15 +148,10 @@ export function PatientVisitTypeStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Visit type saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Visit type API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -213,7 +205,6 @@ export function PatientVisitTypeStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to health concern step
     router.push("/onboarding/patient/health-concern");
   };

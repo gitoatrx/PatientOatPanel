@@ -49,7 +49,6 @@ export function PatientEmailStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.personal_info?.email) {
         const email = progressResponse.data.state.personal_info.email;
-        console.log('Prefilling email form with:', email);
         
         // Prefill form with existing data
         form.setValue('email', email);
@@ -80,7 +79,6 @@ export function PatientEmailStep() {
 
     try {
       setError(null);
-      console.log("Email submitted:", values);
       
       // Prepare email data for API
       const emailData = {
@@ -108,15 +106,10 @@ export function PatientEmailStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Email saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Email API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -168,7 +161,6 @@ export function PatientEmailStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to date of birth step
     router.push("/onboarding/patient/date-of-birth");
   };

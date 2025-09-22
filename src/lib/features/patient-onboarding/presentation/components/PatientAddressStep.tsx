@@ -41,7 +41,6 @@ export function PatientAddressStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.address) {
         const address = progressResponse.data.state.address;
-        console.log('Prefilling address form with:', address);
         
         // Prefill form with existing data
         form.setValue('streetAddress', address.address_line1 || '');
@@ -78,7 +77,6 @@ export function PatientAddressStep() {
 
     try {
       setError(null);
-      console.log("Address submitted:", values);
       
       // Prepare address data for API
       const addressData = {
@@ -111,15 +109,10 @@ export function PatientAddressStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Address saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Address API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -171,7 +164,6 @@ export function PatientAddressStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to email step
     router.push("/onboarding/patient/email");
   };

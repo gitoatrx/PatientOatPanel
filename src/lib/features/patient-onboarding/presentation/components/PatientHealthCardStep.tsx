@@ -101,7 +101,6 @@ export function PatientHealthCardStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.health_card) {
         const healthCardData = progressResponse.data.state.health_card;
-        console.log('Prefilling health card form with:', healthCardData);
         
         // Prefill form with existing data
         if (healthCardData.health_card_number) {
@@ -111,7 +110,6 @@ export function PatientHealthCardStep() {
           form.setValue('hasHealthCard', 'no');
         }
       } else {
-        console.log('No existing health card data found, using default values');
         // Set default values if no existing data
         form.setValue('hasHealthCard', '');
         form.setValue('healthCardNumber', '');
@@ -144,10 +142,6 @@ export function PatientHealthCardStep() {
         hasHealthCard: (state.draft.hasHealthCard as string) || "",
         healthCardNumber: (state.draft.healthCardNumber as string) || "",
       });
-      console.log("PatientHealthCardStep: Form reset with state data:", {
-        hasHealthCard: state.draft.hasHealthCard,
-        healthCardNumber: state.draft.healthCardNumber,
-      });
     }
   }, [state?.draft, form]);
 
@@ -159,16 +153,10 @@ export function PatientHealthCardStep() {
 
     try {
       setError(null);
-      console.log("Health card submitted:", values);
       
       // Determine health card number - send empty string if no health card, otherwise send the number
       const healthCardNumber = values.hasHealthCard === "yes" ? values.healthCardNumber : "";
       
-      console.log("Health card values:", values);
-      console.log("hasHealthCard:", values.hasHealthCard);
-      console.log("healthCardNumber from form:", values.healthCardNumber);
-      console.log("Final healthCardNumber to send:", healthCardNumber);
-      console.log("healthCardNumber type:", typeof healthCardNumber);
       
       let apiResponse;
       try {
@@ -191,16 +179,11 @@ export function PatientHealthCardStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Health card saved successfully:", apiResponse);
         
         try {
           // Navigate to next step based on API response (no success toast)
           const nextStep = apiResponse.data.current_step;
           const nextRoute = getRouteFromApiStep(nextStep);
-          console.log(`Health card API response:`, apiResponse);
-          console.log(`Next step from API: ${nextStep}`);
-          console.log(`Mapped route: ${nextRoute}`);
-          console.log(`Navigating to: ${nextRoute}`);
           router.push(nextRoute);
         } catch (saveError) {
           console.error('Error saving step:', saveError);
@@ -266,7 +249,6 @@ export function PatientHealthCardStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to OTP verification step
     router.push("/onboarding/patient/verify-otp");
   };

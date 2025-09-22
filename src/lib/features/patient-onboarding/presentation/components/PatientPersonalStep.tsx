@@ -55,7 +55,6 @@ export function PatientPersonalStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.personal_info) {
         const personalInfo = progressResponse.data.state.personal_info;
-        console.log('Prefilling personal form with:', personalInfo);
         
         // Prefill form with existing data
         form.setValue('firstName', personalInfo.first_name || '');
@@ -88,7 +87,6 @@ export function PatientPersonalStep() {
 
     try {
       setError(null);
-      console.log("Personal info submitted:", values);
       
       // Prepare personal data for API
       const personalData = {
@@ -117,15 +115,10 @@ export function PatientPersonalStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Personal info saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Personal info API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -177,7 +170,6 @@ export function PatientPersonalStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to health card step
     router.push("/onboarding/patient/health-card");
   };

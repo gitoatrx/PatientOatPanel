@@ -54,7 +54,6 @@ export function PatientGenderStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.personal_info?.gender) {
         const gender = progressResponse.data.state.personal_info.gender;
-        console.log('Prefilling gender form with:', gender);
         
         // Prefill form with existing data
         form.setValue('gender', gender);
@@ -85,7 +84,6 @@ export function PatientGenderStep() {
 
     try {
       setError(null);
-      console.log("Gender submitted:", values);
       
       // Prepare gender data for API
       const genderData = {
@@ -113,15 +111,10 @@ export function PatientGenderStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Gender saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Gender API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -173,7 +166,6 @@ export function PatientGenderStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to personal step
     router.push("/onboarding/patient/personal");
   };

@@ -55,7 +55,6 @@ export function PatientHealthConcernStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.health_concerns) {
         const healthConcernsData = progressResponse.data.state.health_concerns;
-        console.log('Prefilling health concern form with:', healthConcernsData);
         
         // Prefill form with existing data
         if (healthConcernsData.selected_ids && healthConcernsData.selected_ids.length > 0) {
@@ -75,7 +74,6 @@ export function PatientHealthConcernStep() {
           form.setValue('symptoms', healthConcernsData.free_text.join('\n'));
         }
       } else {
-        console.log('Health concern step - no prefill data available yet');
       }
     } catch (error) {
       console.error('Error fetching progress for prefill:', error);
@@ -106,7 +104,6 @@ export function PatientHealthConcernStep() {
         const response = await patientService.getHealthConcernsList();
         
         if (response.success) {
-          console.log('Health concerns loaded from API:', response.data);
           setHealthConcerns(response.data);
         } else {
           console.error('Failed to load health concerns:', response.message);
@@ -138,7 +135,6 @@ export function PatientHealthConcernStep() {
 
     try {
       setError(null);
-      console.log("Health concern submitted:", values);
       
       // Find the concern ID from the selected reason name
       const selectedConcern = healthConcerns.find(concern => concern.name === values.selectedReason);
@@ -155,15 +151,10 @@ export function PatientHealthConcernStep() {
       });
       
       if (apiResponse.success) {
-        console.log("Health concern saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data?.current_step;
         const nextRoute = getRouteFromApiStep(nextStep || 'visit_type');
-        console.log(`Health concern API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -215,7 +206,6 @@ export function PatientHealthConcernStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to address step
     router.push("/onboarding/patient/address");
   };

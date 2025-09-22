@@ -72,13 +72,11 @@ export function PatientDoctorSelectionStep() {
         // Extract visit_name for providers API
         if (state.visit_type?.name) {
           setVisitName(state.visit_type.name);
-          console.log('Visit name extracted:', state.visit_type.name);
         }
         
         // Prefill form with existing provider data
         if (state.provider?.id) {
           const provider = state.provider;
-          console.log('Prefilling provider selection form with:', provider);
           form.setValue('doctorId', provider.id.toString());
         }
       }
@@ -94,7 +92,6 @@ export function PatientDoctorSelectionStep() {
     const loadProviders = async () => {
       // Don't load providers until we have visitName
       if (!visitName) {
-        console.log('Waiting for visit name before loading providers...');
         return;
       }
 
@@ -102,12 +99,10 @@ export function PatientDoctorSelectionStep() {
         setIsLoadingProviders(true);
         setProvidersError(null);
         
-        console.log('Loading providers with visit_name:', visitName, 'and search:', searchTerm);
         const response = await patientService.getProvidersList(searchTerm, visitName);
         
         if (response.success && response.data) {
           setProviders(response.data);
-          console.log("Providers loaded successfully:", response.data);
         } else {
           setProvidersError(response.message || "Failed to load providers");
           console.error("Failed to load providers:", response.message);
@@ -155,7 +150,6 @@ export function PatientDoctorSelectionStep() {
 
     try {
       setError(null);
-      console.log("Provider selection submitted:", data);
       
       // Use the phoneNumber state that was fetched from localStorage
       const providerId = parseInt(data.doctorId);
@@ -164,15 +158,10 @@ export function PatientDoctorSelectionStep() {
       const apiResponse = await patientService.saveProviderSelection(phoneNumber, providerId);
       
       if (apiResponse.success) {
-        console.log("Provider selection saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Provider selection API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response

@@ -114,7 +114,6 @@ export function PatientDateOfBirthStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.personal_info?.date_of_birth) {
         const dateOfBirth = progressResponse.data.state.personal_info.date_of_birth;
-        console.log('Prefilling date of birth form with:', dateOfBirth);
         
         // Parse the date string (format: "1986-04-15")
         const [year, month, day] = dateOfBirth.split('-');
@@ -152,7 +151,6 @@ export function PatientDateOfBirthStep() {
 
     try {
       setError(null);
-      console.log("Date of birth submitted:", values);
       
       // Format date of birth as YYYY-MM-DD
       const dateOfBirth = `${values.birthYear}-${values.birthMonth.padStart(2, '0')}-${values.birthDay.padStart(2, '0')}`;
@@ -180,15 +178,10 @@ export function PatientDateOfBirthStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Date of birth saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Date of birth API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -240,7 +233,6 @@ export function PatientDateOfBirthStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to gender step
     router.push("/onboarding/patient/gender");
   };

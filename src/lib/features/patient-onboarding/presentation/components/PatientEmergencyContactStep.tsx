@@ -99,7 +99,6 @@ export function PatientEmergencyContactStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.emergency_contact) {
         const emergencyContact = progressResponse.data.state.emergency_contact;
-        console.log('Prefilling emergency contact form with:', emergencyContact);
         
         // Prefill form with existing data
         form.setValue('emergencyContactName', emergencyContact.name || '');
@@ -134,7 +133,6 @@ export function PatientEmergencyContactStep() {
 
     try {
       setError(null);
-      console.log("Emergency contact submitted:", values);
       
       // Check if user doesn't want to provide emergency contact
       if (values.emergencyContactRelationship === "none") {
@@ -177,20 +175,14 @@ export function PatientEmergencyContactStep() {
       }
       
       if (apiResponse.success) {
-        console.log("Emergency contact saved successfully:", apiResponse);
         
         // Navigate to next step based on API response (no success toast)
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
-        console.log(`Emergency contact API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
         
         // Debug: Check if route mapping is working
         if (!nextRoute) {
           console.error(`No route found for step: ${nextStep}`);
-          console.log('Available routes:', Object.keys(API_STEP_TO_ROUTE_MAP));
           // Fallback to doctor selection
           router.push("/onboarding/patient/doctor-selection");
         } else {
@@ -248,7 +240,6 @@ export function PatientEmergencyContactStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to visit type step
     router.push("/onboarding/patient/visit-type");
   };
