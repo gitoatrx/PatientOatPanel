@@ -5,9 +5,9 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/use-toast";
 
 export const metadata: Metadata = {
-  title: "Bimble - Find Doctors Fast",
+  title: "123Walkin Clinic - OAT RX",
   description:
-    "Free for Health Card holders. Just tell us your symptoms—no need to search doctors.",
+    "123Walkin Clinic - OAT RX is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
 };
 
 export default function RootLayout({
