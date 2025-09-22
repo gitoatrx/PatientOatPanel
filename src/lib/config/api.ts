@@ -28,6 +28,10 @@ export const API_CONFIG = {
     CONFIRM_APPOINTMENT: '/clinic/onboarding/confirm',
     AVAILABLE_SLOTS_PROVIDER: '/clinic/onboarding/available-slots-provider',
     AVAILABLE_SLOTS: '/clinic/onboarding/available-slots',
+    // Followup endpoints
+    GET_FOLLOWUPS_TOKEN: '/clinic/get-followups-token',
+    GET_FOLLOWUP_QUESTIONS: '/clinic/followups',
+    SAVE_FOLLOWUP_ANSWERS: '/clinic/followups',
   },
 
   // Request Configuration
@@ -94,4 +98,13 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
 // Helper function to get frontend route from API step
 export const getRouteFromApiStep = (apiStep: string): string => {
   return API_STEP_TO_ROUTE_MAP[apiStep] || '/onboarding/patient/health-card';
+};
+
+// Helper functions for followup endpoints
+export const getFollowupQuestionsUrl = (clinicId: number, appointmentId: number, token: string): string => {
+  return `${API_CONFIG.ENDPOINTS.GET_FOLLOWUP_QUESTIONS}/${clinicId}/${appointmentId}/${token}/questions`;
+};
+
+export const getFollowupAnswersUrl = (clinicId: number, appointmentId: number, token: string): string => {
+  return `${API_CONFIG.ENDPOINTS.SAVE_FOLLOWUP_ANSWERS}/${clinicId}/${appointmentId}/${token}/answers`;
 };

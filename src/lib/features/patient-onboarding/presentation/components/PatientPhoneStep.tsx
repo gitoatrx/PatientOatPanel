@@ -179,7 +179,6 @@ export function PatientPhoneStep() {
   return (
     <PatientStepShell
       title="What's your phone number?"
-      description="We'll use this to contact you about your appointments."
       onBack={handleBack}
       onNext={async () => {
         try {

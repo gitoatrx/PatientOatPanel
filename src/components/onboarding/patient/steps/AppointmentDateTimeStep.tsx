@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, memo, useEffect } from "react";
+import React, { useState, memo, useEffect } from "react";
 import { Clock, Calendar, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,7 +7,6 @@ import { useFormContext } from "react-hook-form";
 import { useEnterKey } from "@/lib/hooks/useEnterKey";
 // Date utility imports removed - using string-based dates to avoid timezone issues
 import { patientService } from "@/lib/services/patientService";
-import { AvailableDate } from "@/lib/types/api";
 import { DateGridSkeleton, TimeSlotsGridSkeleton } from "@/components/ui/skeleton-loaders";
 
 // Interface for the component's internal date format - using strings to avoid timezone issues
@@ -79,6 +78,33 @@ const itemVariants = {
   },
 };
 
+// Helper function to add "Today" or "Tomorrow" labels for Vancouver, BC timezone
+const addRelativeDateLabel = (dateString: string, originalLabel: string): string => {
+  try {
+    // Get current date in Vancouver, BC timezone (Pacific Time)
+    const now = new Date();
+    const vancouverTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Vancouver" }));
+    const today = vancouverTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Get tomorrow's date
+    const tomorrow = new Date(vancouverTime);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowString = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Compare with the appointment date
+    if (dateString === today) {
+      return `${originalLabel} • Today`;
+    } else if (dateString === tomorrowString) {
+      return `${originalLabel} • Tomorrow`;
+    }
+    
+    return originalLabel;
+  } catch (error) {
+    // If there's any error with date processing, return the original label
+    return originalLabel;
+  }
+};
+
 // Mock data generation removed - only using real API data now
 
 // Static time slots generation removed - now using API data
@@ -132,23 +158,24 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
         const response = await patientService.getAvailableSlots(providerId);
 
         if (response.success && response.data) {
-          console.log('Available dates API response:', response.data);
 
           // Convert API dates to the format expected by the component - using strings to avoid timezone issues
           const convertedDates: ComponentDate[] = response.data.map(apiDate => {
             // Remove year from the formatted date for display
             const labelWithoutYear = apiDate.formatted_date.replace(/,?\s*\d{4}$/, '');
+            
+            // Add "Today" or "Tomorrow" labels for Vancouver, BC timezone
+            const enhancedLabel = addRelativeDateLabel(apiDate.date, labelWithoutYear);
 
             return {
               value: apiDate.date, // Keep as string (YYYY-MM-DD)
-              label: labelWithoutYear, // Remove year from display
+              label: enhancedLabel, // Enhanced label with Today/Tomorrow
               formatted_date: apiDate.formatted_date,
               day_name: apiDate.day_name,
               day_short: apiDate.day_short,
             };
           });
 
-          console.log('Converted dates:', convertedDates);
           setAvailableDates(convertedDates);
         } else {
           console.error('Failed to fetch available dates:', response.message);
@@ -181,11 +208,9 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
       setTimeSlotsError(null);
 
       try {
-        console.log('Fetching time slots for date:', selectedDate, 'provider:', providerId);
         const response = await patientService.getAvailableTimeSlots(providerId, selectedDate);
 
         if (response.success && response.data) {
-          console.log('Time slots API response:', response.data);
 
           // Convert API time slots to the format expected by the component
           // The API already provides both time and label, so we can use them directly
@@ -194,7 +219,6 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
             label: slot.label, // Use the user-friendly label (e.g., "9:30 AM")
           }));
 
-          console.log('Converted time slots:', convertedTimeSlots);
           setAvailableTimeSlots(convertedTimeSlots);
         } else {
           console.error('Failed to fetch time slots:', response);

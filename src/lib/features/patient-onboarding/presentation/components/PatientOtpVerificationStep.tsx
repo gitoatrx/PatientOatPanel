@@ -145,8 +145,8 @@ export function PatientOtpVerificationStep() {
         // Show success toast
         toast({
           variant: "success",
-          title: "Phone Verified Successfully!",
-          description: "Your phone number has been verified. Loading your progress...",
+          title: "Verification Complete!",
+          description: "Your phone number has been verified",
         });
 
         // Call progress API to get the current step where user left off

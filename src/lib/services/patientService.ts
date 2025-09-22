@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient';
 import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion } from '@/lib/types/api';
-import { API_CONFIG } from '@/lib/config/api';
+import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
 
@@ -787,7 +787,7 @@ export const patientService = {
       console.log('Getting follow-ups token for clinic:', clinicId, 'appointment:', appointmentId);
 
       const response = await apiClient.post<ApiResponse<{ token: string }>>(
-        '/clinic/get-followups-token',
+        API_CONFIG.ENDPOINTS.GET_FOLLOWUPS_TOKEN,
         {
           clinic_id: clinicId,
           appointment_id: appointmentId,
@@ -819,7 +819,7 @@ export const patientService = {
       console.log('Getting follow-up questions for clinic:', clinicId, 'appointment:', appointmentId, 'token:', token);
 
       const response = await apiClient.get<ApiResponse<{ questions: FollowupQuestion[] }>>(
-        `/clinic/followups/${clinicId}/${appointmentId}/${token}/questions`,
+        getFollowupQuestionsUrl(clinicId, appointmentId, token),
         {
           showLoading: false, // Don't show loading for this background fetch
           showErrorToast: false, // Handle errors in component
@@ -847,7 +847,7 @@ export const patientService = {
       console.log('Saving follow-up answers for clinic:', clinicId, 'appointment:', appointmentId, 'token:', token, 'payload:', payload);
 
       const response = await apiClient.post<ApiResponse<{ saved: boolean; answers: Record<string, { value: string; updated_at: string }> }>>(
-        `/clinic/followups/${clinicId}/${appointmentId}/${token}/answers`,
+        getFollowupAnswersUrl(clinicId, appointmentId, token),
         payload,
         {
           showLoading: true,
