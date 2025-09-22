@@ -62,6 +62,7 @@ interface ChatMessage {
   timestamp: Date;
   audioUrl?: string;
   isStreaming?: boolean;
+  isTyping?: boolean;
   structuredData?: {
     findings?: string[];
     differentials?: Array<{ condition: string; likelihood: string }>;
@@ -452,7 +453,7 @@ export function AiAssessmentChat({
 
   // Initialize connection and start chat
   useEffect(() => {
-    if (isOpen && messages.length === 1) {
+    if (messages.length === 1) {
       setIsConnecting(false);
       // Auto-start the chat by hitting the stream endpoint
       const timer = setTimeout(() => {
@@ -461,7 +462,7 @@ export function AiAssessmentChat({
 
       return () => clearTimeout(timer);
     }
-  }, [isOpen, messages.length, startInitialChat]);
+  }, [messages.length, startInitialChat]);
 
   // Handle follow-up questions
   const handleFollowupQuestion = useCallback((question: FollowupQuestion) => {
@@ -701,7 +702,7 @@ export function AiAssessmentChat({
     }
   };
 
-  if (!isOpen) return null;
+  // Component is always rendered when called
 
   if (isEmbedded) {
     return (

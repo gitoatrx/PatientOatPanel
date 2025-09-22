@@ -40,7 +40,6 @@ export function PatientOtpVerificationStep() {
   let stepData;
   try {
     stepData = getStepComponentData("verifyOtp");
-    console.log("PatientOtpVerificationStep: Step data loaded:", stepData);
   } catch (error) {
     console.error("PatientOtpVerificationStep: Error loading step data:", error);
     stepData = {
@@ -56,14 +55,6 @@ export function PatientOtpVerificationStep() {
     };
   }
 
-  // Debug logging
-  console.log("PatientOtpVerificationStep: Component rendered", {
-    state: state,
-    isLoading: isLoading,
-    phoneNumber: phoneNumber,
-    isInitialized: isInitialized,
-    stepData: stepData
-  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(otpSchema),
@@ -74,26 +65,18 @@ export function PatientOtpVerificationStep() {
 
   useEffect(() => {
     try {
-      console.log("PatientOtpVerificationStep: useEffect triggered with state:", state);
 
       // Get phone number from context state first
       if (state?.draft?.phone) {
         setPhoneNumber(state.draft.phone as string);
-        console.log("PatientOtpVerificationStep: Phone number loaded from state:", state.draft.phone);
       } else {
-        console.log("PatientOtpVerificationStep: No phone number in state, checking localStorage");
 
         // First try to get phone number from direct localStorage key with proper formatting
         try {
           const directPhoneNumber = getFormattedPhoneFromStorage();
           if (directPhoneNumber) {
             setPhoneNumber(directPhoneNumber);
-            console.log("PatientOtpVerificationStep: Phone number loaded from direct localStorage:", directPhoneNumber);
-          } else {
-            console.log("PatientOtpVerificationStep: No direct phone number in localStorage, checking state");
-
             // No fallback to patient-onboarding-state - using direct localStorage only
-            console.log("PatientOtpVerificationStep: No phone number found in direct localStorage");
           }
         } catch (error) {
           console.error("Error loading phone number from localStorage:", error);
@@ -102,7 +85,6 @@ export function PatientOtpVerificationStep() {
 
       // Mark as initialized
       setIsInitialized(true);
-      console.log("PatientOtpVerificationStep: Component initialized successfully");
     } catch (error) {
       console.error("PatientOtpVerificationStep: Error during initialization:", error);
       setError("Failed to initialize OTP verification. Please refresh the page.");
@@ -125,17 +107,14 @@ export function PatientOtpVerificationStep() {
 
     // Prevent multiple API calls
     if (isVerifying) {
-      console.log("OTP verification already in progress, ignoring duplicate call");
       return;
     }
 
     try {
       setIsVerifying(true);
       setError(null);
-      console.log("Verifying OTP:", values.otp);
 
       // Show immediate feedback that verification is in progress
-      console.log("Starting OTP verification...");
 
       let verifyResponse;
       try {
@@ -158,12 +137,10 @@ export function PatientOtpVerificationStep() {
       }
 
       if (verifyResponse.success) {
-        console.log("OTP verification successful:", verifyResponse);
 
         // Save OTP verification status to localStorage
         localStorage.setItem('patient-otp-verified', 'true');
         localStorage.setItem('patient-otp-verified-at', new Date().toISOString());
-        console.log("OTP verification status saved to localStorage");
 
         // Show success toast
         toast({
@@ -174,28 +151,23 @@ export function PatientOtpVerificationStep() {
 
         // Call progress API to get the current step where user left off
         try {
-          console.log("OTP verification successful, fetching progress to determine next step");
           const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
 
           if (progressResponse.success && progressResponse.data) {
             const currentStep = progressResponse.data.current_step;
-            console.log("Progress API response - current step:", currentStep);
 
             // Navigate to the step where user left off using centralized mapping
             if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
               const targetRoute = getRouteFromApiStep(currentStep);
-              console.log("Navigating to step where user left off:", currentStep, "→", targetRoute);
 
               // Special handling for completed step
               if (currentStep === 'completed') {
-                console.log("Onboarding is completed, redirecting to confirmation page");
                 router.push("/onboarding/patient/confirmation");
               } else {
                 router.push(targetRoute);
               }
             } else {
               // If no valid current step, go to health card as default
-              console.log("No valid current step found, defaulting to health card step");
               router.push("/onboarding/patient/health-card");
             }
           } else {
@@ -274,7 +246,6 @@ export function PatientOtpVerificationStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
     // Navigate back to phone step
     router.push("/onboarding/patient/phone");
   };
@@ -294,14 +265,12 @@ export function PatientOtpVerificationStep() {
 
     // Prevent multiple resend calls
     if (isVerifying) {
-      console.log("OTP verification in progress, cannot resend");
       return;
     }
 
     try {
       setIsVerifying(true);
       setError(null);
-      console.log("Resending OTP to:", phoneNumber);
 
       // Resend OTP
       const response = await patientService.sendOtp(phoneNumber);

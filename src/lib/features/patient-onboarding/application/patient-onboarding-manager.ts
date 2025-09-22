@@ -41,7 +41,6 @@ export class PatientOnboardingManager {
 
   async getOnboardingState(): Promise<PatientOnboardingState> {
     // Disabled localStorage loading - using progress API instead
-    console.log("PatientOnboardingManager: localStorage loading disabled - using progress API");
 
     // Initialize with default state for UI-only mode
     this.state = {
@@ -60,19 +59,16 @@ export class PatientOnboardingManager {
 
     // No localStorage saving - using progress API
 
-    console.log("PatientOnboardingManager: Initialized with default state:", this.state);
     return this.state;
   }
 
   async loadProgressFromAPI(phone: string): Promise<void> {
     try {
-      console.log("PatientOnboardingManager: Loading progress from API for phone:", phone);
       
       const progressResponse = await patientService.getOnboardingProgress(phone);
       
       if (progressResponse.success && progressResponse.data) {
         const apiData = progressResponse.data;
-        console.log("PatientOnboardingManager: Received progress data from API:", apiData);
         
         // Update state with API data
         if (!this.state) {
@@ -98,7 +94,6 @@ export class PatientOnboardingManager {
         // Special handling for completed step
         if (apiData.current_step === 'completed') {
           this.state.isComplete = true;
-          console.log("PatientOnboardingManager: Onboarding is completed");
         }
         
         // Extract and populate form data from API state
@@ -182,7 +177,6 @@ export class PatientOnboardingManager {
         
         // No localStorage saving - using progress API
         
-        console.log("PatientOnboardingManager: Successfully loaded and merged progress data:", this.state);
       }
     } catch (error) {
       console.error("PatientOnboardingManager: Failed to load progress from API:", error);
@@ -205,7 +199,6 @@ export class PatientOnboardingManager {
       this.state.error = null;
 
       // No API calls for step saving - using local storage only
-      console.log('Saving step data locally:', data);
 
       // Update local state with form data
       this.state.draft = { ...this.state.draft, ...(data as Record<string, unknown>) };
@@ -261,7 +254,6 @@ export class PatientOnboardingManager {
       
       // No localStorage saving - using progress API
       
-      console.log("PatientOnboardingManager: Onboarding completed successfully");
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -294,7 +286,6 @@ export class PatientOnboardingManager {
       this.state.error = null;
 
       // In UI-only mode, just simulate successful registration
-      console.log("PatientOnboardingManager: Simulating patient registration with data:", data);
       
       this.state.isComplete = true;
       this.state.draft = { ...this.state.draft, ...(data as Record<string, unknown>) };
@@ -346,19 +337,12 @@ export class PatientOnboardingManager {
   private getStepNumberFromName(stepName: string): number {
     // Special handling for completed step
     if (stepName === 'completed') {
-      console.log("PatientOnboardingManager: Converting completed step to confirmation step (15)");
-      return 15; // Return confirmation step number
+        return 15; // Return confirmation step number
     }
     
     // Convert API step name to frontend step number
     const stepEntry = Object.entries(PATIENT_STEP_MAPPING).find(
       ([, name]) => name === stepName,
-    );
-    console.log(
-      "PatientOnboardingManager: Converting step name:",
-      stepName,
-      "->",
-      stepEntry ? stepEntry[0] : "not found",
     );
     return stepEntry ? parseInt(stepEntry[0], 10) : 1;
   }
@@ -376,6 +360,5 @@ export class PatientOnboardingManager {
   clearState(): void {
     this.state = null;
     // No localStorage clearing needed - not using localStorage anymore
-    console.log("PatientOnboardingManager: State cleared");
   }
 }

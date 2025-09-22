@@ -21,6 +21,7 @@ export function PatientReviewStep() {
   const [reviewData, setReviewData] = useState<WizardForm | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
@@ -101,6 +102,7 @@ export function PatientReviewStep() {
     }
 
     try {
+      setIsSubmitting(true);
       setError(null);
       console.log("Review submitted, confirming appointment...");
       
@@ -167,6 +169,8 @@ export function PatientReviewStep() {
       
       // Set error state after toast
       setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -265,8 +269,8 @@ export function PatientReviewStep() {
       onBack={handleBack}
       onNext={handleSubmit}
       nextLabel="Book Appointment"
-      isSubmitting={false}
-      isNextDisabled={false} // Review step is always valid
+      isSubmitting={isSubmitting}
+      isNextDisabled={isSubmitting} // Disable button while submitting
       useCard={false}
       progressPercent={Math.round((14 / 15) * 100)}
       currentStep={14}

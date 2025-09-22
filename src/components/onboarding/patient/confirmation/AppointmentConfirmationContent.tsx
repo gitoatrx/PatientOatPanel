@@ -13,8 +13,6 @@ import { AddToCalendar } from "./AddToCalendar";
 import { ShareAppointment } from "./ShareAppointment";
 import { Button } from "@/components/ui/button";
 import { patientService } from "@/lib/services/patientService";
-import { FollowupQuestion } from "@/lib/types/api";
-import { API_CONFIG } from "@/lib/config/api";
 
 
 export function AppointmentConfirmationContent() {
@@ -26,7 +24,6 @@ export function AppointmentConfirmationContent() {
     date: string;
     time: string;
   } | null>(null);
-  const [followupQuestions, setFollowupQuestions] = useState<FollowupQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +45,10 @@ export function AppointmentConfirmationContent() {
           return;
         }
 
-        console.log('Fetching confirmation data for phone:', savedPhone);
         const progressResponse = await patientService.getOnboardingProgress(savedPhone);
 
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
-          console.log('Confirmation API response:', apiData);
 
           // Extract confirmation data from the API response
           if (apiData.state?.confirmation && apiData.state?.appointment && apiData.state?.provider) {
@@ -69,7 +64,6 @@ export function AppointmentConfirmationContent() {
             };
 
             setConfirmationData(confirmation);
-            console.log('Set confirmation data:', confirmation);
           } else {
             setError('Confirmation data not found. Please try again.');
           }
@@ -135,8 +129,7 @@ export function AppointmentConfirmationContent() {
     }
   };
 
-  // Generate follow-up questions using the two-step API process
-  const generateFollowupQuestions = async () => {
+  const handleStartAssessment = async () => {
     if (!confirmationData) {
       console.error('No confirmation data available');
       return;
@@ -144,79 +137,14 @@ export function AppointmentConfirmationContent() {
 
     try {
       setIsGeneratingQuestions(true);
-      console.log('Starting follow-up questions generation...');
 
-      // Step 1: Get the token
-      console.log('Step 1: Getting follow-ups token...');
-      const tokenResponse = await patientService.getFollowupsToken(
-        API_CONFIG.CLINIC_ID,
-        confirmationData.appointment_id
-      );
-
-      console.log('Token response received:', tokenResponse);
-
-      // Handle direct token response format: {"token":"..."}
-      let token: string;
-      if (tokenResponse && typeof tokenResponse === 'object' && 'token' in tokenResponse) {
-        token = tokenResponse.token as string;
-      } else if (tokenResponse && tokenResponse.success && tokenResponse.data?.token) {
-        token = tokenResponse.data.token;
-      } else {
-        console.error('Failed to get follow-ups token:', tokenResponse);
-        throw new Error('Failed to get follow-ups token: Invalid response format');
-      }
-
-      if (!token) {
-        console.error('No token found in response:', tokenResponse);
-        throw new Error('Failed to get follow-ups token: No token in response');
-      }
-      console.log('Step 1 completed: Token received:', token);
-
-      // Step 2: Get the questions using the token
-      console.log('Step 2: Getting follow-up questions...');
-      const questionsResponse = await patientService.getFollowupQuestions(
-        API_CONFIG.CLINIC_ID,
-        confirmationData.appointment_id,
-        token
-      );
-
-      console.log('Questions response received:', questionsResponse);
-
-      // Handle direct questions response format: {"questions": [...], "answers": []}
-      let questions;
-      if (questionsResponse && typeof questionsResponse === 'object' && 'questions' in questionsResponse) {
-        questions = questionsResponse.questions;
-      } else if (questionsResponse && questionsResponse.success && questionsResponse.data?.questions) {
-        questions = questionsResponse.data.questions;
-      } else {
-        console.error('Failed to get follow-up questions:', questionsResponse);
-        throw new Error('Failed to get follow-up questions: Invalid response format');
-      }
-
-      if (!questions || !Array.isArray(questions)) {
-        console.error('No questions found in response:', questionsResponse);
-        throw new Error('Failed to get follow-up questions: No questions in response');
-      }
-
-      console.log('Step 2 completed: Questions received:', questions);
-      setFollowupQuestions(questions);
-      console.log('Follow-up questions generated successfully:', questions.length, 'questions');
-
+      // SECURITY: Navigate to health-checkin without exposing appointment_id in URL
+      // The health-checkin page will authenticate the user and get their appointment_id securely
+      router.push('/onboarding/patient/health-checkin');
     } catch (error) {
-      console.error('Error generating follow-up questions:', error);
-      // Don't throw the error, just log it and continue
-      // The user can still proceed with the assessment
-    } finally {
+      console.error('Error starting health check-in:', error);
       setIsGeneratingQuestions(false);
     }
-  };
-
-  const handleStartAssessment = async () => {
-    // First generate the follow-up questions
-    await generateFollowupQuestions();
-
-    // Then navigate to the health check-in route
-    router.push('/onboarding/patient/health-checkin');
   };
 
   // Show loading state
@@ -348,7 +276,7 @@ export function AppointmentConfirmationContent() {
           doctorName={appt.doctor.name}
           appointmentDate={formatDate(appt.date)}
           appointmentTime={formatTime(appt.time)}
-          followupQuestions={followupQuestions}
+          followupQuestions={[]}
         />
       )}
     </div>

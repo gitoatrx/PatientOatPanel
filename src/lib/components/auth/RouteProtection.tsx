@@ -26,35 +26,23 @@ export function RouteProtection({ children }: RouteProtectionProps) {
       const isVerified = hasActiveSession();
       const phoneNumber = getPhoneNumber();
       
-      console.log('RouteProtection: pathname:', pathname);
-      console.log('RouteProtection: isVerified:', isVerified);
-      console.log('RouteProtection: phoneNumber:', phoneNumber);
 
       // If user is verified and trying to access phone/OTP steps, redirect to current step
       // But only redirect from phone step, not from verify-otp step (let them complete verification)
       if (isVerified && phoneNumber) {
         if (pathname === '/onboarding/patient/phone') {
-          console.log('RouteProtection: User is verified, redirecting from phone step');
           try {
-            console.log('User is already verified, fetching current step...');
             const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
             
             if (progressResponse.success && progressResponse.data) {
               const currentStep = progressResponse.data.current_step;
-              console.log('Current step from API:', currentStep);
               
               // Navigate to the step where user left off
               if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
                 const targetRoute = getRouteFromApiStep(currentStep);
-                console.log("=== ROUTE PROTECTION DEBUG ===");
-                console.log("API returned current_step:", currentStep);
-                console.log("Mapped to route:", targetRoute);
-                console.log("Available mappings:", Object.keys(API_STEP_TO_ROUTE_MAP));
-                console.log("=============================");
                 
                 // Special handling for completed step
                 if (currentStep === 'completed') {
-                  console.log("Onboarding is completed, redirecting to confirmation page");
                   router.replace("/onboarding/patient/confirmation");
                 } else {
                   router.replace(targetRoute);
@@ -62,7 +50,6 @@ export function RouteProtection({ children }: RouteProtectionProps) {
                 return;
               } else {
                 // If no valid current step, go to health card as default
-                console.log("No valid current step found, defaulting to health card step");
                 router.replace("/onboarding/patient/health-card");
                 return;
               }
@@ -82,7 +69,6 @@ export function RouteProtection({ children }: RouteProtectionProps) {
       if (!isVerified && pathname.startsWith('/onboarding/patient/') && 
           pathname !== '/onboarding/patient/phone' && 
           pathname !== '/onboarding/patient/verify-otp') {
-        console.log('User not verified, redirecting to phone step');
         router.replace('/onboarding/patient/phone');
         return;
       }

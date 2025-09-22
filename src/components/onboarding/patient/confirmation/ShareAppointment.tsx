@@ -50,7 +50,7 @@ export function ShareAppointment({ appointment, className = "" }: ShareAppointme
       toast({
         title: "Copy failed",
         description: "Unable to copy to clipboard. Please try again.",
-        variant: "destructive",
+        variant: "error",
       });
     }
   };
@@ -111,13 +111,13 @@ Best regards`;
           text: generateShareText(appointment),
           url: generateShareURL(appointment),
         });
-      } catch (error: any) {
-        if (error.name !== 'AbortError') {
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name !== 'AbortError') {
           console.error('Error sharing:', error);
           toast({
             title: "Share failed",
             description: "Unable to share. Please try another method.",
-            variant: "destructive",
+            variant: "error",
           });
         }
       }
