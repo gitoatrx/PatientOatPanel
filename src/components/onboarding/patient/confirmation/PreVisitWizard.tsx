@@ -73,7 +73,7 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
       text: question.text,
       type: question.type === 'single_select' ? 'single_choice' as const : 
             question.type === 'multiple_select' ? 'multiple_choice' as const :
-            question.type === 'text' ? 'text' as const :
+            question.type === 'text' ? 'textarea' as const :
             question.type === 'number' ? 'text' as const :
             question.type === 'date' ? 'text' as const :
             question.type === 'boolean' ? 'single_choice' as const :
@@ -86,7 +86,8 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
         description: undefined
       })),
       hint: question.hint,
-      placeholder: question.type === 'text' || question.type === 'number' ? 'Please enter your answer...' : undefined
+      placeholder: question.type === 'text' ? 'Please provide your detailed answer...' : 
+                   question.type === 'number' ? 'Please enter your answer...' : undefined
     }]
   }));
 
