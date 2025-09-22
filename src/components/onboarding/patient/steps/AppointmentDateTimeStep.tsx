@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFormContext } from "react-hook-form";
 import { useEnterKey } from "@/lib/hooks/useEnterKey";
-// Date utility imports removed - using string-based dates to avoid timezone issues
+import { format, addDays } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { patientService } from "@/lib/services/patientService";
 import { DateGridSkeleton, TimeSlotsGridSkeleton } from "@/components/ui/skeleton-loaders";
 
@@ -81,21 +82,20 @@ const itemVariants = {
 // Helper function to add "Today" or "Tomorrow" labels for Vancouver, BC timezone
 const addRelativeDateLabel = (dateString: string, originalLabel: string): string => {
   try {
-    // Get current date in Vancouver, BC timezone (Pacific Time)
+    // Get current date in Vancouver, BC timezone
+    const vancouverTimeZone = "America/Vancouver";
     const now = new Date();
-    const vancouverTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Vancouver" }));
-    const today = vancouverTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const vancouverTime = toZonedTime(now, vancouverTimeZone);
     
-    // Get tomorrow's date
-    const tomorrow = new Date(vancouverTime);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowString = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Format dates for comparison (YYYY-MM-DD)
+    const today = format(vancouverTime, "yyyy-MM-dd");
+    const tomorrow = format(addDays(vancouverTime, 1), "yyyy-MM-dd");
     
     // Compare with the appointment date
     if (dateString === today) {
-      return `${originalLabel} • Today`;
-    } else if (dateString === tomorrowString) {
-      return `${originalLabel} • Tomorrow`;
+      return "Today";
+    } else if (dateString === tomorrow) {
+      return "Tomorrow";
     }
     
     return originalLabel;

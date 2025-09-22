@@ -213,7 +213,7 @@ export function AppointmentConfirmationContent() {
             {/* Simple Confirmation Message */}
             <div className="text-center">
               <p className="text-xl text-gray-700 leading-relaxed">
-                Your follow-up appointment with <span className="text-green-600 font-semibold">{appt.doctor.name}</span> has been scheduled for
+                Your appointment with <span className="text-green-600 font-semibold">{appt.doctor.name}</span> has been scheduled for
                 <br />
                 <span className="text-green-600 font-semibold underline">{formatDate(appt.date)}, {formatTime(appt.time)}</span>
               </p>

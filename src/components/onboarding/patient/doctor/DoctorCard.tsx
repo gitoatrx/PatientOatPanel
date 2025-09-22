@@ -86,7 +86,7 @@ export function DoctorCard({ doctor, selected, onSelect, className }: DoctorCard
           </div>
           
           {/* Availability */}
-          <p
+          {/* <p
             className={cn(
               "text-xs mt-1",
               safeNextAvailable.toLowerCase().includes("today")
@@ -99,7 +99,7 @@ export function DoctorCard({ doctor, selected, onSelect, className }: DoctorCard
               : safeNextAvailable.toLowerCase().includes("tomorrow")
               ? "Available Tomorrow"
               : `Next: ${safeNextAvailable}`}
-          </p>
+          </p> */}
         </div>
 
         {/* Right-side selector */}
