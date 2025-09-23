@@ -13,6 +13,8 @@ import { AddToCalendar } from "./AddToCalendar";
 import { ShareAppointment } from "./ShareAppointment";
 import { Button } from "@/components/ui/button";
 import { patientService } from "@/lib/services/patientService";
+import { PatientStepShell } from "@/lib/features/patient-onboarding/presentation/components/PatientStepShell";
+import { getStepComponentData } from "@/lib/features/patient-onboarding/config/patient-onboarding-config";
 
 
 export function AppointmentConfirmationContent() {
@@ -27,7 +29,11 @@ export function AppointmentConfirmationContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shouldShowHealthCheckin, setShouldShowHealthCheckin] = useState(false);
   const router = useRouter();
+
+  // Get step configuration
+  const stepData = getStepComponentData("confirmation");
 
   // Fetch confirmation data from API
   useEffect(() => {
@@ -49,6 +55,11 @@ export function AppointmentConfirmationContent() {
 
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
+          const followupStatuses = apiData.state?.health_concerns?.followup_status;
+          const hasFollowupFlag = Array.isArray(followupStatuses)
+            ? followupStatuses.some((status) => status === true || status === "true")
+            : followupStatuses === true || followupStatuses === "true";
+          setShouldShowHealthCheckin(hasFollowupFlag);
 
           // Extract confirmation data from the API response
           if (apiData.state?.confirmation && apiData.state?.appointment && apiData.state?.provider) {
@@ -150,46 +161,73 @@ export function AppointmentConfirmationContent() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-sm text-muted-foreground">Loading confirmation...</p>
+      <PatientStepShell
+        title="Loading..."
+        description="Loading your confirmation..."
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading confirmation...</p>
+          </div>
         </div>
-      </div>
+      </PatientStepShell>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 mb-4">{error}</div>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-          >
-            Reload Page
-          </button>
+      <PatientStepShell
+        title="Error"
+        description="Something went wrong"
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="text-red-500 mb-4">{error}</div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+            >
+              Reload Page
+            </button>
+          </div>
         </div>
-      </div>
+      </PatientStepShell>
     );
   }
 
   // Show confirmation content
   if (!confirmationData) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-gray-500 mb-4">No confirmation data available</div>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-          >
-            Reload Page
-          </button>
+      <PatientStepShell
+        title="No Data"
+        description="Confirmation data not available"
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="text-gray-500 mb-4">No confirmation data available</div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+            >
+              Reload Page
+            </button>
+          </div>
         </div>
-      </div>
+      </PatientStepShell>
     );
   }
 
@@ -197,19 +235,23 @@ export function AppointmentConfirmationContent() {
 
 
   return (
-    <div className="bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="max-w-lg mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
+    <>
+      <PatientStepShell
+        title="Appointment Confirmed!"
+        progressPercent={stepData.progressPercent}
+        currentStep={stepData.currentStep}
+        totalSteps={stepData.totalSteps}
+        useCard={false}
+      >
+        <div className="max-w-lg mx-auto pb-8">
+          {/* Success Icon */}
+          <div className="text-center mb-8 pt-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4 relative overflow-hidden">
+              <CheckCircle className="w-8 h-8 text-green-600 relative z-10" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Appointment Confirmed!</h1>
-            <p className="text-lg text-gray-600">Your appointment has been successfully booked</p>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Simple Confirmation Message */}
             <div className="text-center">
               <p className="text-xl text-gray-700 leading-relaxed">
@@ -220,56 +262,58 @@ export function AppointmentConfirmationContent() {
             </div>
 
             {/* Assessment CTA Card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <div className="text-center space-y-4">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Pre-Visit Health Check-in</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">
-                    Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you&apos;ve been feeling.
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" />
-                    <span>2-3 minutes</span>
+            {shouldShowHealthCheckin ? (
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                <div className="text-center space-y-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Pre-Visit Health Check-in</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you&apos;ve been feeling.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Secure & Private</span>
-                  </div>
-                </div>
 
-                <Button
-                  onClick={handleStartAssessment}
-                  disabled={isGeneratingQuestions}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isGeneratingQuestions ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Generating Questions...
-                    </>
-                  ) : (
-                    <>
-                      Start Health Check-in
-                      <ChevronRight className="w-4 h-4 ml-2" />
-                    </>
-                  )}
-                </Button>
+                  <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-4 h-4" />
+                      <span>2-3 minutes</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Secure & Private</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleStartAssessment}
+                    disabled={isGeneratingQuestions}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingQuestions ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Generating Questions...
+                      </>
+                    ) : (
+                      <>
+                        Start Health Check-in
+                        <ChevronRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-            </div>
 
+            ) : null}
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
               <AddToCalendar appointment={appt} className="flex-1" />
               <ShareAppointment appointment={appt} className="flex-1" />
             </div>
           </div>
         </div>
-      </div>
+      </PatientStepShell>
 
-      {/* AI Assessment Chat Modal */}
+      {/* AI Assessment Chat Modal - Outside PatientStepShell */}
       {showAssessment && (
         <AiAssessmentChat
           onClose={() => setShowAssessment(false)}
@@ -279,6 +323,8 @@ export function AppointmentConfirmationContent() {
           followupQuestions={[]}
         />
       )}
-    </div>
+    </>
   );
 }
+
+

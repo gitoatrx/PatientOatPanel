@@ -48,20 +48,20 @@ export function FormSelect({
   };
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-2 w-full", className)}>
       <label
         htmlFor={name}
         className="block text-lg font-semibold text-foreground"
       >
         {label}
       </label>
-      <div className="relative">
+      <div className="relative w-full overflow-hidden">
         <select
           id={name}
           {...register(name, {
             onChange: handleChange,
           })}
-          className="w-full p-4 pr-12 border border-border rounded-lg transition-colors text-base bg-background text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          className="w-full p-4 pr-12 border border-border rounded-lg transition-colors text-base bg-background text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed min-w-0"
         >
           {placeholder && (
             <option value="" disabled>

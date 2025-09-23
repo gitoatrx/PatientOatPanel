@@ -398,11 +398,15 @@ function IntroStep({ onNext, doctorName, followupQuestions = [] }: { onNext: () 
         className="text-center space-y-6"
       >
         <motion.div
-          className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl"
+          className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl overflow-hidden"
           whileHover={{ scale: 1.05, rotate: 5 }}
           transition={{ type: "spring", stiffness: 300 }}
         >
-          <Calendar className="h-10 w-10 text-white" />
+          <img 
+            src="/123Walkin.png" 
+            alt="123Walkin" 
+            className="w-12 h-12 object-contain"
+          />
         </motion.div>
 
         <div className="space-y-3">

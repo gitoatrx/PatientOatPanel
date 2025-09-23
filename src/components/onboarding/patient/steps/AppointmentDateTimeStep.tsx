@@ -547,7 +547,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
                   {/* Available dates grid */}
                   {!isLoadingDates && !datesError && availableDates.length > 0 && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3">
                       {displayedDates.map((date, index) => {
                         // Use the selectedDate state for more reliable selection tracking
                         const isSelected = selectedDate === date.value || formValues.appointmentDate === date.value;
@@ -558,36 +558,13 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                             type="button"
                             onClick={() => handleDateSelect(date)}
                             className={cn(
-                              "p-3 sm:p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
+                              "p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
                               isSelected
-                                ? "text-white border-2 border-transparent"
-                                : "border-2 border-gray-200 bg-white text-gray-700",
+                                ? "text-white border-2 border-transparent bg-blue-600"
+                                : "border-2 border-gray-200 bg-white text-gray-700 hover:bg-blue-500 hover:text-white hover:border-blue-500",
                             )}
-                            style={
-                              isSelected
-                                ? {
-                                  background: "#2563eb", // blue-600 - prominent blue from your project
-                                }
-                                : {
-                                  background: "white",
-                                }
-                            }
                             variants={itemVariants}
                             custom={index}
-                            onMouseEnter={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.background = "#3b82f6"; // blue-500 - lighter blue for hover
-                                e.currentTarget.style.color = "white";
-                                e.currentTarget.style.borderColor = "#3b82f6"; // Maintain border color on hover
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.background = "white";
-                                e.currentTarget.style.color = "#374151";
-                                e.currentTarget.style.borderColor = "#e5e7eb"; // Reset to gray-200 border
-                              }
-                            }}
                           >
                             {/* Content */}
                             <div className="relative z-10">
@@ -674,43 +651,20 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                 ) : (
                   <div className="space-y-4">
                     {/* Time slots grid */}
-                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3">
                       {displayedTimeSlots.map((slot, index) => (
                         <motion.button
                           key={slot.value}
                           type="button"
                           onClick={() => handleTimeSelect(slot)}
                           className={cn(
-                            "p-2 sm:p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
+                            "p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
                             formValues.appointmentTime === slot.value
-                              ? "text-white border-2 border-transparent"
-                              : "border-2 border-gray-200 bg-white text-gray-700",
+                              ? "text-white border-2 border-transparent bg-green-600"
+                              : "border-2 border-gray-200 bg-white text-gray-700 hover:bg-green-500 hover:text-white hover:border-green-500",
                           )}
-                          style={
-                            formValues.appointmentTime === slot.value
-                              ? {
-                                background: "#16a34a", // green-600 - different color for time slots
-                              }
-                              : {
-                                background: "white",
-                              }
-                          }
                           variants={itemVariants}
                           custom={index}
-                          onMouseEnter={(e) => {
-                            if (formValues.appointmentTime !== slot.value) {
-                              e.currentTarget.style.background = "#22c55e"; // green-500 - lighter green for hover
-                              e.currentTarget.style.color = "white";
-                              e.currentTarget.style.borderColor = "#22c55e"; // Maintain border color on hover
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (formValues.appointmentTime !== slot.value) {
-                              e.currentTarget.style.background = "white";
-                              e.currentTarget.style.color = "#374151";
-                              e.currentTarget.style.borderColor = "#e5e7eb"; // Reset to gray-200 border
-                            }
-                          }}
                         >
                           {/* Content */}
                           <div className="relative z-10">

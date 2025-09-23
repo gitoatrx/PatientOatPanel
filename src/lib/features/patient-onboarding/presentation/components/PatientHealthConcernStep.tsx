@@ -277,15 +277,16 @@ export function PatientHealthConcernStep() {
               ) : (
                 <Combobox
                   options={healthConcerns.map(concern => ({
-                    value: concern.name,
+                    value: concern.id.toString(),
                     label: concern.name,
                   }))}
                   value={formValues.selectedReason}
-                  onValueChange={(value) =>
-                    form.setValue("selectedReason", value, {
+                  onValueChange={(value) => {
+                    const selectedConcern = healthConcerns.find(concern => concern.id.toString() === value);
+                    form.setValue("selectedReason", selectedConcern ? selectedConcern.name : "", {
                       shouldValidate: true,
-                    })
-                  }
+                    });
+                  }}
                   placeholder="Select your health concern..."
                   emptyMessage="No health conditions found."
                   displayValue={(value) => {

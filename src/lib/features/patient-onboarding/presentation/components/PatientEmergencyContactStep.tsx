@@ -294,7 +294,7 @@ export function PatientEmergencyContactStep() {
       totalSteps={15}
     >
         <FormProvider {...form}>
-          <div className="max-w-xl mx-auto space-y-4">
+          <div className="max-w-xl mx-auto space-y-4 w-full">
             {/* Error Display */}
             {error && (
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">

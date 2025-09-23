@@ -1,5 +1,9 @@
 "use client";
 
+import { Info } from "lucide-react";
+import { PatientStepShell } from "@/lib/features/patient-onboarding/presentation/components/PatientStepShell";
+import { getStepComponentData } from "@/lib/features/patient-onboarding/config/patient-onboarding-config";
+
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PreVisitWizard } from "@/components/onboarding/patient/confirmation/PreVisitWizard";
@@ -16,6 +20,8 @@ function HealthCheckInContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noFollowupMessage, setNoFollowupMessage] = useState<string | null>(null);
+  const confirmationStepData = getStepComponentData("confirmation");
   
   interface AppointmentData {
     state?: {
@@ -124,6 +130,7 @@ function HealthCheckInContent() {
       try {
         setIsLoading(true);
         setError(null);
+        setNoFollowupMessage(null);
 
         // SECURITY: Always require authentication first
         // Get phone number from localStorage (required for authentication)
@@ -174,6 +181,30 @@ function HealthCheckInContent() {
         // Set the verified appointment data
         setAppointmentId(userAppointmentId);
         setAppointmentData(progressData);
+
+        const healthConcerns = progressData.state?.health_concerns;
+        let hasFollowupFlag = true;
+        if (healthConcerns) {
+          const followupStatuses = healthConcerns.followup_status;
+          if (Array.isArray(followupStatuses)) {
+            hasFollowupFlag = followupStatuses.some((status) => status === true || status === "true");
+          } else if (followupStatuses !== undefined) {
+            hasFollowupFlag = followupStatuses === true || followupStatuses === "true";
+          }
+          if (!hasFollowupFlag) {
+            if (!signal.aborted) {
+              const labels = Array.isArray(healthConcerns.selected_labels) ? healthConcerns.selected_labels.filter(Boolean) : [];
+              const labelText = labels.length > 1
+                ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`
+                : labels[0] ?? "this concern";
+              setFollowupQuestions([]);
+              setToken(undefined);
+              setNoFollowupMessage(`We don't have a pre-visit follow-up for ${labelText}. Your clinician will review it with you during the appointment.`);
+              setIsInitialized(true);
+            }
+            return;
+          }
+        }
 
         // Generate follow-up questions with abort signal
         await generateFollowupQuestions(userAppointmentId, signal);
@@ -250,6 +281,32 @@ function HealthCheckInContent() {
   }
 
   // Create appointment data from progress response or use mock data
+  if (noFollowupMessage) {
+    return (
+      <PatientStepShell
+        title="No Follow-up Check-in Needed"
+        description={noFollowupMessage}
+        useCard={false}
+        currentStep={confirmationStepData.currentStep}
+        totalSteps={confirmationStepData.totalSteps}
+        progressPercent={confirmationStepData.progressPercent}
+        onBack={handleClose}
+        onNext={handleClose}
+        nextLabel="Back to confirmation"
+      >
+        <div className="max-w-lg mx-auto py-16">
+          <div className="flex flex-col items-center space-y-6 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100">
+              <Info className="h-8 w-8 text-blue-600" />
+            </div>
+            <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+              If anything changes before your visit, please call the clinic so we can update your chart.
+            </p>
+          </div>
+        </div>
+      </PatientStepShell>
+    );
+  }
   const appt = appointmentData ? {
     doctor: {
       name: appointmentData.state?.provider

@@ -98,6 +98,7 @@ export interface OnboardingProgressResponse {
         selected_ids: number[];
         selected_labels: string[];
         free_text: string[];
+        followup_status?: Array<boolean | "true" | "false">;
       };
       provider?: {
         id: number;

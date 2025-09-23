@@ -201,7 +201,9 @@ export function PatientStepShell({
       )}
 
       <div
-        className={`${contentMaxWidthClass} mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-2 pb-20 ${
+        className={`${contentMaxWidthClass} mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-2 ${
+          onNext ? "pb-20" : "pb-8"
+        } ${
           typeof progressPercent === "number" ? "pt-10" : "pt-2"
         }`}
       >
@@ -261,46 +263,50 @@ export function PatientStepShell({
         </div>
       </div>
 
-      {/* Fixed footer at the bottom of the viewport (no animation) */}
-      <div
-        className={`fixed bottom-0 left-0 right-0 ${contentMaxWidthClass} mx-auto px-5 bg-background`}
-      >
+      {/* Fixed footer at the bottom of the viewport (no animation) - only show if there are buttons */}
+      {(onNext || skipButton || footerExtra) && (
         <div
-          className={`${contentMaxWidthClass} container mx-auto px-4 py-4 space-y-3`}
+          className={`fixed bottom-0 left-0 right-0 ${contentMaxWidthClass} mx-auto px-5 bg-background`}
         >
-          {footerExtra ? <div>{footerExtra}</div> : null}
-
-          {skipButton && (
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="w-full text-lg cursor-pointer"
-              onClick={skipButton.onClick}
-              disabled={skipButton.disabled}
-            >
-              {skipButton.label}
-            </Button>
-          )}
-
-          <Button
-            type="button"
-            size="lg"
-            className="w-full text-lg text-white cursor-pointer"
-            onClick={handleNext}
-            disabled={!!isNextDisabled || isSubmitting}
+          <div
+            className={`${contentMaxWidthClass} container mx-auto px-4 py-4 space-y-3`}
           >
-            {isSubmitting ? (
-              <>
-                <LoadingSpinner size="sm" className="text-white" />
-                <span>Loading...</span>
-              </>
-            ) : (
-              nextLabel
+            {footerExtra ? <div>{footerExtra}</div> : null}
+
+            {skipButton && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full text-lg cursor-pointer"
+                onClick={skipButton.onClick}
+                disabled={skipButton.disabled}
+              >
+                {skipButton.label}
+              </Button>
             )}
-          </Button>
+
+            {onNext && (
+              <Button
+                type="button"
+                size="lg"
+                className="w-full text-lg text-white cursor-pointer"
+                onClick={handleNext}
+                disabled={!!isNextDisabled || isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <LoadingSpinner size="sm" className="text-white" />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  nextLabel
+                )}
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
