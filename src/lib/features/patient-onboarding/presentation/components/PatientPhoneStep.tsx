@@ -22,6 +22,22 @@ const phoneSchema = z.object({
         // Remove all non-digit characters
         const digits = val.replace(/\D/g, "");
 
+        // Check if phone number starts with 0
+        if (digits.length > 0 && digits[0] === "0") {
+          return false;
+        }
+
+        return true;
+      },
+      {
+        message: "Phone number cannot start with 0",
+      },
+    )
+    .refine(
+      (val) => {
+        // Remove all non-digit characters
+        const digits = val.replace(/\D/g, "");
+
         // Check if all digits are the same (e.g., 0000000000, 1111111111)
         if (digits.length > 0) {
           const firstDigit = digits[0];
