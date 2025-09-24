@@ -32,6 +32,7 @@ export const API_CONFIG = {
     GET_FOLLOWUPS_TOKEN: '/clinic/get-followups-token',
     GET_FOLLOWUP_QUESTIONS: '/clinic/followups',
     SAVE_FOLLOWUP_ANSWERS: '/clinic/followups',
+    TELEHEALTH_PATIENT_SESSION_BASE: '/clinic/appointments',
   },
 
   // Request Configuration
@@ -98,6 +99,17 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
 // Helper function to get frontend route from API step
 export const getRouteFromApiStep = (apiStep: string): string => {
   return API_STEP_TO_ROUTE_MAP[apiStep] || '/onboarding/patient/health-card';
+};
+
+export interface TelehealthPatientSessionUrlArgs {
+  appointmentId: string;
+  token: string;
+}
+
+export const getTelehealthPatientSessionUrl = ({ appointmentId, token }: TelehealthPatientSessionUrlArgs): string => {
+  const safeAppointmentId = encodeURIComponent(appointmentId);
+  const safeToken = encodeURIComponent(token);
+  return `${API_CONFIG.ENDPOINTS.TELEHEALTH_PATIENT_SESSION_BASE}/${safeAppointmentId}/video/session/patient?token=${safeToken}`;
 };
 
 // Helper functions for followup endpoints
