@@ -547,7 +547,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
                   {/* Available dates grid */}
                   {!isLoadingDates && !datesError && availableDates.length > 0 && (
-                    <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                       {displayedDates.map((date, index) => {
                         // Use the selectedDate state for more reliable selection tracking
                         const isSelected = selectedDate === date.value || formValues.appointmentDate === date.value;
@@ -558,7 +558,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                             type="button"
                             onClick={() => handleDateSelect(date)}
                             className={cn(
-                              "p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
+                              "p-4 sm:p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm min-h-[80px] sm:min-h-[70px]",
                               isSelected
                                 ? "text-white border-2 border-transparent bg-blue-600"
                                 : "border-2 border-gray-200 bg-white text-gray-700 hover:bg-blue-500 hover:text-white hover:border-blue-500",
@@ -567,8 +567,8 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                             custom={index}
                           >
                             {/* Content */}
-                            <div className="relative z-10">
-                              <div className="text-sm font-semibold">
+                            <div className="relative z-10 flex flex-col justify-center h-full">
+                              <div className="text-sm font-semibold leading-tight">
                                 {date.label}
                               </div>
                               <div className="text-xs opacity-80 mt-1">
@@ -651,14 +651,14 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                 ) : (
                   <div className="space-y-4">
                     {/* Time slots grid */}
-                    <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                       {displayedTimeSlots.map((slot, index) => (
                         <motion.button
                           key={slot.value}
                           type="button"
                           onClick={() => handleTimeSelect(slot)}
                           className={cn(
-                            "p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm",
+                            "p-4 sm:p-3 rounded-lg transition-all duration-300 text-center font-medium relative overflow-hidden group text-sm min-h-[60px] sm:min-h-[50px]",
                             formValues.appointmentTime === slot.value
                               ? "text-white border-2 border-transparent bg-green-600"
                               : "border-2 border-gray-200 bg-white text-gray-700 hover:bg-green-500 hover:text-white hover:border-green-500",
@@ -667,8 +667,8 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                           custom={index}
                         >
                           {/* Content */}
-                          <div className="relative z-10">
-                            <div className="text-xs font-semibold">
+                          <div className="relative z-10 flex items-center justify-center h-full">
+                            <div className="text-sm font-semibold">
                               {slot.label}
                             </div>
                           </div>
