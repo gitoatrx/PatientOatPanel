@@ -51,6 +51,7 @@ interface UseVonageSessionResult {
   checkExistingStreams: () => void;
   debugPublisherState: () => void;
   debugSessionConnections: () => void;
+  startCameraPreview: () => Promise<void>;
   callStatus: CallStatus;
   participantCount: number;
   isAudioEnabled: boolean;
@@ -276,6 +277,7 @@ export function useVonageSession({
   const [participantCount, setParticipantCount] = useState(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
 
   // Monitor video state changes
   useEffect(() => {
@@ -294,6 +296,59 @@ export function useVonageSession({
   useEffect(() => {
     localContainerRef.current = localContainer;
   }, [localContainer]);
+
+  // Start camera preview when local container is ready
+  useEffect(() => {
+    const startCameraPreview = async () => {
+      console.log('🔍 Attempting to start camera preview:', {
+        localContainer: localContainerRef.current,
+        containerExists: !!localContainerRef.current,
+        containerId: localContainerRef.current?.id
+      });
+      
+      if (!localContainerRef.current) {
+        console.log('❌ Local container not ready yet, will retry...');
+        return;
+      }
+      
+      try {
+        console.log('🎥 Requesting camera permission...');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setPreviewStream(stream);
+        
+        const localEl = localContainerRef.current;
+        if (localEl) {
+          // Create a video element to show the preview
+          const videoElement = document.createElement('video');
+          videoElement.srcObject = stream;
+          videoElement.autoplay = true;
+          videoElement.muted = true;
+          videoElement.playsInline = true;
+          videoElement.style.width = '100%';
+          videoElement.style.height = '100%';
+          videoElement.style.objectFit = 'cover';
+          
+          // Clear the container and add the preview
+          localEl.innerHTML = '';
+          localEl.appendChild(videoElement);
+          
+          console.log('✅ Camera preview started successfully!', {
+            container: localEl,
+            videoElement: videoElement,
+            stream: stream
+          });
+        }
+      } catch (error) {
+        console.log('❌ Camera preview failed:', error);
+        // This is expected if permissions haven't been granted yet
+      }
+    };
+
+    // Only start preview if we have a container
+    if (localContainerRef.current) {
+      startCameraPreview();
+    }
+  }, [localContainer]); // Depend on localContainer changes
 
   const resetContainers = useCallback(() => {
     removeAllChildren(remoteContainerRef.current);
@@ -318,6 +373,12 @@ export function useVonageSession({
         console.warn("Error destroying publisher", publishError);
       }
       publisherRef.current = null;
+
+      // Stop preview stream if it exists
+      if (previewStream) {
+        previewStream.getTracks().forEach(track => track.stop());
+        setPreviewStream(null);
+      }
 
       if (sessionRef.current && !fromDisconnect) {
         try {
@@ -386,29 +447,34 @@ export function useVonageSession({
         return;
       }
 
-      try {
-        const preview = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        preview.getTracks().forEach((track) => track.stop());
-      } catch (mediaError) {
-        console.warn("Permission preflight failed", mediaError);
-        const reason = (mediaError as { name?: string } | undefined)?.name;
-        let errorMessage = 'Unable to access your camera and microphone. Please check your device settings and try again.';
-        
-        // Specific error handling (matching doctor-side implementation)
-        if (reason === 'NotAllowedError' || reason === 'PermissionDeniedError') {
-          errorMessage = 'Camera and microphone access is required for video calls. Please allow access and try again.';
-        } else if (reason === 'NotFoundError' || reason === 'DevicesNotFoundError') {
-          errorMessage = 'No camera or microphone found. Please connect a camera and microphone and try again.';
-        } else if (reason === 'NotReadableError' || reason === 'TrackStartError') {
-          errorMessage = 'Camera or microphone is being used by another application. Please close other applications and try again.';
+      // Check if we already have a preview stream, if not create one
+      let currentPreviewStream = previewStream;
+      if (!currentPreviewStream) {
+        try {
+          currentPreviewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          setPreviewStream(currentPreviewStream);
+          console.log('✅ Camera preview created during join process');
+        } catch (mediaError) {
+          console.warn("Permission preflight failed", mediaError);
+          const reason = (mediaError as { name?: string } | undefined)?.name;
+          let errorMessage = 'Unable to access your camera and microphone. Please check your device settings and try again.';
+          
+          // Specific error handling (matching doctor-side implementation)
+          if (reason === 'NotAllowedError' || reason === 'PermissionDeniedError') {
+            errorMessage = 'Camera and microphone access is required for video calls. Please allow access and try again.';
+          } else if (reason === 'NotFoundError' || reason === 'DevicesNotFoundError') {
+            errorMessage = 'No camera or microphone found. Please connect a camera and microphone and try again.';
+          } else if (reason === 'NotReadableError' || reason === 'TrackStartError') {
+            errorMessage = 'Camera or microphone is being used by another application. Please close other applications and try again.';
+          }
+          
+          setError(errorMessage);
+          setStatusMessage('Camera and microphone access failed');
+          setCallStatus(CALL_STATUSES.ERROR);
+          isJoiningRef.current = false;
+          setIsBusy(false);
+          return;
         }
-        
-        setError(errorMessage);
-        setStatusMessage('Camera and microphone access failed');
-        setCallStatus(CALL_STATUSES.ERROR);
-        isJoiningRef.current = false;
-        setIsBusy(false);
-        return;
       }
 
       setStatusMessage('Requesting secure session details...');
@@ -508,7 +574,8 @@ export function useVonageSession({
         tokenLength: sessionToken?.length
       });
 
-      resetContainers();
+      // Only reset remote container, keep local preview until publisher is ready
+      removeAllChildren(remoteContainerRef.current);
       setStatusMessage("Connecting to the secure session...");
 
       const session: VonageSession = OT.initSession(applicationId, sessionIdentifier);
@@ -808,7 +875,12 @@ export function useVonageSession({
         publishVideo: true,
       };
 
-      if (currentVideoDeviceRef.current) {
+      // Use the existing preview stream if available
+      if (currentPreviewStream) {
+        publisherOptions.videoSource = currentPreviewStream.getVideoTracks()[0];
+        publisherOptions.audioSource = currentPreviewStream.getAudioTracks()[0];
+        console.log('✅ Using existing preview stream for publisher');
+      } else if (currentVideoDeviceRef.current) {
         publisherOptions.videoSource = currentVideoDeviceRef.current;
       }
 
@@ -830,15 +902,40 @@ export function useVonageSession({
         return;
       };
 
+      console.log('🔴 Creating Vonage publisher with options:', {
+        publisherOptions,
+        localEl,
+        hasPreviewStream: !!currentPreviewStream,
+        containerExists: !!localEl
+      });
+
+      // Clear the container before creating the publisher to avoid duplicate videos
+      if (localEl) {
+        localEl.innerHTML = '';
+        console.log('🧹 Cleared local container before creating publisher');
+      }
+
       publisher = OT.initPublisher(localEl, publisherOptions, handlePublisherError);
       if (!publisher || publisherErrorOccurred) {
+        console.log('❌ Publisher creation failed or error occurred');
         isJoiningRef.current = false;
         return;
       }
 
+      console.log('✅ Vonage publisher created successfully:', {
+        publisher,
+        streamId: publisher.streamId,
+        hasVideo: publisher.hasVideo,
+        hasAudio: publisher.hasAudio
+      });
+
       publisherRef.current = publisher;
       setIsMicMuted(false);
       setIsCameraOff(false);
+
+      // Keep preview stream as backup until we confirm publisher is working
+      // We'll stop it after successful publish
+      console.log('🔄 Keeping preview stream as backup until publisher is confirmed working');
 
       console.log('🔴 About to connect to session:', {
         sessionId: sessionIdentifier,
@@ -994,6 +1091,42 @@ export function useVonageSession({
               }
             });
           }
+
+          // Now that publisher is working, stop the preview stream
+          if (previewStream) {
+            previewStream.getTracks().forEach(track => track.stop());
+            setPreviewStream(null);
+            console.log('✅ Preview stream stopped after successful publish');
+          }
+
+          // Add a fallback check - if video doesn't appear in 3 seconds, restore preview
+          setTimeout(() => {
+            const localEl = localContainerRef.current;
+            if (localEl && localEl.children.length === 0) {
+              console.log('⚠️ No video detected in local container, restoring preview stream');
+              // Restart camera preview as fallback
+              navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                  // Ensure container is clear before adding fallback video
+                  localEl.innerHTML = '';
+                  
+                  const videoElement = document.createElement('video');
+                  videoElement.srcObject = stream;
+                  videoElement.autoplay = true;
+                  videoElement.muted = true;
+                  videoElement.playsInline = true;
+                  videoElement.style.width = '100%';
+                  videoElement.style.height = '100%';
+                  videoElement.style.objectFit = 'cover';
+                  
+                  localEl.appendChild(videoElement);
+                  console.log('✅ Fallback preview stream restored');
+                })
+                .catch(error => {
+                  console.log('❌ Failed to restore fallback preview:', error);
+                });
+            }
+          }, 3000);
 
           setIsConnected(true);
           setIsBusy(false);
@@ -1334,6 +1467,41 @@ export function useVonageSession({
     }
   }, []);
 
+  const startCameraPreview = useCallback(async () => {
+    console.log('🎥 Manually starting camera preview...');
+    
+    if (!localContainerRef.current) {
+      console.log('❌ No local container available');
+      return;
+    }
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setPreviewStream(stream);
+      
+      const localEl = localContainerRef.current;
+      if (localEl) {
+        // Create a video element to show the preview
+        const videoElement = document.createElement('video');
+        videoElement.srcObject = stream;
+        videoElement.autoplay = true;
+        videoElement.muted = true;
+        videoElement.playsInline = true;
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        
+        // Clear the container and add the preview
+        localEl.innerHTML = '';
+        localEl.appendChild(videoElement);
+        
+        console.log('✅ Manual camera preview started successfully!');
+      }
+    } catch (error) {
+      console.error('❌ Manual camera preview failed:', error);
+    }
+  }, []);
+
   const checkExistingStreams = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
@@ -1418,12 +1586,13 @@ export function useVonageSession({
       checkExistingStreams,
       debugPublisherState,
       debugSessionConnections,
+      startCameraPreview,
       callStatus,
       participantCount,
       isAudioEnabled,
       isVideoEnabled,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, callStatus, participantCount, isAudioEnabled, isVideoEnabled],
+    [join, leave, toggleMic, toggleCamera, switchCamera, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled],
   );
 }
 

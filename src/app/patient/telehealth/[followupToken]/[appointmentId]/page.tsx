@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const mockMessages: TelehealthChatMessage[] = [
   {
     id: "1",
-    author: "Dr. Yagnik Devani",
+    author: "RAPHAEL AJAYI",
     authoredAt: "10:01",
     content: "Hello, thanks for joining today.",
   },
@@ -23,20 +23,20 @@ const mockMessages: TelehealthChatMessage[] = [
   },
   {
     id: "3",
-    author: "Dr. Yagnik Devani",
+    author: "RAPHAEL AJAYI",
     authoredAt: "10:03",
     content: "Great! Let's review your symptoms before we begin.",
   },
 ];
 
 const mockParticipants = [
-  { name: "Dr. Yagnik Devani", role: "Doctor" },
+  { name: "RAPHAEL AJAYI", role: "Doctor" },
   { name: "You", role: "Patient" },
 ];
 
 const SCHEDULED_TIME = "Today - 10:00 AM EST";
 const SESSION_TITLE = "Consulting session";
-const PROVIDER_NAME = "Dr. Yagnik Devani";
+const PROVIDER_NAME = "RAPHAEL AJAYI";
 
 interface PatientTelehealthPageProps {
   params: Promise<{

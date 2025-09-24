@@ -144,7 +144,7 @@ export function TelehealthVideoPanel({
     }
   }, []);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
@@ -152,20 +152,26 @@ export function TelehealthVideoPanel({
     setHasUserPositioned(true);
     
     const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
     setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: clientX - rect.left,
+      y: clientY - rect.top,
     });
   }, []);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isDragging || !panelRef.current) return;
     
     e.preventDefault();
     
     const panelRect = panelRef.current.getBoundingClientRect();
-    const newX = e.clientX - panelRect.left - dragOffset.x;
-    const newY = e.clientY - panelRect.top - dragOffset.y;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    const newX = clientX - panelRect.left - dragOffset.x;
+    const newY = clientY - panelRect.top - dragOffset.y;
     
     // Fixed camera dimensions
     const cameraWidth = 160;
@@ -214,12 +220,16 @@ export function TelehealthVideoPanel({
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove, { passive: false });
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleMouseMove, { passive: false });
+      document.addEventListener('touchend', handleMouseUp);
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'grabbing';
       
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleMouseMove);
+        document.removeEventListener('touchend', handleMouseUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
       };
@@ -295,16 +305,19 @@ export function TelehealthVideoPanel({
 
         <div 
           className={cn(
-            "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0",
+            "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
+            // Mobile: top-left positioning, Desktop: bottom-right positioning
+            hasUserPositioned ? "" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5"),
             isDragging && "cursor-grabbing scale-105 transition-none"
           )}
-          style={{
-            left: hasUserPositioned ? `${cameraPosition.x}px` : (isFullscreen ? '24px' : '20px'),
-            top: hasUserPositioned ? `${cameraPosition.y}px` : (isFullscreen ? 'calc(100% - 114px)' : 'calc(100% - 110px)'),
-            right: hasUserPositioned ? 'auto' : (isFullscreen ? '24px' : '20px'),
-            bottom: hasUserPositioned ? 'auto' : (isFullscreen ? '24px' : '20px'),
-          }}
+          style={hasUserPositioned ? {
+            left: `${cameraPosition.x}px`,
+            top: `${cameraPosition.y}px`,
+            right: 'auto',
+            bottom: 'auto',
+          } : {}}
           onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
           onDoubleClick={resetCameraPosition}
           title="Drag to move camera • Double-click to reset position"
         >

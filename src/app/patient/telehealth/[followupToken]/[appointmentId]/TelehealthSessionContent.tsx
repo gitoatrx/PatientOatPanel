@@ -154,81 +154,86 @@ export function TelehealthSessionContent({
             <div className="w-full lg:w-96 h-80 lg:h-full bg-white border border-gray-200 flex flex-col rounded-xl shadow-lg">
               {/* Chat Header with Doctor Info */}
               <div className="p-4">
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4 shadow-lg">
-                  <div className="flex items-center justify-between">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-5 shadow-lg overflow-hidden">
+                  <div className="flex items-center justify-start min-w-0">
                     {/* Provider Info */}
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shadow-md">
-                        <span className="text-white font-bold text-lg">
-                          {providerName.split(' ').map(n => n[0]).join('')}
-                        </span>
+                    <div className="flex items-center space-x-4 min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center shadow-lg border-2 border-white/30">
+                          <span className="text-white font-bold text-xl">
+                            {providerName.split(' ').map(n => n[0]).join('')}
+                          </span>
+                        </div>
+                        {/* Online Status Indicator */}
+                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                          telehealth.isConnected ? 'bg-green-400' : 'bg-gray-400'
+                        }`}></div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-white text-lg truncate">{providerName}</h3>
-                        <p className="text-sm text-white/80">Endocrinologist</p>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-white text-xl">{providerName}</h3>
+                        <p className="text-white/80 text-sm">Healthcare Provider</p>
                       </div>
                     </div>
                     
-                    {/* Status and Controls */}
-                    <div className="flex items-center space-x-3">
-                      {/* Connection Status */}
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-3 h-3 rounded-full ${telehealth.isConnected ? 'bg-green-400 shadow-green-400/50' : 'bg-gray-400'} shadow-lg`}></div>
-                        <span className={`text-xs font-medium px-3 py-1.5 rounded-full ${statusDisplay.badgeClass} shadow-sm`}>
-                          {statusDisplay.label}
-                        </span>
-                        {telehealth.participantCount > 0 && (
-                          <span className="text-xs text-white/70 bg-white/10 px-2 py-1 rounded-full">
-                            {telehealth.participantCount} participant{telehealth.participantCount !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* Debug Controls */}
-                      {telehealth.isConnected && (
-                        <div className="flex items-center space-x-1">
-                          <button
-                            onClick={telehealth.printParticipants}
-                            className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-200 hover:scale-105"
-                            title="Print participants to console"
-                          >
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-                            </svg>
-                          </button>
-                          <button
-                            onClick={telehealth.checkExistingStreams}
-                            className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-200 hover:scale-105"
-                            title="Check existing streams"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={telehealth.debugPublisherState}
-                            className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-200 hover:scale-105"
-                            title="Debug publisher state"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={telehealth.debugSessionConnections}
-                            className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-200 hover:scale-105"
-                            title="Debug session connections"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* Debug Controls - Commented Out for Production */}
+              {/* 
+              {telehealth.isConnected && (
+                <div className="px-4 pb-2">
+                  <div className="bg-gray-100 rounded-lg p-2 flex items-center space-x-1">
+                    <span className="text-xs text-gray-600 mr-2">Debug:</span>
+                    <button
+                      onClick={telehealth.printParticipants}
+                      className="p-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded transition-colors"
+                      title="Print participants to console"
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={telehealth.checkExistingStreams}
+                      className="p-1.5 bg-green-100 hover:bg-green-200 text-green-600 rounded transition-colors"
+                      title="Check existing streams"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={telehealth.debugPublisherState}
+                      className="p-1.5 bg-purple-100 hover:bg-purple-200 text-purple-600 rounded transition-colors"
+                      title="Debug publisher state"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={telehealth.debugSessionConnections}
+                      className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded transition-colors"
+                      title="Debug session connections"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={telehealth.startCameraPreview}
+                      className="p-1.5 bg-red-100 hover:bg-red-200 text-red-600 rounded transition-colors"
+                      title="Start camera preview"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+              */}
 
               {/* Chat Messages */}
               <div className="flex-1 overflow-hidden bg-gray-50">
