@@ -248,7 +248,7 @@ export function TelehealthSessionContent({
                 variant="drawer"
                 headerTitle="Meeting Chat"
                 headerSubtitle={`${telehealth.participantCount} participants in room`}
-                participantNames={[...new Set(["You", providerName, ...telehealth.participants.map(p => p.name)])]}
+                participantNames={[...new Set(["You", providerName, ...telehealth.participants.map(p => `Participant ${p.connectionId.slice(-4)}`)])]}
               />
             </div>
           </div>
