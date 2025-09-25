@@ -87,7 +87,7 @@ interface TelehealthChatPanelProps {
   participantStatus?: "online" | "offline" | "busy";
   participantRole?: string;
   messages: TelehealthChatMessage[];
-  onSendMessage?: (content: string, type?: 'text' | 'image' | 'file', attachment?: any) => void;
+  onSendMessage?: (content: string, type?: 'text' | 'image' | 'file', attachment?: File | Blob) => void;
   onClose?: () => void;
   isConnected?: boolean;
   typingUsers?: Array<{ id: string; name: string; timestamp: number }>;
