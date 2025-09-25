@@ -430,17 +430,17 @@ export function useVonageSession({
         containerExists: !!localContainerRef.current,
         containerId: localContainerRef.current?.id
       });
-      
+
       if (!localContainerRef.current) {
         console.log('❌ Local container not ready yet, will retry...');
         return;
       }
-      
+
       try {
         console.log('🎥 Requesting camera permission...');
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setPreviewStream(stream);
-        
+
         const localEl = localContainerRef.current;
         if (localEl) {
           // Create a video element to show the preview
@@ -452,11 +452,11 @@ export function useVonageSession({
           videoElement.style.width = '100%';
           videoElement.style.height = '100%';
           videoElement.style.objectFit = 'cover';
-          
+
           // Clear the container and add the preview
           localEl.innerHTML = '';
           localEl.appendChild(videoElement);
-          
+
           console.log('✅ Camera preview started successfully!', {
             container: localEl,
             videoElement: videoElement,
@@ -1685,7 +1685,7 @@ export function useVonageSession({
             publishError && console.error("Re-publish error", publishError),
           );
           
-          console.log('🎤 Switched to microphone:', available[nextIndex]?.label || nextDeviceId);
+          console.log('��� Switched to microphone:', available[nextIndex]?.label || nextDeviceId);
           
           // Dispatch event to update participant info controls
           document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
@@ -1694,6 +1694,20 @@ export function useVonageSession({
       setError("Unable to switch microphone. Please try leaving and rejoining the call.");
     }
   }, [isCameraOff, isMicMuted]);
+
+  const selectMicrophone = useCallback(async (deviceId: string) => {
+    const publisher = publisherRef.current;
+    if (!publisher || !deviceId) return;
+    try {
+      if (typeof publisher.setAudioSource === "function") {
+        await publisher.setAudioSource(deviceId);
+        currentAudioDeviceRef.current = deviceId;
+        document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
+      }
+    } catch (err) {
+      console.warn('Failed to set microphone device:', err);
+    }
+  }, []);
 
   // Function to add participant info overlay to any container
   const addParticipantInfoOverlay = useCallback((container: HTMLDivElement, participantName: string, type: 'local' | 'remote', connectionId?: string) => {
@@ -2162,16 +2176,16 @@ export function useVonageSession({
 
   const startCameraPreview = useCallback(async () => {
     console.log('🎥 Manually starting camera preview...');
-    
+
     if (!localContainerRef.current) {
       console.log('❌ No local container available');
       return;
     }
-    
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setPreviewStream(stream);
-      
+
       const localEl = localContainerRef.current;
       if (localEl) {
         // Create a video element to show the preview
@@ -2183,11 +2197,11 @@ export function useVonageSession({
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
         videoElement.style.objectFit = 'cover';
-        
+
         // Clear the container and add the preview
         localEl.innerHTML = '';
         localEl.appendChild(videoElement);
-        
+
         console.log('✅ Manual camera preview started successfully!');
       }
     } catch (error) {
@@ -2311,6 +2325,7 @@ export function useVonageSession({
       toggleCamera,
       switchCamera,
       switchMicrophone,
+      selectMicrophone,
       isConnected,
       isBusy,
       isMicMuted,
@@ -2339,10 +2354,6 @@ export function useVonageSession({
       stopTypingIndicator,
       clearChatHistory,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
+    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
   );
 }
-
-
-
-

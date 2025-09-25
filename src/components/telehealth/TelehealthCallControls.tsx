@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, RefreshCcw, MessageCircle } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Settings, RefreshCcw, MessageCircle } from "lucide-react";
 import { SignalStrengthIndicator } from "./SignalStrengthIndicator";
 import { MicrophoneSelector } from "./MicrophoneSelector";
 
@@ -84,18 +84,20 @@ export function TelehealthCallControls({
   const micIsMuted = micMutedProp ?? micMuted;
   const cameraIsOff = cameraOffProp ?? cameraOff;
   const isOverlay = variant === "overlay";
-  const joinLabel = isConnected ? "Leave call" : isBusy ? "Connecting..." : "Join call";
+  const joinLabel = isConnected ? "Leave" : isBusy ? "Connecting..." : "Join";
   const joinDisabled = !isConnected && isBusy;
   const controlsDisabled = !isConnected || isBusy;
   const deviceSwitchDisabled = controlsDisabled || !onOpenDeviceSettings;
 
+  const [showSettings, setShowSettings] = useState(false);
+
   return (
-    <div className="space-y-3">
-      {/* Signal Strength and Microphone Selector */}
+    <div className="space-y-3 relative">
+      {/* Signal Strength and Microphone Selector (panel view) */}
       {isConnected && !isOverlay && (
         <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-          <SignalStrengthIndicator 
-            strength={signalStrength} 
+          <SignalStrengthIndicator
+            strength={signalStrength}
             audioLevel={audioLevel}
           />
           <MicrophoneSelector
@@ -112,106 +114,149 @@ export function TelehealthCallControls({
         className={cn(
           "flex flex-wrap items-center gap-3",
           isOverlay
-            ? "justify-center gap-4"
+            ? "justify-center gap-3"
             : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm",
         )}
       >
-      {showChatButton && (
-        <div className="block lg:hidden">
+        {showChatButton && (
+          <div className="block lg:hidden order-1">
+            <Button
+              type="button"
+              variant={isOverlay ? "ghost" : "outline"}
+              className={cn(
+                "h-12 rounded-full px-4 text-base relative",
+                isOverlay && "h-12 w-12 px-0 text-white hover:bg-white/10 border border-white/20",
+                isChatOpen && !isOverlay && "bg-white text-black"
+              )}
+              onClick={onToggleChat}
+              aria-label={isChatOpen ? "Close chat" : "Open chat"}
+            >
+              <MessageCircle className="h-5 w-5" />
+              {!isOverlay && <span className="ml-2">Chat</span>}
+              {!isChatOpen && chatUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-green-500 text-white text-xs flex items-center justify-center">
+                  {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                </span>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Microphone */}
+        <Button
+          type="button"
+          variant={isOverlay ? "ghost" : "outline"}
+          className={cn(
+            "order-1 h-12 rounded-full px-4 text-base",
+            isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/10 border border-white/20",
+            micIsMuted && !isOverlay && "bg-red-500 hover:bg-red-600 text-white border-red-500",
+            !micIsMuted && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
+            isOverlay && micIsMuted && "ring-2 ring-red-400"
+          )}
+          onClick={handleToggleMic}
+          aria-label={micIsMuted ? "Unmute microphone" : "Mute microphone"}
+          disabled={controlsDisabled}
+        >
+          {micIsMuted ? <MicOff className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} /> : <Mic className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />}
+          {!isOverlay && <span className="ml-2">{micIsMuted ? "Unmute" : "Mute"}</span>}
+        </Button>
+  {/* Settings gear */}
+  <div className="order-3 relative">
           <Button
             type="button"
             variant={isOverlay ? "ghost" : "outline"}
             className={cn(
-              "h-12 rounded-full px-4 text-base relative",
-              isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
-              isChatOpen && "bg-white text-black"
+              "h-12 rounded-full px-4 text-base",
+              isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/10 border border-white/20",
             )}
-            onClick={onToggleChat}
-            aria-label={isChatOpen ? "Close chat" : "Open chat"}
+            onClick={() => setShowSettings((v) => !v)}
+            aria-label="Settings"
+            disabled={controlsDisabled}
           >
-            <MessageCircle className="h-5 w-5" />
-            {isOverlay ? <span className="sr-only">{isChatOpen ? "Close chat" : "Open chat"}</span> : <span>Chat</span>}
-            {!isChatOpen && chatUnreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-green-500 text-white text-xs flex items-center justify-center">
-                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
-              </span>
-            )}
+            <Settings className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />
+            {!isOverlay && <span className="ml-2">Settings</span>}
           </Button>
+
+          {isOverlay && showSettings && (
+            <div className="absolute bottom-16 right-0 z-30 w-[88vw] max-w-[360px] rounded-xl bg-slate-900/95 text-white shadow-2xl border border-white/10 p-2 backdrop-blur">
+              <div className="px-3 py-2 text-[11px] font-semibold tracking-wide text-white/70">MICROPHONE</div>
+              <div className="max-h-60 overflow-auto">
+                {audioDevices.map((device) => (
+                  <button
+                    key={device.deviceId}
+                    onClick={() => { onSwitchMicrophone?.(device.deviceId || ""); setShowSettings(false); }}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-white/10",
+                      (device.deviceId === currentAudioDevice) && "bg-white/5"
+                    )}
+                  >
+                    <span className="truncate pr-2">{device.label || `Microphone ${device.deviceId?.slice(-4)}`}</span>
+                    {device.deviceId === currentAudioDevice && (
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    )}
+                  </button>
+                ))}
+                {audioDevices.length === 0 && (
+                  <div className="px-3 py-3 text-sm text-white/70">No microphones found</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      )}
-      <Button
-        type="button"
-        className={cn(
-          "h-12 rounded-full px-5 text-base font-semibold",
-          isConnected
-            ? "bg-red-500 text-white hover:bg-red-600"
-            : "bg-emerald-500 text-white hover:bg-emerald-600",
-          isOverlay && "h-14 w-14 px-0",
-        )}
-        onClick={isConnected ? onLeave : onJoin}
-        aria-label={joinLabel}
-        disabled={joinDisabled}
-      >
-        {isConnected ? <PhoneOff className="h-5 w-5" /> : <Phone className="h-5 w-5" />}
-        {isOverlay ? <span className="sr-only">{joinLabel}</span> : <span>{joinLabel}</span>}
-      </Button>
+        {/* Camera */}
+        <Button
+          type="button"
+          variant={isOverlay ? "ghost" : "outline"}
+          className={cn(
+            "order-2 h-12 rounded-full px-4 text-base",
+            isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/10 border border-white/20",
+            cameraIsOff && !isOverlay && "bg-red-500 hover:bg-red-600 text-white border-red-500",
+            !cameraIsOff && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
+            isOverlay && cameraIsOff && "ring-2 ring-red-400"
+          )}
+          onClick={handleToggleCamera}
+          aria-label={cameraIsOff ? "Start video" : "Stop video"}
+          disabled={controlsDisabled}
+        >
+          {cameraIsOff ? <VideoOff className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} /> : <Video className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />}
+          {!isOverlay && <span className="ml-2">{cameraIsOff ? "Start video" : "Stop video"}</span>}
+        </Button>
 
-      <Button
-        type="button"
-        variant={isOverlay ? "ghost" : "outline"}
-        className={cn(
-          "h-12 rounded-full px-4 text-base",
-          isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
-          micIsMuted && "bg-red-500 hover:bg-red-600 text-white border-red-500",
-          !micIsMuted && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
-        )}
-        onClick={handleToggleMic}
-        aria-label={micIsMuted ? "Unmute microphone" : "Mute microphone"}
-        disabled={controlsDisabled}
-      >
-        {micIsMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-        {isOverlay ? (
-          <span className="sr-only">{micIsMuted ? "Unmute" : "Mute"}</span>
-        ) : (
-          <span>{micIsMuted ? "Unmute" : "Mute"}</span>
-        )}
-      </Button>
+      
+      
+        {/* Join/Leave */}
+        <Button
+          type="button"
+          className={cn(
+            "order-4 h-12 rounded-full px-5 text-base font-semibold",
+            isConnected
+              ? "bg-red-500 text-white hover:bg-red-600"
+              : "bg-emerald-500 text-white hover:bg-emerald-600",
+            isOverlay && "h-12 px-5 rounded-full shadow-lg",
+          )}
+          onClick={isConnected ? onLeave : onJoin}
+          aria-label={joinLabel}
+          disabled={joinDisabled}
+        >
+          {isConnected ? <PhoneOff className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} /> : <Phone className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />}
+          <span className="ml-2">{joinLabel}</span>
+        </Button>
 
-      <Button
-        type="button"
-        variant={isOverlay ? "ghost" : "outline"}
-        className={cn(
-          "h-12 rounded-full px-4 text-base",
-          isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
-          cameraIsOff && "bg-red-500 hover:bg-red-600 text-white border-red-500",
-          !cameraIsOff && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
-        )}
-        onClick={handleToggleCamera}
-        aria-label={cameraIsOff ? "Start video" : "Stop video"}
-        disabled={controlsDisabled}
-      >
-        {cameraIsOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
-        {isOverlay ? (
-          <span className="sr-only">{cameraIsOff ? "Start video" : "Stop video"}</span>
-        ) : (
-          <span>{cameraIsOff ? "Start video" : "Stop video"}</span>
-        )}
-      </Button>
 
-      <Button
-        type="button"
-        variant={isOverlay ? "ghost" : "outline"}
-        className={cn(
-          "h-12 rounded-full px-4 text-base",
-          isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
+        {/* Optional switch camera icon (panel view retains it) */}
+        {!isOverlay && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 rounded-full px-4 text-base"
+            onClick={() => onOpenDeviceSettings?.()}
+            aria-label="Switch camera"
+            disabled={deviceSwitchDisabled}
+          >
+            <RefreshCcw className="h-5 w-5" />
+            <span className="ml-2">Switch</span>
+          </Button>
         )}
-        onClick={() => onOpenDeviceSettings?.()}
-        aria-label="Switch camera"
-        disabled={deviceSwitchDisabled}
-      >
-        <RefreshCcw className="h-5 w-5" />
-        {isOverlay ? <span className="sr-only">Switch camera</span> : <span>Switch camera</span>}
-      </Button>
       </section>
     </div>
   );

@@ -96,18 +96,21 @@ export function PermissionRequestModal({
           )}
 
           {/* Action Buttons */}
-          <div className="flex space-x-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="outline"
+              size="lg"
               onClick={onClose}
               className="flex-1"
             >
               Cancel
             </Button>
             <Button
+              variant="default"
+              size="lg"
               onClick={handleRetry}
               disabled={isRetrying}
-              className="flex-1 bg-[#1B58F5] hover:bg-[#1547c9]"
+              className="flex-1"
             >
               {isRetrying ? "Requesting..." : "Allow Access"}
             </Button>

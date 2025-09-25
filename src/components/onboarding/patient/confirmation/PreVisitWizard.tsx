@@ -188,10 +188,10 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
           answersPayload
         );
 
-        if (saveResponse.success) {
-          console.log("Answers saved successfully:", saveResponse.data);
+        if (saveResponse.data?.saved) {
+          console.log("Answers saved successfully:", saveResponse.data.answers);
         } else {
-          console.error("Failed to save answers:", saveResponse.message);
+          console.error("Failed to save answers:", saveResponse.message || "Unknown error");
         }
       } else {
         console.log("No API data available, skipping API save");

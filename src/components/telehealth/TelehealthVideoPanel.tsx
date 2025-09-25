@@ -450,7 +450,7 @@ export function TelehealthVideoPanel({
 
         {overlayControls ? (
           <div className={overlayControlsClasses}>
-            <div className="pointer-events-auto">{overlayControls}</div>
+            <div className="pointer-events-auto rounded-full bg-black/40 backdrop-blur-md border border-white/20 ring-1 ring-white/10 px-3 py-3">{overlayControls}</div>
           </div>
         ) : null}
     </div>

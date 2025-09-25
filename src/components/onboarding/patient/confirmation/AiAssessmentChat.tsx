@@ -174,7 +174,7 @@ export function AiAssessmentChat({
             stopSpeaking();
             resolve();
           }, { once: true });
-          await currentAudioRef.current.play();
+          try { await currentAudioRef.current.play(); } catch { }
           return;
         }
       } catch (error) {
