@@ -66,3 +66,4 @@ const params = parseTelehealthUrl('https://yourdomain.com/patient/telehealth/abc
 
 
 
+

@@ -21,6 +21,28 @@ interface Participant {
   isLocal: boolean;
 }
 
+// Chat message interface for signaling
+export interface ChatMessage {
+  id: string;
+  author: string;
+  content: string;
+  timestamp: string;
+  isOwn: boolean;
+  type?: 'text' | 'image' | 'file';
+  attachment?: {
+    name: string;
+    size: number;
+    url?: string;
+  };
+}
+
+// Typing indicator interface
+export interface TypingUser {
+  id: string;
+  name: string;
+  timestamp: number;
+}
+
 // Call status constants (matching doctor-side implementation)
 export const CALL_STATUSES = {
   IDLE: 'idle',
@@ -56,6 +78,12 @@ interface UseVonageSessionResult {
   participantCount: number;
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
+  chatMessages: ChatMessage[];
+  sendChatMessage: (content: string, type?: 'text' | 'image' | 'file', attachment?: any) => void;
+  typingUsers: TypingUser[];
+  sendTypingIndicator: () => void;
+  stopTypingIndicator: () => void;
+  clearChatHistory: () => void;
 }
 
 type VonagePublisher = {
@@ -86,7 +114,20 @@ type VonageSession = {
   subscribe: (
     stream: any,
     element: HTMLElement,
-    options: { insertMode: string; width: string; height: string },
+    options: { 
+      insertMode: string; 
+      width: string; 
+      height: string;
+      showControls?: boolean;
+      controls?: boolean;
+      style?: {
+        buttonDisplayMode?: string;
+        nameDisplayMode?: string;
+        audioLevelDisplayMode?: string;
+        archiveStatusDisplayMode?: string;
+        backgroundImageURI?: string;
+      };
+    },
     callback: (err?: Error) => void,
   ) => void;
   unpublish: (publisher: VonagePublisher) => void;
@@ -278,6 +319,49 @@ export function useVonageSession({
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Chat persistence key based on session
+  const chatStorageKey = `telehealth_chat_${appointmentId}_${followupToken}`;
+
+  // Load chat messages from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedMessages = localStorage.getItem(chatStorageKey);
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        setChatMessages(parsedMessages);
+        console.log('📱 Loaded chat messages from localStorage:', parsedMessages.length);
+      }
+    } catch (error) {
+      console.error('Error loading chat messages from localStorage:', error);
+    }
+  }, [chatStorageKey]);
+
+  // Save chat messages to localStorage whenever they change
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      try {
+        localStorage.setItem(chatStorageKey, JSON.stringify(chatMessages));
+        console.log('💾 Saved chat messages to localStorage:', chatMessages.length);
+      } catch (error) {
+        console.error('Error saving chat messages to localStorage:', error);
+      }
+    }
+  }, [chatMessages, chatStorageKey]);
+
+  // Clear chat messages when session ends
+  const clearChatHistory = useCallback(() => {
+    try {
+      localStorage.removeItem(chatStorageKey);
+      setChatMessages([]);
+      console.log('🗑️ Cleared chat history from localStorage');
+    } catch (error) {
+      console.error('Error clearing chat history:', error);
+    }
+  }, [chatStorageKey]);
 
   // Monitor video state changes
   useEffect(() => {
@@ -644,8 +728,22 @@ export function useVonageSession({
         wrapper.dataset.streamId = streamId;
         wrapper.dataset.connectionId = connectionId;
         wrapper.dataset.streamType = streamType;
+        wrapper.dataset.participantName = `Participant ${connectionId.slice(-4)}`; // Use last 4 chars of connection ID
         wrapper.style.width = "100%";
         wrapper.style.height = "100%";
+        wrapper.style.backgroundColor = "#1e293b";
+        wrapper.style.border = "1px solid #374151";
+        wrapper.style.cursor = "pointer";
+        
+        // Add click handler for focus functionality
+        wrapper.addEventListener('click', () => {
+          console.log('🎯 Participant clicked:', connectionId);
+          // This will be handled by the video panel component
+          const event = new CustomEvent('participantClick', {
+            detail: { connectionId, streamId, participantName: wrapper.dataset.participantName }
+          });
+          document.dispatchEvent(event);
+        });
 
         remoteEl.appendChild(wrapper);
         console.log('🔴 STREAM CONTAINER APPENDED:', {
@@ -668,7 +766,21 @@ export function useVonageSession({
         session.subscribe(
           stream,
           wrapper,
-          { insertMode: "append", width: "100%", height: "100%" },
+          { 
+            insertMode: "append", 
+            width: "100%", 
+            height: "100%",
+            // Disable default Vonage UI controls for subscribers
+            showControls: false,
+            controls: false,
+            style: {
+              buttonDisplayMode: "off",
+              nameDisplayMode: "off",
+              audioLevelDisplayMode: "off",
+              archiveStatusDisplayMode: "off",
+              backgroundImageURI: "off"
+            }
+          },
           (subscribeError?: Error) => {
             console.log('🔴 SUBSCRIBE CALLBACK CALLED:', {
               streamId: streamId,
@@ -859,6 +971,87 @@ export function useVonageSession({
         });
       });
 
+      // Add chat signaling event listener
+      session.on("signal:msg", (event: any) => {
+        console.log('🔴 CHAT MESSAGE RECEIVED:', {
+          data: event.data,
+          from: event.from?.connectionId,
+          currentConnectionId: session.connection?.connectionId,
+          type: event.type,
+          timestamp: new Date().toISOString()
+        });
+
+        // Prevent echo - don't process messages from our own connection
+        if (event.from?.connectionId === session.connection?.connectionId) {
+          console.log('🚫 Ignoring own message echo');
+          return;
+        }
+
+        if (event.data) {
+          try {
+            const messageData = JSON.parse(event.data);
+            const newMessage: ChatMessage = {
+              id: `received_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              author: messageData.author,
+              content: messageData.content,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              isOwn: false,
+              type: messageData.type || 'text',
+              attachment: messageData.attachment,
+            };
+            
+            setChatMessages(prev => [...prev, newMessage]);
+          } catch (e) {
+            // Fallback for old format
+            const messageData = event.data.split(': ');
+            const author = messageData[0];
+            const content = messageData.slice(1).join(': ');
+            
+            const newMessage: ChatMessage = {
+              id: `received_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              author: author,
+              content: content,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              isOwn: false,
+              type: 'text',
+            };
+            
+            setChatMessages(prev => [...prev, newMessage]);
+          }
+        }
+      });
+
+      // Add typing indicator event listener
+      session.on("signal:typing", (event: any) => {
+        // Prevent echo - don't process typing from our own connection
+        if (event.from?.connectionId === session.connection?.connectionId) {
+          return;
+        }
+
+        if (event.data) {
+          try {
+            const typingData = JSON.parse(event.data);
+            const typingUser: TypingUser = {
+              id: event.from?.connectionId || 'unknown',
+              name: typingData.name,
+              timestamp: Date.now(),
+            };
+            
+            setTypingUsers(prev => {
+              const filtered = prev.filter(user => user.id !== typingUser.id);
+              return [...filtered, typingUser];
+            });
+
+            // Remove typing indicator after 3 seconds
+            setTimeout(() => {
+              setTypingUsers(prev => prev.filter(user => user.id !== typingUser.id));
+            }, 3000);
+          } catch (e) {
+            console.error('Error parsing typing data:', e);
+          }
+        }
+      });
+
       session.on("sessionReconnecting", handleSessionReconnecting);
       session.on("sessionReconnected", handleSessionReconnected);
       session.on("sessionDisconnected", handleSessionDisconnected);
@@ -873,6 +1066,16 @@ export function useVonageSession({
         height: "100%",
         publishAudio: true,
         publishVideo: true,
+        // Disable default Vonage UI controls
+        showControls: false,
+        controls: false,
+        style: {
+          buttonDisplayMode: "off",
+          nameDisplayMode: "off",
+          audioLevelDisplayMode: "off",
+          archiveStatusDisplayMode: "off",
+          backgroundImageURI: "off"
+        }
       };
 
       // Use the existing preview stream if available
@@ -1198,7 +1401,9 @@ export function useVonageSession({
       console.warn("Error disconnecting session", disconnectError);
     }
     cleanup({ message: "Call ended", fromDisconnect: true });
-  }, [cleanup]);
+    // Clear chat history when leaving the session
+    clearChatHistory();
+  }, [cleanup, clearChatHistory]);
 
   const toggleMic = useCallback(async () => {
     const publisher = publisherRef.current;
@@ -1312,6 +1517,115 @@ export function useVonageSession({
 
   const clearError = useCallback(() => {
     setError(undefined);
+  }, []);
+
+  const sendChatMessage = useCallback((content: string, type: 'text' | 'image' | 'file' = 'text', attachment?: any) => {
+    console.log('🔴 sendChatMessage called:', {
+      content,
+      type,
+      attachment,
+      hasSession: !!sessionRef.current,
+      participantName,
+      isConnected
+    });
+    
+    if (!sessionRef.current || !participantName) {
+      console.error('❌ Cannot send message: session or participant name missing', {
+        hasSession: !!sessionRef.current,
+        participantName
+      });
+      return;
+    }
+    
+    if (!isConnected) {
+      console.error('❌ Cannot send message: not connected to session');
+      // Add a temporary message to show the user that the message couldn't be sent
+      const tempMessage: ChatMessage = {
+        id: `temp_${Date.now()}`,
+        author: participantName,
+        content: content,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        isOwn: true,
+        type,
+        attachment,
+      };
+      
+      setChatMessages(prev => [...prev, tempMessage]);
+      setError('Cannot send message: Please wait for the call to connect');
+      return;
+    }
+    
+    const messageData = JSON.stringify({
+      author: participantName,
+      content: content,
+      type: type,
+      attachment: attachment,
+      timestamp: Date.now()
+    });
+    
+    // Check message size (Vonage has a limit of ~8KB for signaling)
+    const messageSize = new Blob([messageData]).size;
+    console.log('🔴 Message size check:', {
+      size: messageSize,
+      sizeKB: Math.round(messageSize / 1024),
+      hasAttachment: !!attachment,
+      attachmentSize: attachment?.url ? new Blob([attachment.url]).size : 0
+    });
+    
+    if (messageSize > 8000) { // 8KB limit
+      console.warn('⚠️ Message too large for Vonage signaling. Consider reducing file size.');
+      setError('File too large to send. Please use a smaller file (under 5KB).');
+      return;
+    }
+    
+    console.log('🔴 Sending signal:', {
+      type: 'msg',
+      data: messageData,
+      sessionId: sessionRef.current.sessionId
+    });
+    
+    (sessionRef.current as any).signal({
+      type: 'msg',
+      data: messageData
+    }, (error?: Error) => {
+      if (error) {
+        console.error('❌ Failed to send chat message:', error);
+      } else {
+        console.log('✅ Chat message sent successfully');
+        // Add message to local state immediately for better UX
+        const newMessage: ChatMessage = {
+          id: `sent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          author: participantName,
+          content: content,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          isOwn: true,
+          type,
+          attachment,
+        };
+        
+        setChatMessages(prev => [...prev, newMessage]);
+      }
+    });
+  }, [participantName, isConnected]);
+
+  const sendTypingIndicator = useCallback(() => {
+    if (!sessionRef.current || !participantName || !isConnected) return;
+    
+    const typingData = JSON.stringify({
+      name: participantName,
+      timestamp: Date.now()
+    });
+    
+    (sessionRef.current as any).signal({
+      type: 'typing',
+      data: typingData
+    });
+  }, [participantName, isConnected]);
+
+  const stopTypingIndicator = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
   }, []);
 
   const printParticipants = useCallback(() => {
@@ -1535,21 +1849,47 @@ export function useVonageSession({
           const streamId = stream.streamId;
           const connectionId = stream.connection?.connectionId;
           
-          // Create wrapper element
+          // Create wrapper element with participant info
           const wrapper = document.createElement("div");
           wrapper.dataset.streamId = streamId;
           wrapper.dataset.connectionId = connectionId;
           wrapper.dataset.streamType = stream.hasVideo ? "camera" : "audio";
+          wrapper.dataset.participantName = `Participant ${connectionId.slice(-4)}`; // Use last 4 chars of connection ID
           wrapper.style.width = "100%";
           wrapper.style.height = "100%";
-          wrapper.style.backgroundColor = "#f0f0f0";
-          wrapper.style.border = "2px solid blue"; // Blue border for manually triggered streams
-          wrapper.innerHTML = `<div style="color: blue; padding: 10px;">Manual Stream: ${streamId}</div>`;
+          wrapper.style.backgroundColor = "#1e293b";
+          wrapper.style.border = "1px solid #374151";
+          wrapper.style.cursor = "pointer";
+          wrapper.innerHTML = `<div style="color: white; padding: 10px; text-align: center;">Loading...</div>`;
+          
+          // Add click handler for focus functionality
+          wrapper.addEventListener('click', () => {
+            console.log('🎯 Participant clicked:', connectionId);
+            // This will be handled by the video panel component
+            const event = new CustomEvent('participantClick', {
+              detail: { connectionId, streamId, participantName: wrapper.dataset.participantName }
+            });
+            document.dispatchEvent(event);
+          });
           
           remoteEl.appendChild(wrapper);
           
           // Subscribe to the stream
-          session.subscribe(stream, wrapper, { insertMode: "append", width: "100%", height: "100%" }, (error?: Error) => {
+          session.subscribe(stream, wrapper, { 
+            insertMode: "append", 
+            width: "100%", 
+            height: "100%",
+            // Disable default Vonage UI controls for subscribers
+            showControls: false,
+            controls: false,
+            style: {
+              buttonDisplayMode: "off",
+              nameDisplayMode: "off",
+              audioLevelDisplayMode: "off",
+              archiveStatusDisplayMode: "off",
+              backgroundImageURI: "off"
+            }
+          }, (error?: Error) => {
             if (error) {
               console.error('❌ Manual subscription failed:', error);
             } else {
@@ -1591,8 +1931,14 @@ export function useVonageSession({
       participantCount,
       isAudioEnabled,
       isVideoEnabled,
+      chatMessages,
+      sendChatMessage,
+      typingUsers,
+      sendTypingIndicator,
+      stopTypingIndicator,
+      clearChatHistory,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled],
+    [join, leave, toggleMic, toggleCamera, switchCamera, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
   );
 }
 

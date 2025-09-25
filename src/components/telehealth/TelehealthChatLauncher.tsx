@@ -11,6 +11,7 @@ interface TelehealthChatLauncherProps {
   participantName: string;
   participantRole?: string;
   participantStatus?: "online" | "offline" | "busy";
+  onSendMessage?: (content: string) => void;
 }
 
 export function TelehealthChatLauncher({
@@ -18,6 +19,7 @@ export function TelehealthChatLauncher({
   participantName,
   participantRole = "Doctor",
   participantStatus = "online",
+  onSendMessage,
 }: TelehealthChatLauncherProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
@@ -71,6 +73,7 @@ export function TelehealthChatLauncher({
             participantRole={participantRole}
             participantStatus={participantStatus}
             messages={messages}
+            onSendMessage={onSendMessage}
             onClose={toggleChat}
           />
         </div>

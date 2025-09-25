@@ -8,7 +8,7 @@ import {
   PermissionRequestModal,
   type TelehealthChatMessage,
 } from "@/components/telehealth";
-import { useVonageSession } from "@/lib/telehealth/useVonageSession";
+import { useVonageSession, type ChatMessage } from "@/lib/telehealth/useVonageSession";
 
 interface TelehealthSessionContentProps {
   sessionId: string;
@@ -50,6 +50,15 @@ export function TelehealthSessionContent({
     remoteContainer,
     localContainer,
   });
+
+  // Convert Vonage chat messages to UI format
+  const uiMessages: TelehealthChatMessage[] = telehealth.chatMessages.map(msg => ({
+    id: msg.id,
+    author: msg.author,
+    authoredAt: msg.timestamp,
+    content: msg.content,
+    isOwn: msg.isOwn,
+  }));
 
   // Show permission modal when there's a permission error
   const isPermissionError = telehealth.error?.includes('camera and microphone') || 
@@ -162,7 +171,12 @@ export function TelehealthSessionContent({
                   participantName={providerName}
                   participantRole="Doctor"
                   participantStatus={telehealth.isConnected ? "online" : "offline"}
-                  messages={messages}
+                  messages={uiMessages}
+                  onSendMessage={telehealth.sendChatMessage}
+                  isConnected={telehealth.isConnected}
+                  typingUsers={telehealth.typingUsers}
+                  onTypingStart={telehealth.sendTypingIndicator}
+                  onTypingStop={telehealth.stopTypingIndicator}
                 />
               </div>
             </div>

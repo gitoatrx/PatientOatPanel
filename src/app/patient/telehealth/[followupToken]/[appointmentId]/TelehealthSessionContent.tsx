@@ -8,7 +8,7 @@ import {
   PermissionRequestModal,
   type TelehealthChatMessage,
 } from "@/components/telehealth";
-import { useVonageSession, CALL_STATUSES, type CallStatus } from "@/lib/telehealth/useVonageSession";
+import { useVonageSession, CALL_STATUSES, type CallStatus, type ChatMessage } from "@/lib/telehealth/useVonageSession";
 
 interface TelehealthSessionContentProps {
   sessionId: string;
@@ -50,6 +50,15 @@ export function TelehealthSessionContent({
     remoteContainer,
     localContainer,
   });
+
+  // Convert Vonage chat messages to UI format
+  const uiMessages: TelehealthChatMessage[] = telehealth.chatMessages.map(msg => ({
+    id: msg.id,
+    author: msg.author,
+    authoredAt: msg.timestamp,
+    content: msg.content,
+    isOwn: msg.isOwn,
+  }));
 
   // Status display logic (matching doctor-side implementation)
   const getStatusDisplay = (status: CallStatus, participantCount: number) => {
@@ -151,30 +160,39 @@ export function TelehealthSessionContent({
             </div>
 
             {/* Right Side - Chat Panel */}
-            <div className="w-full lg:w-96 h-80 lg:h-full bg-white border border-gray-200 flex flex-col rounded-xl shadow-lg">
-              {/* Chat Header with Doctor Info */}
-              <div className="p-4">
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-5 shadow-lg overflow-hidden">
-                  <div className="flex items-center justify-start min-w-0">
-                    {/* Provider Info */}
-                    <div className="flex items-center space-x-4 min-w-0">
-                      <div className="relative flex-shrink-0">
-                        <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center shadow-lg border-2 border-white/30">
-                          <span className="text-white font-bold text-xl">
-                            {providerName.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        </div>
-                        {/* Online Status Indicator */}
-                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                          telehealth.isConnected ? 'bg-green-400' : 'bg-gray-400'
-                        }`}></div>
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-white text-xl">{providerName}</h3>
-                        <p className="text-white/80 text-sm">Healthcare Provider</p>
-                      </div>
+            <div className="w-full lg:w-96 h-80 lg:h-full bg-gray-50 flex flex-col rounded-xl shadow-lg overflow-hidden">
+              {/* Discord-style Chat Header */}
+              <div className="bg-gray-800 border-b border-gray-700 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  {/* Provider Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">
+                        {providerName.split(' ').map(n => n[0]).join('')}
+                      </span>
                     </div>
-                    
+                    {/* Online Status Indicator */}
+                    <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800 ${
+                      telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'
+                    }`}></div>
+                  </div>
+                  
+                  {/* Provider Info */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-white text-sm truncate">{providerName}</h3>
+                    <p className="text-gray-400 text-xs">
+                      {telehealth.isConnected ? 'Online' : 'Offline'} • Healthcare Provider
+                    </p>
+                  </div>
+                  
+                  {/* Connection Status */}
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'
+                    }`}></div>
+                    <span className="text-xs text-gray-400">
+                      {telehealth.isConnected ? 'Connected' : 'Disconnected'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -241,7 +259,12 @@ export function TelehealthSessionContent({
                   participantName={providerName}
                   participantRole="Doctor"
                   participantStatus={telehealth.isConnected ? "online" : "offline"}
-                  messages={messages}
+                  messages={uiMessages}
+                  onSendMessage={telehealth.sendChatMessage}
+                  isConnected={telehealth.isConnected}
+                  typingUsers={telehealth.typingUsers}
+                  onTypingStart={telehealth.sendTypingIndicator}
+                  onTypingStop={telehealth.stopTypingIndicator}
                 />
               </div>
             </div>

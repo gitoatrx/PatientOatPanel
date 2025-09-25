@@ -70,10 +70,10 @@ export function TelehealthCallControls({
   return (
     <section
       className={cn(
-        "flex flex-wrap items-center gap-3 rounded-3xl bg-white p-4 shadow-sm",
+        "flex flex-wrap items-center gap-3",
         isOverlay
-          ? "justify-center gap-4 bg-black/70 px-6 py-4 text-white shadow-xl backdrop-blur-md"
-          : "justify-center sm:justify-start",
+          ? "justify-center gap-4"
+          : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm",
       )}
     >
       <Button
@@ -98,7 +98,7 @@ export function TelehealthCallControls({
         variant={isOverlay ? "ghost" : "outline"}
         className={cn(
           "h-12 rounded-full px-4 text-base",
-          isOverlay && "h-14 w-14 px-0 text-white hover:bg-white/10",
+          isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
           micIsMuted && "bg-red-500 hover:bg-red-600 text-white border-red-500",
           !micIsMuted && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
         )}
@@ -119,7 +119,7 @@ export function TelehealthCallControls({
         variant={isOverlay ? "ghost" : "outline"}
         className={cn(
           "h-12 rounded-full px-4 text-base",
-          isOverlay && "h-14 w-14 px-0 text-white hover:bg-white/10",
+          isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
           cameraIsOff && "bg-red-500 hover:bg-red-600 text-white border-red-500",
           !cameraIsOff && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
         )}
@@ -140,7 +140,7 @@ export function TelehealthCallControls({
         variant={isOverlay ? "ghost" : "outline"}
         className={cn(
           "h-12 rounded-full px-4 text-base",
-          isOverlay && "h-14 w-14 px-0 text-white hover:bg-white/10",
+          isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
         )}
         onClick={() => onOpenDeviceSettings?.()}
         aria-label="Switch camera"

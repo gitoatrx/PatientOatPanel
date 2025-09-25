@@ -408,3 +408,20 @@ input[type="number"] {
     @apply text-primary  hover:text-primary/80;
   }
 }
+
+/* Minimal video container styling - back to original */
+#vonage-remote-container {
+  /* Let Vonage handle the layout naturally */
+}
+
+/* Removed all custom grid layouts - back to original */
+
+/* Removed all custom styling - back to original */
+
+/* Removed all custom indicators - back to original */
+
+/* Removed all custom CSS - back to original */
+
+/* Removed all responsive CSS - back to original */
+
+/* Removed all status indicators - back to original */
