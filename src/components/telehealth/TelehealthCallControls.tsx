@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, RefreshCcw } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, RefreshCcw, MessageCircle } from "lucide-react";
+import { SignalStrengthIndicator } from "./SignalStrengthIndicator";
+import { MicrophoneSelector } from "./MicrophoneSelector";
 
 interface TelehealthCallControlsProps {
   isConnected?: boolean;
@@ -15,7 +17,18 @@ interface TelehealthCallControlsProps {
   onToggleMic?: () => void;
   onToggleCamera?: () => void;
   onOpenDeviceSettings?: () => void;
+  onSwitchMicrophone?: (deviceId: string) => void;
   variant?: "panel" | "overlay";
+  // Signal strength and audio device props
+  signalStrength?: 'excellent' | 'good' | 'fair' | 'poor';
+  audioLevel?: number;
+  audioDevices?: Array<{ deviceId?: string; label?: string }>;
+  currentAudioDevice?: string | null;
+  // Chat button controls
+  showChatButton?: boolean;
+  isChatOpen?: boolean;
+  chatUnreadCount?: number;
+  onToggleChat?: () => void;
 }
 
 export function TelehealthCallControls({
@@ -28,7 +41,16 @@ export function TelehealthCallControls({
   onToggleMic,
   onToggleCamera,
   onOpenDeviceSettings,
+  onSwitchMicrophone,
   variant = "panel",
+  signalStrength = 'good',
+  audioLevel = 0,
+  audioDevices = [],
+  currentAudioDevice = null,
+  showChatButton = false,
+  isChatOpen = false,
+  chatUnreadCount = 0,
+  onToggleChat,
 }: TelehealthCallControlsProps) {
   const [micMuted, setMicMuted] = useState(micMutedProp ?? false);
   const [cameraOff, setCameraOff] = useState(cameraOffProp ?? false);
@@ -68,14 +90,55 @@ export function TelehealthCallControls({
   const deviceSwitchDisabled = controlsDisabled || !onOpenDeviceSettings;
 
   return (
-    <section
-      className={cn(
-        "flex flex-wrap items-center gap-3",
-        isOverlay
-          ? "justify-center gap-4"
-          : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm",
+    <div className="space-y-3">
+      {/* Signal Strength and Microphone Selector */}
+      {isConnected && !isOverlay && (
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+          <SignalStrengthIndicator 
+            strength={signalStrength} 
+            audioLevel={audioLevel}
+          />
+          <MicrophoneSelector
+            audioDevices={audioDevices}
+            currentDevice={currentAudioDevice}
+            onDeviceChange={onSwitchMicrophone || (() => {})}
+            disabled={controlsDisabled}
+          />
+        </div>
       )}
-    >
+
+      {/* Main Controls */}
+      <section
+        className={cn(
+          "flex flex-wrap items-center gap-3",
+          isOverlay
+            ? "justify-center gap-4"
+            : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm",
+        )}
+      >
+      {showChatButton && (
+        <div className="block lg:hidden">
+          <Button
+            type="button"
+            variant={isOverlay ? "ghost" : "outline"}
+            className={cn(
+              "h-12 rounded-full px-4 text-base relative",
+              isOverlay && "h-14 w-14 px-0 text-white bg-black/50 hover:bg-black/70",
+              isChatOpen && "bg-white text-black"
+            )}
+            onClick={onToggleChat}
+            aria-label={isChatOpen ? "Close chat" : "Open chat"}
+          >
+            <MessageCircle className="h-5 w-5" />
+            {isOverlay ? <span className="sr-only">{isChatOpen ? "Close chat" : "Open chat"}</span> : <span>Chat</span>}
+            {!isChatOpen && chatUnreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-green-500 text-white text-xs flex items-center justify-center">
+                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+              </span>
+            )}
+          </Button>
+        </div>
+      )}
       <Button
         type="button"
         className={cn(
@@ -149,6 +212,7 @@ export function TelehealthCallControls({
         <RefreshCcw className="h-5 w-5" />
         {isOverlay ? <span className="sr-only">Switch camera</span> : <span>Switch camera</span>}
       </Button>
-    </section>
+      </section>
+    </div>
   );
 }

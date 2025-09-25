@@ -13,14 +13,19 @@ interface TelehealthVideoPanelProps {
   onRemoteContainerReady?: (element: HTMLDivElement | null) => void;
   onLocalContainerReady?: (element: HTMLDivElement | null) => void;
   overlayControls?: ReactNode;
+  signalStrength?: 'excellent' | 'good' | 'fair' | 'poor';
 }
 
-const normalizeVideoElements = (container: HTMLDivElement | null) => {
+type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
+const normalizeVideoElements = (
+  container: HTMLDivElement | null,
+  opts?: { strength?: TileStrength; names?: string[] }
+) => {
   if (!container) return;
 
   const isTiled = container.dataset.tiled === "true";
   const videos = container.querySelectorAll("video");
-  videos.forEach((video) => {
+  videos.forEach((video, index) => {
     video.style.width = "100%";
     video.style.height = "100%";
     video.style.maxHeight = "100%";
@@ -31,13 +36,69 @@ const normalizeVideoElements = (container: HTMLDivElement | null) => {
       wrapper.style.display = "flex";
       wrapper.style.alignItems = "center";
       wrapper.style.justifyContent = "center";
-      wrapper.style.backgroundColor = "#1e293b";
+      wrapper.style.backgroundColor = "#111827";
       wrapper.style.minHeight = "0";
       wrapper.style.width = "100%";
       wrapper.style.height = "100%";
       wrapper.style.maxWidth = "100%";
       wrapper.style.maxHeight = "100%";
       wrapper.style.aspectRatio = isTiled ? "16 / 9" : "";
+      wrapper.style.borderRadius = isTiled ? "12px" : "8px";
+      wrapper.style.overflow = "hidden";
+      wrapper.style.boxShadow = isTiled ? "0 6px 24px rgba(0,0,0,0.25)" : "0 4px 16px rgba(0,0,0,0.2)";
+      wrapper.style.position = "relative";
+
+      if (!wrapper.querySelector('.tile-signal-badge')) {
+        const badge = document.createElement('div');
+        badge.className = 'tile-signal-badge';
+        badge.style.position = 'absolute';
+        badge.style.bottom = '6px';
+        badge.style.right = '6px';
+        badge.style.display = 'flex';
+        badge.style.gap = '2px';
+        badge.style.alignItems = 'flex-end';
+        badge.style.padding = '2px 4px';
+        badge.style.borderRadius = '9999px';
+        badge.style.background = 'rgba(0,0,0,0.45)';
+        badge.style.backdropFilter = 'blur(6px)';
+
+        const levels = 4;
+        const s = opts?.strength;
+        const active = s === 'excellent' ? 4 : s === 'good' ? 3 : s === 'fair' ? 2 : s === 'poor' ? 1 : 3;
+        for (let i = 1; i <= levels; i++) {
+          const bar = document.createElement('span');
+          bar.style.width = '3px';
+          bar.style.height = `${3 + i * 3}px`;
+          bar.style.borderRadius = '2px';
+          bar.style.background = i <= active ? '#22c55e' : 'rgba(255,255,255,0.35)';
+          badge.appendChild(bar);
+        }
+        wrapper.appendChild(badge);
+      }
+
+      // Add participant name badge (mobile/tablet only)
+      const nm = opts?.names?.[index];
+      const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+      // Remove existing on desktop to avoid showing names there
+      const existingName = wrapper.querySelector('.tile-name-badge');
+      if (isDesktop && existingName) existingName.remove();
+      if (!isDesktop && nm && !existingName) {
+        const nameEl = document.createElement('div');
+        nameEl.className = 'tile-name-badge';
+        nameEl.textContent = nm;
+        nameEl.style.position = 'absolute';
+        nameEl.style.left = '8px';
+        nameEl.style.bottom = '8px';
+        nameEl.style.padding = '2px 8px';
+        nameEl.style.fontSize = '12px';
+        nameEl.style.fontWeight = '600';
+        nameEl.style.color = '#fff';
+        nameEl.style.background = 'rgba(0,0,0,0.55)';
+        nameEl.style.borderRadius = '9999px';
+        nameEl.style.backdropFilter = 'blur(6px)';
+        nameEl.style.pointerEvents = 'none';
+        wrapper.appendChild(nameEl);
+      }
     }
   });
 };
@@ -51,6 +112,7 @@ export function TelehealthVideoPanel({
   onRemoteContainerReady,
   onLocalContainerReady,
   overlayControls,
+  signalStrength,
 }: TelehealthVideoPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
@@ -58,6 +120,8 @@ export function TelehealthVideoPanel({
   const [remoteHasVideo, setRemoteHasVideo] = useState(false);
   const [localHasVideo, setLocalHasVideo] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [remoteTileCount, setRemoteTileCount] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -67,6 +131,13 @@ export function TelehealthVideoPanel({
     onRemoteContainerReady?.(remoteRef.current);
     return () => onRemoteContainerReady?.(null);
   }, [onRemoteContainerReady]);
+
+  // Track viewport width for responsive tiling decisions
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     onLocalContainerReady?.(localRef.current);
@@ -78,10 +149,12 @@ export function TelehealthVideoPanel({
     if (!remoteElement) return;
 
     const update = () => {
-      const hasVideo = remoteElement.querySelector("video") !== null;
+      const videos = remoteElement.querySelectorAll("video");
+      const hasVideo = videos.length > 0;
       setRemoteHasVideo(hasVideo);
+      setRemoteTileCount(videos.length);
       if (hasVideo) {
-        normalizeVideoElements(remoteElement);
+        normalizeVideoElements(remoteElement, { strength: signalStrength, names: remoteNames });
       }
     };
 
@@ -115,7 +188,8 @@ export function TelehealthVideoPanel({
       const hasVideo = localElement.querySelector("video") !== null;
       setLocalHasVideo(hasVideo);
       if (hasVideo) {
-        normalizeVideoElements(localElement);
+        // Do not add name badge here; we already render "You" label below
+        normalizeVideoElements(localElement, { strength: signalStrength });
       }
     };
 
@@ -239,33 +313,42 @@ export function TelehealthVideoPanel({
   const participantCount = participants.length;
   const participantLabel = `${participantCount} ${participantCount === 1 ? "participant" : "participants"}`;
   const providerFirstName = providerName.split(" ")[0] ?? providerName;
+  const remoteNames = participants
+    .map(p => p.name)
+    .filter(n => n && n !== localParticipantName);
   const hasNamedLocalParticipant = participants.some((participant) => participant.name === localParticipantName);
   const remoteParticipantCount = Math.max(1, participantCount - (hasNamedLocalParticipant ? 1 : 0));
-  const remoteColumnCount = (
-    remoteParticipantCount <= 1 ? 1 : remoteParticipantCount === 2 ? 2 : remoteParticipantCount <= 4 ? 2 : 3
-  );
+  const tileCount = Math.max(1, remoteTileCount || remoteParticipantCount);
+  // Meet/Zoom-like tiling: near-square grid using sqrt
+  const calcColumns = (n: number) => {
+    if (n <= 1) return 1;
+    const cols = Math.ceil(Math.sqrt(n));
+    return Math.min(cols, 3);
+  };
+  const isMobileOrTablet = viewportWidth < 1024; // < lg
+  const remoteColumnCount = isMobileOrTablet && tileCount === 2 ? 1 : calcColumns(tileCount);
   const remoteLayoutClass =
-    remoteParticipantCount > 1 ? "grid gap-4 p-4 sm:p-6 place-items-center" : "flex items-center justify-center";
+    tileCount > 1 ? "grid gap-2 sm:gap-3 p-0 sm:p-4 items-stretch content-start" : "flex items-center justify-center";
   const remoteGridStyle: CSSProperties | undefined = (
-    remoteParticipantCount > 1
+    tileCount > 1
       ? {
           gridTemplateColumns: `repeat(${remoteColumnCount}, minmax(0, 1fr))`,
-          gridAutoRows: "1fr",
-          justifyItems: "center",
+          justifyItems: "stretch",
           alignItems: "stretch",
+          gridAutoRows: isMobileOrTablet && tileCount === 2 ? undefined : "1fr",
         }
       : undefined
   );
   const panelClasses = cn(
-    "relative overflow-hidden shadow-lg",
-    isFullscreen ? "h-[100svh] max-h-[100svh] w-full  rounded-none bg-slate-800 sm:rounded-none" : "rounded-3xl bg-slate-800",
+    "relative overflow-hidden bg-slate-800",
+    isFullscreen ? "h-[100svh] max-h-[100svh] w-full rounded-none" : "rounded-none sm:rounded-none sm:shadow-none",
   );
   const remoteContainerClasses = cn(
-    "relative w-full bg-slate-800 overflow-hidden h-full",
+    "relative w-full bg-slate-800 overflow-hidden h-full min-h-0 pt-8 sm:pt-10",
     remoteLayoutClass,
   );
   const localPreviewClasses = cn(
-    "relative overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-lg backdrop-blur",
+    "relative overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-lg",
     isFullscreen ? "h-36 w-48 sm:h-40 sm:w-56" : "h-28 w-40 sm:h-32 sm:w-44",
   );
   const overlayControlsClasses = cn(
@@ -273,13 +356,13 @@ export function TelehealthVideoPanel({
     isFullscreen && "bottom-10",
   );
   const fullscreenToggleClasses = cn(
-    "pointer-events-none absolute top-3 right-3 flex gap-2",
+    "pointer-events-none absolute top-12 right-3 sm:top-14 flex gap-2",
     isFullscreen && "top-6 right-6",
   );
 
   useEffect(() => {
-    normalizeVideoElements(remoteRef.current);
-  }, [remoteParticipantCount, isFullscreen]);
+    normalizeVideoElements(remoteRef.current, { strength: signalStrength, names: remoteNames });
+  }, [remoteParticipantCount, isFullscreen, signalStrength, remoteNames.join('|')]);
 
   return (
     <div ref={panelRef} className={cn(panelClasses, "h-full")}>
@@ -288,9 +371,16 @@ export function TelehealthVideoPanel({
           id="vonage-remote-container"
           className={remoteContainerClasses}
           style={remoteGridStyle}
-          data-tiled={remoteParticipantCount > 1 ? "true" : "false"}
+          data-tiled={tileCount > 1 ? "true" : "false"}
           aria-label="Remote video stream"
         />
+
+        {/* Header overlay */}
+        <div className="pointer-events-none absolute top-3 left-3 right-3 z-10 flex items-center justify-start">
+          <div className="rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white shadow-sm max-w-[70%] truncate">
+            {sessionTitle}
+          </div>
+        </div>
 
         {!remoteHasVideo ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-slate-200">
@@ -333,9 +423,7 @@ export function TelehealthVideoPanel({
                 <span>Your camera preview will appear here.</span>
               </div>
             ) : null}
-            <div className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white">
-              {localParticipantName}
-            </div>
+
             {/* Drag handle */}
             <div className="absolute top-1 right-1 pointer-events-none">
               <GripVertical className="h-3 w-3 text-white/60" />

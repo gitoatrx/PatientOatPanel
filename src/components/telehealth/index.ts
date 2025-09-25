@@ -3,3 +3,5 @@ export { TelehealthChatPanel, type TelehealthChatMessage } from "./TelehealthCha
 export { TelehealthCallControls } from "./TelehealthCallControls";
 export { TelehealthChatLauncher } from "./TelehealthChatLauncher";
 export { PermissionRequestModal } from "./PermissionRequestModal";
+export { SignalStrengthIndicator } from "./SignalStrengthIndicator";
+export { MicrophoneSelector } from "./MicrophoneSelector";

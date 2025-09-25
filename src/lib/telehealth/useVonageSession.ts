@@ -61,6 +61,7 @@ interface UseVonageSessionResult {
   toggleMic: () => Promise<void>;
   toggleCamera: () => Promise<void>;
   switchCamera: () => void;
+  switchMicrophone: () => void;
   isConnected: boolean;
   isBusy: boolean;
   isMicMuted: boolean;
@@ -78,6 +79,10 @@ interface UseVonageSessionResult {
   participantCount: number;
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
+  signalStrength: 'excellent' | 'good' | 'fair' | 'poor';
+  audioLevel: number;
+  audioDevices: Array<{ deviceId?: string; label?: string }>;
+  currentAudioDevice: string | null;
   chatMessages: ChatMessage[];
   sendChatMessage: (content: string, type?: 'text' | 'image' | 'file', attachment?: any) => void;
   typingUsers: TypingUser[];
@@ -90,6 +95,8 @@ type VonagePublisher = {
   publishAudio: (enabled: boolean) => void;
   publishVideo: (enabled: boolean) => void;
   setVideoSource?: (deviceId: string) => Promise<void>;
+  setAudioSource?: (deviceId: string) => Promise<void>;
+  on?: (event: string, handler: (...args: any[]) => void) => void;
   stream?: {
     streamId?: string;
     hasAudio?: boolean;
@@ -243,6 +250,36 @@ const listVideoInputs = async (OT: any) => {
   });
 };
 
+const listAudioInputs = async (OT: any) => {
+  const fallback: Array<{ kind?: string; deviceId?: string; label?: string }> = [];
+  const filterAudio = (devices: any) => {
+    if (!Array.isArray(devices)) return fallback;
+    return devices.filter((device) => device?.kind === "audioInput" && device?.deviceId);
+  };
+
+  return new Promise<Array<{ kind?: string; deviceId?: string; label?: string }>>((resolve) => {
+    try {
+      OT.getDevices((error: Error | null, devices: any) => {
+        if (error) {
+          resolve(fallback);
+        } else {
+          resolve(filterAudio(devices));
+        }
+      });
+    } catch (err: unknown) {
+      void err;
+      const maybePromise = OT.getDevices?.();
+      if (maybePromise?.then) {
+        maybePromise
+          .then((devices: any) => resolve(filterAudio(devices)))
+          .catch(() => resolve(fallback));
+      } else {
+        resolve(fallback);
+      }
+    }
+  });
+};
+
 const removeAllChildren = (element: HTMLElement | null) => {
   if (!element) return;
   while (element.firstChild) {
@@ -306,6 +343,8 @@ export function useVonageSession({
   const isJoiningRef = useRef(false);
   const videoDevicesRef = useRef<Array<{ deviceId?: string }>>([]);
   const currentVideoDeviceRef = useRef<string | null>(null);
+  const audioDevicesRef = useRef<Array<{ deviceId?: string; label?: string }>>([]);
+  const currentAudioDeviceRef = useRef<string | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -321,6 +360,8 @@ export function useVonageSession({
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [signalStrength, setSignalStrength] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
+  const [audioLevel, setAudioLevel] = useState(0);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Chat persistence key based on session
@@ -755,6 +796,9 @@ export function useVonageSession({
         });
         logInfo('remote stream container appended', { streamId, connectionId, childCount: remoteEl.children.length });
 
+        // Add participant info overlay to the new remote stream
+        addParticipantInfoOverlay(wrapper, `Participant ${connectionId.slice(-4)}`, 'remote', connectionId);
+
         console.log('🔴 ABOUT TO SUBSCRIBE TO STREAM:', {
           stream: stream,
           wrapper: wrapper,
@@ -1060,6 +1104,10 @@ export function useVonageSession({
       videoDevicesRef.current = videoInputs;
       currentVideoDeviceRef.current = videoInputs[0]?.deviceId ?? null;
 
+      const audioInputs = await listAudioInputs(OT);
+      audioDevicesRef.current = audioInputs;
+      currentAudioDeviceRef.current = audioInputs[0]?.deviceId ?? null;
+
       const publisherOptions: Record<string, unknown> = {
         insertMode: "append",
         width: "100%",
@@ -1075,7 +1123,10 @@ export function useVonageSession({
           audioLevelDisplayMode: "off",
           archiveStatusDisplayMode: "off",
           backgroundImageURI: "off"
-        }
+        },
+        // Enable signal strength monitoring
+        enableAudioLevelDisplay: true,
+        enableVideoLevelDisplay: true
       };
 
       // Use the existing preview stream if available
@@ -1131,6 +1182,44 @@ export function useVonageSession({
         hasVideo: publisher.hasVideo,
         hasAudio: publisher.hasAudio
       });
+
+      // Don't add participant info overlay to local container
+      // The controls should only show on remote participants' video feeds
+
+      // Add signal strength monitoring
+      if (publisher.on) {
+        publisher.on('audioLevelUpdated', (event: any) => {
+          const level = event.audioLevel || 0;
+          setAudioLevel(level);
+          
+          // Update signal strength based on audio level
+          if (level > 0.7) {
+            setSignalStrength('excellent');
+          } else if (level > 0.4) {
+            setSignalStrength('good');
+          } else if (level > 0.1) {
+            setSignalStrength('fair');
+          } else {
+            setSignalStrength('poor');
+          }
+          
+          // Detect speaking (threshold for speaking detection)
+          const isSpeaking = level > 0.05 && !isMicMuted;
+          
+          // Dispatch events to update participant info controls
+          document.dispatchEvent(new CustomEvent('signalStrengthUpdate'));
+          document.dispatchEvent(new CustomEvent('speakingStatusUpdate', {
+            detail: { 
+              connectionId: sessionRef.current?.connection?.connectionId,
+              isSpeaking: isSpeaking 
+            }
+          }));
+        });
+
+        publisher.on('videoDimensionsChanged', (event: any) => {
+          console.log('📹 Video dimensions changed:', event);
+        });
+      }
 
       publisherRef.current = publisher;
       setIsMicMuted(false);
@@ -1412,6 +1501,15 @@ export function useVonageSession({
     publisher.publishAudio(!nextMuted);
     setIsMicMuted(nextMuted);
     setIsAudioEnabled(!nextMuted);
+    
+    // Dispatch mic status update event for local participant
+    const event = new CustomEvent('micStatusUpdate', {
+      detail: { 
+        connectionId: sessionRef.current?.connection?.connectionId,
+        isMuted: nextMuted 
+      }
+    });
+    document.dispatchEvent(event);
   }, [isMicMuted]);
 
   const toggleCamera = useCallback(async () => {
@@ -1514,6 +1612,287 @@ export function useVonageSession({
       setError("Unable to switch camera. Please try leaving and rejoining the call.");
     }
   }, [isCameraOff, isMicMuted]);
+
+
+  const switchMicrophone = useCallback(async () => {
+    const publisher = publisherRef.current;
+    if (!publisher) return;
+
+    const devices = audioDevicesRef.current;
+    if (!devices.length) {
+      const OT = window.OT;
+      if (OT) {
+        const refreshed = await listAudioInputs(OT);
+        audioDevicesRef.current = refreshed;
+      }
+    }
+
+    const available = audioDevicesRef.current;
+    if (!available.length) return;
+
+    const currentId = currentAudioDeviceRef.current;
+    const currentIndex = available.findIndex((device) => device.deviceId === currentId);
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % available.length;
+    const nextDeviceId = available[nextIndex]?.deviceId;
+    if (!nextDeviceId) return;
+
+    try {
+        if (typeof publisher.setAudioSource === "function") {
+          await publisher.setAudioSource(nextDeviceId);
+          currentAudioDeviceRef.current = nextDeviceId;
+          console.log('🎤 Switched to microphone:', available[nextIndex]?.label || nextDeviceId);
+          
+          // Dispatch event to update participant info controls
+          document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
+          return;
+        }
+    } catch (error) {
+      console.warn('Failed to switch microphone using setAudioSource:', error);
+    }
+
+    // Fallback: recreate publisher with new audio source
+    try {
+      const session = sessionRef.current;
+      if (!session) return;
+
+      const localEl = localContainerRef.current;
+      if (!localEl) return;
+
+      const OT = window.OT;
+      if (!OT) return;
+      
+      const newPublisher: VonagePublisher = OT.initPublisher(
+        localEl,
+        {
+          insertMode: "append",
+          width: "100%",
+          height: "100%",
+          publishAudio: !isMicMuted,
+          publishVideo: !isCameraOff,
+          audioSource: nextDeviceId,
+        },
+        (publisherError?: Error) => {
+          if (publisherError) {
+            console.error("Microphone switch error", publisherError);
+            return;
+          }
+        },
+      );
+
+          publisherRef.current = newPublisher;
+          currentAudioDeviceRef.current = nextDeviceId;
+          session.publish(newPublisher, (publishError?: Error) =>
+            publishError && console.error("Re-publish error", publishError),
+          );
+          
+          console.log('🎤 Switched to microphone:', available[nextIndex]?.label || nextDeviceId);
+          
+          // Dispatch event to update participant info controls
+          document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
+    } catch (switchError) {
+      console.error("Unable to switch microphone", switchError);
+      setError("Unable to switch microphone. Please try leaving and rejoining the call.");
+    }
+  }, [isCameraOff, isMicMuted]);
+
+  // Function to add participant info overlay to any container
+  const addParticipantInfoOverlay = useCallback((container: HTMLDivElement, participantName: string, type: 'local' | 'remote', connectionId?: string) => {
+    // Check if overlay already exists
+    if (container.querySelector('[data-participant-info-overlay]')) {
+      return;
+    }
+
+    // Create participant info overlay (compact corner overlay like Zoom/Skype)
+    const participantInfo = document.createElement("div");
+    participantInfo.setAttribute('data-participant-info-overlay', 'true');
+    participantInfo.style.position = "absolute";
+    participantInfo.style.top = "8px";
+    participantInfo.style.left = "8px";
+    participantInfo.style.zIndex = "10";
+    participantInfo.style.display = "flex";
+    participantInfo.style.alignItems = "center";
+    participantInfo.style.background = "rgba(0, 0, 0, 0.7)";
+    participantInfo.style.borderRadius = "12px";
+    participantInfo.style.padding = "4px 8px";
+    participantInfo.style.backdropFilter = "blur(4px)";
+    participantInfo.style.fontSize = "10px";
+    participantInfo.style.height = "auto";
+    participantInfo.style.width = "auto";
+    participantInfo.style.maxWidth = "none";
+    
+    // Participant name (compact)
+    const participantNameElement = document.createElement("div");
+    participantNameElement.style.color = "white";
+    participantNameElement.style.fontSize = "11px";
+    participantNameElement.style.fontWeight = "500";
+    participantNameElement.style.marginRight = "6px";
+    participantNameElement.style.lineHeight = "1";
+    participantNameElement.textContent = participantName;
+    
+    // Status indicators container (inline, compact)
+    const controlsContainer = document.createElement("div");
+    controlsContainer.style.display = "flex";
+    controlsContainer.style.alignItems = "center";
+    controlsContainer.style.gap = "4px";
+    
+    // Signal strength indicator (compact)
+    const signalStrengthElement = document.createElement("div");
+    signalStrengthElement.style.display = "flex";
+    signalStrengthElement.style.alignItems = "center";
+    signalStrengthElement.style.gap = "3px";
+    
+    // Function to update signal strength
+    const updateSignalStrength = (strength: 'excellent' | 'good' | 'fair' | 'poor', audioLevel: number) => {
+      const getBarColor = (barStrength: 'excellent' | 'good' | 'fair' | 'poor') => {
+        switch (barStrength) {
+          case 'excellent': return '#10b981'; // green
+          case 'good': return '#eab308'; // yellow
+          case 'fair': return '#f97316'; // orange
+          case 'poor': return '#ef4444'; // red
+          default: return '#6b7280'; // gray
+        }
+      };
+      
+      const getBarCount = (barStrength: 'excellent' | 'good' | 'fair' | 'poor') => {
+        switch (barStrength) {
+          case 'excellent': return 5;
+          case 'good': return 4;
+          case 'fair': return 3;
+          case 'poor': return 2;
+          default: return 1;
+        }
+      };
+      
+      const color = getBarColor(strength);
+      const barCount = getBarCount(strength);
+      const percentage = Math.round(audioLevel * 100);
+      
+      signalStrengthElement.innerHTML = `
+        <div style="display: flex; align-items: end; gap: 1px;">
+          <div style="width: 2px; height: 3px; background: ${barCount >= 1 ? color : '#374151'}; border-radius: 1px;"></div>
+          <div style="width: 2px; height: 5px; background: ${barCount >= 2 ? color : '#374151'}; border-radius: 1px;"></div>
+          <div style="width: 2px; height: 7px; background: ${barCount >= 3 ? color : '#374151'}; border-radius: 1px;"></div>
+          <div style="width: 2px; height: 9px; background: ${barCount >= 4 ? color : '#374151'}; border-radius: 1px;"></div>
+        </div>
+      `;
+    };
+    
+    // Initialize with current values
+    if (type === 'local') {
+      // For local participant, show your own signal strength
+      updateSignalStrength(signalStrength, audioLevel);
+    } else {
+      // For remote participants, show a default "good" signal strength
+      // In a real implementation, this would come from the remote participant's audio level
+      updateSignalStrength('good', 0.5);
+    }
+    
+    // No microphone selector for remote participants
+    // Only show signal strength for remote participants
+    
+    // Always add signal strength indicator
+    controlsContainer.appendChild(signalStrengthElement);
+
+    // Microphone status indicator (compact)
+    const micStatusElement = document.createElement("div");
+    micStatusElement.style.display = "flex";
+    micStatusElement.style.alignItems = "center";
+    micStatusElement.style.gap = "2px";
+    
+    const micIcon = document.createElement("div");
+    micIcon.innerHTML = "🎤";
+    micIcon.style.fontSize = "10px";
+    micIcon.style.opacity = "0.8";
+    
+    const micStatus = document.createElement("span");
+    micStatus.style.color = "#10b981";
+    micStatus.style.fontSize = "9px";
+    micStatus.style.fontWeight = "500";
+    micStatus.textContent = "ON";
+    
+    micStatusElement.appendChild(micIcon);
+    micStatusElement.appendChild(micStatus);
+    
+    // Speaking status indicator (just icon, very compact)
+    const speakingStatusElement = document.createElement("div");
+    speakingStatusElement.style.display = "flex";
+    speakingStatusElement.style.alignItems = "center";
+    speakingStatusElement.style.opacity = "0";
+    speakingStatusElement.style.transition = "opacity 0.3s ease";
+    
+    const speakingIcon = document.createElement("div");
+    speakingIcon.innerHTML = "🔊";
+    speakingIcon.style.fontSize = "10px";
+    
+    speakingStatusElement.appendChild(speakingIcon);
+    
+    // Add status indicators to controls
+    controlsContainer.appendChild(micStatusElement);
+    controlsContainer.appendChild(speakingStatusElement);
+
+    // Function to update microphone status
+    const updateMicStatus = (isMuted: boolean) => {
+      micStatus.textContent = isMuted ? "OFF" : "ON";
+      micStatus.style.color = isMuted ? "#ef4444" : "#10b981";
+      micIcon.style.opacity = isMuted ? "0.4" : "0.8";
+    };
+
+    // Function to update speaking status
+    const updateSpeakingStatus = (isSpeaking: boolean) => {
+      speakingStatusElement.style.opacity = isSpeaking ? "1" : "0";
+    };
+    
+    // Assemble the participant info (inline layout)
+    participantInfo.appendChild(participantNameElement);
+    participantInfo.appendChild(controlsContainer);
+    
+    // Add to container
+    container.appendChild(participantInfo);
+    
+    // Add event listeners for dynamic updates
+    const updateControls = () => {
+      // For remote participants, we could update their signal strength here
+      // For now, we'll keep it static since we don't have access to their audio levels
+      // In a real implementation, this would come from the remote participant's audio level
+    };
+
+    // Listen for signal strength changes
+    const signalStrengthListener = () => updateControls();
+    document.addEventListener('signalStrengthUpdate', signalStrengthListener);
+
+    // Listen for microphone status changes
+    const micStatusListener = (event: any) => {
+      if (connectionId && event.detail?.connectionId === connectionId) {
+        updateMicStatus(event.detail.isMuted);
+      }
+    };
+    document.addEventListener('micStatusUpdate', micStatusListener);
+
+    // Listen for speaking status changes
+    const speakingStatusListener = (event: any) => {
+      if (connectionId && event.detail?.connectionId === connectionId) {
+        updateSpeakingStatus(event.detail.isSpeaking);
+      }
+    };
+    document.addEventListener('speakingStatusUpdate', speakingStatusListener);
+    
+    // Clean up listeners when container is cleared
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          const hasOverlay = container.querySelector('[data-participant-info-overlay]');
+        if (!hasOverlay) {
+          document.removeEventListener('signalStrengthUpdate', signalStrengthListener);
+          document.removeEventListener('micStatusUpdate', micStatusListener);
+          document.removeEventListener('speakingStatusUpdate', speakingStatusListener);
+          observer.disconnect();
+        }
+        }
+      });
+    });
+    
+    observer.observe(container, { childList: true, subtree: true });
+  }, [signalStrength, audioLevel, switchMicrophone]);
 
   const clearError = useCallback(() => {
     setError(undefined);
@@ -1849,7 +2228,7 @@ export function useVonageSession({
           const streamId = stream.streamId;
           const connectionId = stream.connection?.connectionId;
           
-          // Create wrapper element with participant info
+          // Create wrapper element
           const wrapper = document.createElement("div");
           wrapper.dataset.streamId = streamId;
           wrapper.dataset.connectionId = connectionId;
@@ -1860,7 +2239,24 @@ export function useVonageSession({
           wrapper.style.backgroundColor = "#1e293b";
           wrapper.style.border = "1px solid #374151";
           wrapper.style.cursor = "pointer";
-          wrapper.innerHTML = `<div style="color: white; padding: 10px; text-align: center;">Loading...</div>`;
+          wrapper.style.position = "relative";
+          
+          // Add loading message
+          const loadingMessage = document.createElement("div");
+          loadingMessage.style.color = "white";
+          loadingMessage.style.padding = "10px";
+          loadingMessage.style.textAlign = "center";
+          loadingMessage.style.position = "absolute";
+          loadingMessage.style.top = "50%";
+          loadingMessage.style.left = "50%";
+          loadingMessage.style.transform = "translate(-50%, -50%)";
+          loadingMessage.style.zIndex = "5";
+          loadingMessage.textContent = "Loading...";
+          
+          wrapper.appendChild(loadingMessage);
+          
+          // Add participant info overlay
+          addParticipantInfoOverlay(wrapper, `Participant ${connectionId.slice(-4)}`, 'remote', connectionId);
           
           // Add click handler for focus functionality
           wrapper.addEventListener('click', () => {
@@ -1914,6 +2310,7 @@ export function useVonageSession({
       toggleMic,
       toggleCamera,
       switchCamera,
+      switchMicrophone,
       isConnected,
       isBusy,
       isMicMuted,
@@ -1931,6 +2328,10 @@ export function useVonageSession({
       participantCount,
       isAudioEnabled,
       isVideoEnabled,
+      signalStrength,
+      audioLevel,
+      audioDevices: audioDevicesRef.current,
+      currentAudioDevice: currentAudioDeviceRef.current,
       chatMessages,
       sendChatMessage,
       typingUsers,
@@ -1938,7 +2339,7 @@ export function useVonageSession({
       stopTypingIndicator,
       clearChatHistory,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
+    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
   );
 }
 
