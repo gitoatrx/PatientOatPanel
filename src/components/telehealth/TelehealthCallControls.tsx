@@ -112,20 +112,20 @@ export function TelehealthCallControls({
       {/* Main Controls */}
       <section
         className={cn(
-          "flex flex-wrap items-center gap-3",
+          "flex items-center gap-2",
           isOverlay
-            ? "justify-center gap-3"
-            : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm",
+            ? "justify-center bg-black/40 backdrop-blur-md rounded-xl px-3 py-2"
+            : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm flex-wrap gap-3",
         )}
       >
         {showChatButton && (
           <div className="block lg:hidden order-1">
             <Button
               type="button"
-              variant={isOverlay ? "ghost" : "outline"}
+              variant="ghost"
               className={cn(
                 "h-12 rounded-full px-4 text-base relative",
-                isOverlay && "h-12 w-12 px-0 text-white hover:bg-white/10 border border-white/20",
+                isOverlay && "h-12 w-12 px-0 text-white hover:bg-white/20 bg-black/30",
                 isChatOpen && !isOverlay && "bg-white text-black"
               )}
               onClick={onToggleChat}
@@ -145,13 +145,13 @@ export function TelehealthCallControls({
         {/* Microphone */}
         <Button
           type="button"
-          variant={isOverlay ? "ghost" : "outline"}
+          variant="ghost"
           className={cn(
             "order-1 h-12 rounded-full px-4 text-base",
-            isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/10 border border-white/20",
-            micIsMuted && !isOverlay && "bg-red-500 hover:bg-red-600 text-white border-red-500",
-            !micIsMuted && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
-            isOverlay && micIsMuted && "ring-2 ring-red-400"
+            isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
+            micIsMuted && !isOverlay && "bg-red-500 hover:bg-red-600 text-white ",
+            !micIsMuted && !isOverlay && "bg-green-500 hover:bg-green-600 text-white ",
+              isOverlay && micIsMuted && "bg-red-500/20"
           )}
           onClick={handleToggleMic}
           aria-label={micIsMuted ? "Unmute microphone" : "Mute microphone"}
@@ -164,10 +164,10 @@ export function TelehealthCallControls({
   <div className="order-3 relative">
           <Button
             type="button"
-            variant={isOverlay ? "ghost" : "outline"}
+            variant="ghost"
             className={cn(
               "h-12 rounded-full px-4 text-base",
-              isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/10 border border-white/20",
+              isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
             )}
             onClick={() => setShowSettings((v) => !v)}
             aria-label="Settings"
@@ -206,13 +206,13 @@ export function TelehealthCallControls({
         {/* Camera */}
         <Button
           type="button"
-          variant={isOverlay ? "ghost" : "outline"}
+          variant="ghost"
           className={cn(
             "order-2 h-12 rounded-full px-4 text-base",
-            isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/10 border border-white/20",
-            cameraIsOff && !isOverlay && "bg-red-500 hover:bg-red-600 text-white border-red-500",
-            !cameraIsOff && !isOverlay && "bg-green-500 hover:bg-green-600 text-white border-green-500",
-            isOverlay && cameraIsOff && "ring-2 ring-red-400"
+            isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
+            cameraIsOff && !isOverlay && "bg-red-500 hover:bg-red-600 text-white ",
+            !cameraIsOff && !isOverlay && "bg-green-500 hover:bg-green-600 text-white ",
+              isOverlay && cameraIsOff && "bg-red-500/20"
           )}
           onClick={handleToggleCamera}
           aria-label={cameraIsOff ? "Start video" : "Stop video"}
@@ -239,7 +239,7 @@ export function TelehealthCallControls({
           disabled={joinDisabled}
         >
           {isConnected ? <PhoneOff className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} /> : <Phone className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />}
-          <span className="ml-2">{joinLabel}</span>
+          <span className="ml-2 hidden sm:inline">{joinLabel}</span>
         </Button>
 
 
