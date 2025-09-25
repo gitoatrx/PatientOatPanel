@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useState } from "react";
 import {
@@ -113,6 +113,7 @@ export function TelehealthSessionContent({
                   statusMessage={telehealth.statusMessage}
                   onRemoteContainerReady={handleRemoteContainerReady}
                   onLocalContainerReady={handleLocalContainerReady}
+                  signalStrength={telehealth.signalStrength}
                   overlayControls={
                     <TelehealthCallControls
                       variant="overlay"
@@ -192,4 +193,3 @@ export function TelehealthSessionContent({
     </div>
   );
 }
-

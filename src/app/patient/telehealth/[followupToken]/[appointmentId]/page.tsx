@@ -48,7 +48,6 @@ interface PatientTelehealthPageProps {
 export default async function PatientTelehealthSessionPage({ params }: PatientTelehealthPageProps) {
   const { followupToken, appointmentId } = await params;
 
-  // TODO: Validate followupToken and fetch appointment details from backend
   // For now, we'll use the appointmentId as the sessionId
   const sessionId = appointmentId;
 

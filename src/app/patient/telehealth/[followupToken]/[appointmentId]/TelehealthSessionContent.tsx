@@ -6,6 +6,7 @@ import {
   TelehealthChatPanel,
   TelehealthCallControls,
   PermissionRequestModal,
+  TelehealthChatLauncher,
   type TelehealthChatMessage,
 } from "@/components/telehealth";
 import { useVonageSession, CALL_STATUSES, type CallStatus, type ChatMessage } from "@/lib/telehealth/useVonageSession";
@@ -34,6 +35,8 @@ export function TelehealthSessionContent({
   const [remoteContainer, setRemoteContainer] = useState<HTMLDivElement | null>(null);
   const [localContainer, setLocalContainer] = useState<HTMLDivElement | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [lastReadIndex, setLastReadIndex] = useState(0);
 
   const handleRemoteContainerReady = useCallback((element: HTMLDivElement | null) => {
     setRemoteContainer(element);
@@ -86,6 +89,8 @@ export function TelehealthSessionContent({
 
   const statusDisplay = getStatusDisplay(telehealth.callStatus, telehealth.participantCount);
 
+  const unreadCount = uiMessages.slice(lastReadIndex).filter(m => !m.isOwn).length;
+
   // Show permission modal when there's a permission error
   const isPermissionError = telehealth.error?.includes('camera and microphone') || 
                            telehealth.error?.includes('Permission') ||
@@ -111,14 +116,20 @@ export function TelehealthSessionContent({
     setShowPermissionModal(false);
   };
 
+  React.useEffect(() => {
+    if (isChatOpen) {
+      setLastReadIndex(uiMessages.length);
+    }
+  }, [isChatOpen, uiMessages.length]);
+
       return (
-        <div className="h-screen bg-gray-50 overflow-hidden p-4 lg:p-6">
+        <div className="telehealth-full-viewport bg-background overflow-hidden p-0 lg:p-6 pb-[var(--safe-area-bottom)] md:pb-0">
           {/* Split Screen Layout - Responsive */}
           <div className="flex flex-col lg:flex-row h-full gap-4 lg:gap-6">
             {/* Left Side - Video Panel */}
             <div className="flex-1 flex flex-col min-h-0">
               {/* Video Content */}
-              <div className="flex-1 relative rounded-xl overflow-hidden shadow-lg bg-white">
+              <div className="flex-1 relative overflow-hidden bg-black sm:rounded-xl sm:shadow-lg">
                 <TelehealthVideoPanel
                   sessionTitle={sessionTitle}
                   providerName={providerName}
@@ -127,6 +138,7 @@ export function TelehealthSessionContent({
                   statusMessage={telehealth.statusMessage}
                   onRemoteContainerReady={handleRemoteContainerReady}
                   onLocalContainerReady={handleLocalContainerReady}
+                  signalStrength={telehealth.signalStrength}
                   overlayControls={
                     <TelehealthCallControls
                       variant="overlay"
@@ -139,6 +151,15 @@ export function TelehealthSessionContent({
                       onToggleMic={telehealth.toggleMic}
                       onToggleCamera={telehealth.toggleCamera}
                       onOpenDeviceSettings={telehealth.switchCamera}
+                      onSwitchMicrophone={telehealth.switchMicrophone}
+                      signalStrength={telehealth.signalStrength}
+                      audioLevel={telehealth.audioLevel}
+                      audioDevices={telehealth.audioDevices}
+                      currentAudioDevice={telehealth.currentAudioDevice}
+                      showChatButton
+                      isChatOpen={isChatOpen}
+                      chatUnreadCount={unreadCount}
+                      onToggleChat={() => setIsChatOpen(v => !v)}
                     />
                   }
                 />
@@ -159,8 +180,8 @@ export function TelehealthSessionContent({
               </div>
             </div>
 
-            {/* Right Side - Chat Panel */}
-            <div className="w-full lg:w-96 h-80 lg:h-full bg-gray-50 flex flex-col rounded-xl shadow-lg overflow-hidden">
+            {/* Right Side - Chat Panel (desktop only) */}
+            <div className="hidden lg:flex lg:w-96 lg:h-full bg-gray-50 flex-col rounded-xl shadow-lg overflow-hidden">
               {/* Discord-style Chat Header */}
               <div className="bg-gray-800 border-b border-gray-700 px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -176,7 +197,7 @@ export function TelehealthSessionContent({
                       telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'
                     }`}></div>
                   </div>
-                  
+
                   {/* Provider Info */}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white text-sm truncate">{providerName}</h3>
@@ -184,7 +205,7 @@ export function TelehealthSessionContent({
                       {telehealth.isConnected ? 'Online' : 'Offline'} • Healthcare Provider
                     </p>
                   </div>
-                  
+
                   {/* Connection Status */}
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
@@ -196,62 +217,6 @@ export function TelehealthSessionContent({
                   </div>
                 </div>
               </div>
-
-              {/* Debug Controls - Commented Out for Production */}
-              {/* 
-              {telehealth.isConnected && (
-                <div className="px-4 pb-2">
-                  <div className="bg-gray-100 rounded-lg p-2 flex items-center space-x-1">
-                    <span className="text-xs text-gray-600 mr-2">Debug:</span>
-                    <button
-                      onClick={telehealth.printParticipants}
-                      className="p-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded transition-colors"
-                      title="Print participants to console"
-                    >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-                      </svg>
-                    </button>
-                    <button
-                      onClick={telehealth.checkExistingStreams}
-                      className="p-1.5 bg-green-100 hover:bg-green-200 text-green-600 rounded transition-colors"
-                      title="Check existing streams"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={telehealth.debugPublisherState}
-                      className="p-1.5 bg-purple-100 hover:bg-purple-200 text-purple-600 rounded transition-colors"
-                      title="Debug publisher state"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={telehealth.debugSessionConnections}
-                      className="p-1.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded transition-colors"
-                      title="Debug session connections"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={telehealth.startCameraPreview}
-                      className="p-1.5 bg-red-100 hover:bg-red-200 text-red-600 rounded transition-colors"
-                      title="Start camera preview"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-              */}
 
               {/* Chat Messages */}
               <div className="flex-1 overflow-hidden bg-gray-50">
@@ -268,6 +233,24 @@ export function TelehealthSessionContent({
                 />
               </div>
             </div>
+
+            {/* Chat Launcher (mobile/tablet) - controlled, no floating button */}
+            <div className="lg:hidden">
+              <TelehealthChatLauncher
+                participantName={providerName}
+                participantRole="Doctor"
+                participantStatus={telehealth.isConnected ? "online" : "offline"}
+                messages={uiMessages}
+                onSendMessage={(content) => telehealth.sendChatMessage(content)}
+                isOpen={isChatOpen}
+                onToggle={() => setIsChatOpen(v => !v)}
+                hideTrigger
+                variant="drawer"
+                headerTitle="Meeting Chat"
+                headerSubtitle={`${telehealth.participantCount} participants in room`}
+                participantNames={[...new Set(["You", providerName, ...telehealth.participants.map(p => p.name)])]}
+              />
+            </div>
           </div>
 
       {/* Permission Request Modal */}
@@ -280,4 +263,3 @@ export function TelehealthSessionContent({
     </div>
   );
 }
-

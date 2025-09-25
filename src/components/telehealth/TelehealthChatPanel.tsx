@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -7,17 +7,18 @@ import { cn } from "@/lib/utils";
 import { Send, Paperclip, Image, File, X, Download } from "lucide-react";
 
 // Discord-style Avatar component
-function ChatAvatar({ 
-  name, 
-  isOwn = false, 
-  size = "md" 
-}: { 
-  name: string; 
-  isOwn?: boolean; 
-  size?: "sm" | "md" | "lg" 
+function ChatAvatar({
+  name,
+  isOwn = false,
+  size = "md"
+}: {
+  name: string;
+  isOwn?: boolean;
+  size?: "sm" | "md" | "lg"
 }) {
-  const getInitials = (name: string) => {
-    return name
+  const getInitials = (rawName: string) => {
+    const safe = (rawName ?? "").toString().trim() || "User";
+    return safe
       .split(' ')
       .map(n => n[0])
       .join('')
@@ -51,8 +52,9 @@ function ChatAvatar({
     "bg-rose-500"
   ];
 
+  const safeName = (name ?? "").toString().trim() || "User";
   // Generate consistent color based on name
-  const colorIndex = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % avatarColors.length;
+  const colorIndex = safeName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % avatarColors.length;
   const bgColor = avatarColors[colorIndex];
 
   return (
@@ -61,7 +63,7 @@ function ChatAvatar({
       sizeClasses[size],
       isOwn ? "bg-blue-500" : bgColor
     )}>
-      {getInitials(name)}
+      {getInitials(safeName)}
     </div>
   );
 }
@@ -91,6 +93,11 @@ interface TelehealthChatPanelProps {
   typingUsers?: Array<{ id: string; name: string; timestamp: number }>;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
+  // Drawer-style popup variant for mobile
+  variant?: 'default' | 'drawer';
+  headerTitle?: string;
+  headerSubtitle?: string;
+  participantNames?: string[];
 }
 
 
@@ -104,6 +111,11 @@ export function TelehealthChatPanel({
   typingUsers = [],
   onTypingStart,
   onTypingStop,
+  variant = 'default',
+  headerTitle = 'Meeting Chat',
+  headerSubtitle,
+  participantNames = [],
+  onClose,
 }: TelehealthChatPanelProps) {
   const [draftMessage, setDraftMessage] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -114,6 +126,16 @@ export function TelehealthChatPanel({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on Escape when used as drawer
+  useEffect(() => {
+    if (variant !== 'drawer') return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [variant, onClose]);
 
   useEffect(() => {
     const anchor = bottomAnchorRef.current;
@@ -285,97 +307,54 @@ export function TelehealthChatPanel({
       return;
     }
 
-    // Send message with attachments
-    if (attachments.length > 0) {
-      for (const file of attachments) {
-        try {
-          // Convert ALL files to base64 for sharing/downloading
-          const base64Data = await fileToBase64(file);
-          
-          // Check the actual message size that will be sent
-          const testMessage = {
-            author: "test",
-            content: trimmed || `Sent ${file.name}`,
-            type: file.type.startsWith('image/') ? 'image' : 'file',
-            attachment: {
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              lastModified: file.lastModified,
-              url: base64Data
-            },
-            timestamp: Date.now()
-          };
-          
-          const testMessageSize = new Blob([JSON.stringify(testMessage)]).size;
-          console.log('📊 Message size check:', {
-            fileName: file.name,
-            originalSize: file.size,
-            base64Size: new Blob([base64Data]).size,
-            totalMessageSize: testMessageSize,
-            sizeKB: Math.round(testMessageSize / 1024)
-          });
-          
-          // Vonage Video signaling limit is ~8KB
-          if (testMessageSize > 8000) {
-            console.warn(`⚠️ Message too large for Vonage Video signaling: ${Math.round(testMessageSize / 1024)}KB`);
-            alert(`File "${file.name}" is too large to send via chat. The file becomes ${Math.round(testMessageSize / 1024)}KB when encoded, which exceeds the chat limit. Please use a smaller file.`);
-            continue; // Skip this file and try the next one
-          }
-          
-          const attachmentData: any = {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            lastModified: file.lastModified,
-            url: base64Data // Always include base64 data for download
-          };
-          
-          const messageType = file.type.startsWith('image/') ? 'image' : 'file';
-          // For images, don't show "Sent filename" text - just show the image
-          // For files, show the filename as text
-          const content = file.type.startsWith('image/') 
-            ? (trimmed || '') // Empty or custom message for images
-            : (trimmed || `Sent ${file.name}`); // Show filename for files
-          
-          console.log('📤 Sending file attachment:', {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            hasBase64: !!base64Data
-          });
-          
-          onSendMessage(content, messageType, attachmentData);
-        } catch (error) {
-          console.error('Error processing file:', error);
-          // Send without base64 if conversion fails
-          const attachmentData = {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            lastModified: file.lastModified
-          };
-          const messageType = file.type.startsWith('image/') ? 'image' : 'file';
-          const content = file.type.startsWith('image/') 
-            ? (trimmed || '') // Empty or custom message for images
-            : (trimmed || `Sent ${file.name}`); // Show filename for files
-          onSendMessage(content, messageType, attachmentData);
-        }
-      }
-    } else {
-      onSendMessage(trimmed);
-    }
-    
+    // Text-only messages
+    onSendMessage(trimmed);
+
     setDraftMessage("");
-    setAttachments([]);
     onTypingStop?.();
   };
 
+  const isDrawer = variant === 'drawer';
+
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className={cn("flex h-full min-h-0 flex-col", isDrawer ? "bg-slate-900 text-white rounded-t-2xl" : "bg-gray-50")}>
+      {/* Drawer Header */}
+      {isDrawer && (
+        <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+          <div className="flex flex-col gap-2 px-4 pt-2 pb-3">
+            <div className="mx-auto h-1 w-12 rounded-full bg-white/20" />
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold text-base">{headerTitle}</h3>
+                {headerSubtitle && <p className="text-emerald-400 text-xs">{headerSubtitle}</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                {participantNames.length > 0 && (
+                  <div className="flex -space-x-2">
+                    {participantNames.slice(0,5).map((n, i) => (
+                      <div key={i} className="ring-2 ring-slate-900 rounded-full">
+                        <ChatAvatar name={n || "Participant"} size="sm" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onClose?.()}
+                  aria-label="Close chat"
+                  className="ml-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chat Messages Area */}
-      <div className="flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} className="h-full overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div ref={scrollContainerRef} className="h-full overflow-y-auto overscroll-contain scrollbar-hide p-3 sm:p-4">
           {messages.map((message, index) => {
             const isFirstMessage = index === 0;
             const isNewAuthor = index === 0 || messages[index - 1].author !== message.author;
@@ -386,22 +365,24 @@ export function TelehealthChatPanel({
               <div
                 key={message.id}
                 className={cn(
-                  "group relative flex gap-3 px-4 py-1 hover:bg-gray-50/50 transition-colors",
-                  isNewAuthor && "mt-4",
-                  !isNewAuthor && "mt-0.5"
+                  "group relative flex gap-3 px-3 sm:px-4 py-1.5 transition-colors",
+                  isDrawer ? "hover:bg-white/5" : "hover:bg-gray-50/50",
+                  isNewAuthor && "mt-3",
+                  !isNewAuthor && "mt-0.5",
+                  message.isOwn ? "flex-row-reverse text-right items-end" : "items-end"
                 )}
               >
                 {/* Avatar - only show for first message from each author */}
                 <div className="flex-shrink-0">
                   {isNewAuthor ? (
-                    <ChatAvatar 
-                      name={message.isOwn ? "You" : message.author} 
-                      isOwn={message.isOwn} 
-                      size="md" 
+                    <ChatAvatar
+                      name={message.isOwn ? "You" : (message.author || "Participant")}
+                      isOwn={message.isOwn}
+                      size="md"
                     />
                   ) : (
                     <div className="w-10 h-10 flex items-center justify-center">
-                      <div className="w-0.5 h-6 bg-gray-300 rounded-full"></div>
+                      <div className={cn("w-0.5 h-6 rounded-full", isDrawer ? "bg-slate-600" : "bg-gray-300")}></div>
                     </div>
                   )}
                 </div>
@@ -410,25 +391,31 @@ export function TelehealthChatPanel({
                 <div className="flex-1 min-w-0">
                   {/* Author name and timestamp - only show for first message from each author */}
                   {isNewAuthor && (
-                    <div className="flex items-baseline gap-2 mb-1">
+                    <div className={cn("flex items-baseline gap-2 mb-1", message.isOwn && "justify-end")}>
                       <span className={cn(
                         "font-semibold text-sm",
-                        message.isOwn ? "text-blue-600" : "text-gray-900"
+                        isDrawer ? "text-white" : message.isOwn ? "text-blue-600" : "text-gray-900"
                       )}>
-                        {message.isOwn ? "You" : message.author}
+                        {message.isOwn ? "You" : (message.author || "Participant")}
                       </span>
-                      <span className="text-xs text-gray-500 font-medium">
+                      <span className={cn("text-xs font-medium", isDrawer ? "text-slate-400" : "text-gray-500")}>
                         {message.authoredAt}
                       </span>
                     </div>
                   )}
-                  
+
                   {/* Message content */}
                   <div className="relative">
                     <div
                       className={cn(
-                        "text-sm break-words overflow-wrap-anywhere leading-relaxed",
-                        message.isOwn ? "text-blue-900" : "text-gray-900"
+                        "inline-block max-w-[80%] px-3 py-2 rounded-2xl text-sm break-words leading-relaxed",
+                        isDrawer
+                          ? message.isOwn
+                            ? "bg-emerald-600 text-white"
+                            : "bg-slate-700 text-white"
+                          : message.isOwn
+                            ? "bg-blue-500 text-white"
+                            : "bg-gray-200 text-gray-900"
                       )}
                     >
                   {/* Attachment display */}
@@ -522,11 +509,11 @@ export function TelehealthChatPanel({
           {typingUsers.length > 0 && (() => {
             console.log('👀 Showing typing indicator for:', typingUsers.map(u => u.name));
             return (
-              <div className="flex gap-3 px-4 py-2 bg-gray-50/50 border-l-2 border-blue-200">
+              <div className={cn("flex gap-3 px-4 py-2 border-l-2", isDrawer ? "bg-slate-800/60 border-emerald-400/50" : "bg-gray-50/50 border-blue-200")}>
               {/* Avatar for typing user */}
               <div className="flex-shrink-0">
                 <ChatAvatar 
-                  name={typingUsers[0].name} 
+                  name={typingUsers[0].name || "Participant"} 
                   isOwn={false} 
                   size="md" 
                 />
@@ -539,7 +526,7 @@ export function TelehealthChatPanel({
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
-                <span className="text-sm text-gray-600 font-medium animate-pulse">
+                <span className={cn("text-sm font-medium animate-pulse", isDrawer ? "text-slate-300" : "text-gray-600")}>
                   {typingUsers.map(user => user.name).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
                 </span>
               </div>
@@ -551,118 +538,27 @@ export function TelehealthChatPanel({
         </div>
       </div>
 
-      {/* Attachments Preview */}
-      {attachments.length > 0 && (
-        <div className="border-t border-gray-300 p-3 bg-gray-100">
-          <div className="flex flex-wrap gap-2">
-            {attachments.map((file, index) => (
-              <div key={index} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-gray-300 shadow-sm">
-                {file.type.startsWith('image/') ? (
-                  <div className="flex items-center gap-2">
-                    <img 
-                      src={URL.createObjectURL(file)} 
-                      alt={file.name}
-                      className="h-8 w-8 rounded object-cover"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-medium truncate max-w-[100px]">{file.name}</span>
-                      <span className="text-xs text-gray-500">{formatFileSize(file.size)}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <File className="h-4 w-4 text-gray-500" />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-medium truncate max-w-[100px]">{file.name}</span>
-                      <span className="text-xs text-gray-500">{formatFileSize(file.size)}</span>
-                    </div>
-                  </>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-5 w-5 p-0 ml-auto hover:bg-gray-100"
-                  onClick={() => removeAttachment(index)}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Message Input */}
-      <div className="border-t border-gray-300 p-3 bg-gray-100">
+      <div className={cn("p-3", isDrawer ? "border-t border-slate-800 bg-slate-900" : "border-t border-gray-300 bg-gray-100")}>
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <div className="flex-1 relative">
-            <div className="flex items-center bg-white rounded-lg border border-gray-300 shadow-sm">
-              {/* Attachment Button */}
-              <div className="relative">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700"
-                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                
-                {/* Attachment Menu */}
-                {showAttachmentMenu && (
-                  <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-10">
-                    <div className="flex flex-col gap-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="justify-start text-left"
-                        onClick={() => {
-                          imageInputRef.current?.click();
-                          setShowAttachmentMenu(false);
-                        }}
-                      >
-                        <Image className="h-4 w-4 mr-2" />
-                        Image
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="justify-start text-left"
-                        onClick={() => {
-                          fileInputRef.current?.click();
-                          setShowAttachmentMenu(false);
-                        }}
-                      >
-                        <File className="h-4 w-4 mr-2" />
-                        File
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
+            <div className={cn("flex items-center rounded-full border shadow-sm pl-3", isDrawer ? "bg-slate-800 border-slate-700" : "bg-white border-gray-300")}>
               {/* Text Input */}
               <Textarea
                 value={draftMessage}
                 onChange={(event) => {
                   setDraftMessage(event.target.value);
                   handleTyping();
-                  // Auto-resize textarea
                   const textarea = event.target;
                   textarea.style.height = 'auto';
-                  textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px'; // Max 2 rows (40px per row)
+                  textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
                 }}
-                placeholder="Write your message..."
-                className="flex-1 min-h-[36px] sm:min-h-[40px] max-h-[80px] resize-none bg-transparent border-0 text-gray-900 placeholder-gray-500 px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm focus:ring-0 focus:outline-none overflow-hidden"
+                placeholder="Type something here"
+                className={cn("flex-1 min-h-[40px] sm:min-h-[44px] max-h-[80px] resize-none bg-transparent border-0 px-2 py-2 sm:px-4 sm:py-3 text-sm focus:ring-0 focus:outline-none overflow-hidden", isDrawer ? "text-white placeholder-slate-400" : "text-gray-900 placeholder-gray-500")}
                 rows={1}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    // Create a synthetic form event for handleSubmit
                     const formEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as React.FormEvent<HTMLFormElement>;
                     handleSubmit(formEvent);
                   }
@@ -670,34 +566,16 @@ export function TelehealthChatPanel({
               />
               
               {/* Send Button */}
-              <Button 
-                type="submit" 
-                disabled={!draftMessage.trim() && attachments.length === 0}
-                className="m-1 h-8 w-8 rounded-lg bg-blue-500 p-0 text-white hover:bg-blue-600 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              <Button
+                type="submit"
+                disabled={!draftMessage.trim()}
+                className={cn("my-1 mr-1 h-9 w-9 p-0 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors", isDrawer ? "rounded-full bg-emerald-500 text-white hover:bg-emerald-600" : "rounded-full bg-blue-500 text-white hover:bg-blue-600")}
               >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </form>
-        
-        {/* Hidden file inputs */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileSelect}
-          accept="*/*"
-        />
-        <input
-          ref={imageInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileSelect}
-          accept="image/*"
-        />
       </div>
     </div>
   );
