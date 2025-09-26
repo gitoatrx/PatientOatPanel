@@ -1,112 +1,118 @@
 import * as Ably from 'ably';
 
-/**
- * Ably Video Call Service for patient telehealth sessions
- * Handles listening for doctor connect events in the waiting room
- */
-
 export interface AblyConnectEvent {
   event: 'connect';
-  metadata: any[];
+  metadata: unknown[];
   context: {
     actor: {
-      type: 'doctor';
-      id: number;
+      id: string;
+      name: string;
+      role: string;
     };
-    clinic_id: number;
-    appointment_id: number;
+    appointmentId: string;
+    timestamp: string;
   };
-  published_at: string;
 }
 
-export interface AblyVideoCallServiceConfig {
+export interface AblyVideoCallServiceOptions {
   appointmentId: string;
   onDoctorConnect: (event: AblyConnectEvent) => void;
-  onError?: (error: Error) => void;
+  onError: (error: Error) => void;
 }
 
 export class AblyVideoCallService {
   private ably: Ably.Realtime | null = null;
   private channel: Ably.RealtimeChannel | null = null;
   private isConnected = false;
-  private config: AblyVideoCallServiceConfig;
+  private connectionError: Error | null = null;
 
-  constructor(config: AblyVideoCallServiceConfig) {
-    this.config = config;
-  }
+  constructor(private options: AblyVideoCallServiceOptions) {}
 
-  /**
-   * Initialize and connect to Ably
-   */
   async connect(): Promise<void> {
     try {
-      const apiKey = process.env.NEXT_PUBLIC_ABLY_LISTEN_KEY;
-      const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'clinic-video-call';
-
-      if (!apiKey) {
-        throw new Error('NEXT_PUBLIC_ABLY_LISTEN_KEY is not defined');
+      console.log('🔌 Connecting to Ably for video call events...');
+      
+      // Get Ably key from environment
+      const ablyKey = process.env.NEXT_PUBLIC_ABLY_LISTEN_KEY;
+      if (!ablyKey) {
+        throw new Error('NEXT_PUBLIC_ABLY_LISTEN_KEY is not configured');
       }
 
-      console.log('🔌 Initializing Ably connection...');
-      
-      this.ably = new Ably.Realtime({
-        key: apiKey,
-        clientId: `patient-${this.config.appointmentId}`,
+      // Create Ably client
+      const ably = new Ably.Realtime({
+        key: ablyKey,
+        clientId: `patient-${this.options.appointmentId}`,
       });
 
-      // Create channel name using the appointment ID
-      const channelName = `${channelPrefix}.${this.config.appointmentId}`;
-      console.log('📡 Connecting to Ably channel:', channelName);
+      this.ably = ably;
 
-      this.channel = this.ably.channels.get(channelName);
+      // Wait for connection
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Ably connection timeout'));
+        }, 10000);
 
-      // Listen for connection state changes
-      this.ably.connection.on('connected', () => {
-        console.log('✅ Ably connected successfully');
-        this.isConnected = true;
+        ably.connection.on('connected', () => {
+          clearTimeout(timeout);
+          console.log('✅ Connected to Ably');
+          this.isConnected = true;
+          this.connectionError = null;
+          resolve();
+        });
+
+        ably.connection.on('failed', (stateChange) => {
+          clearTimeout(timeout);
+          const error = new Error(`Ably connection failed: ${stateChange.reason}`);
+          console.error('❌ Ably connection failed:', error);
+          this.connectionError = error;
+          this.options.onError(error);
+          reject(error);
+        });
       });
 
-      this.ably.connection.on('disconnected', () => {
-        console.log('❌ Ably disconnected');
-        this.isConnected = false;
-      });
+      // Subscribe to doctor connect events
+      const channelName = `video-call-${this.options.appointmentId}`;
+      const channel = ably.channels.get(channelName);
+      this.channel = channel;
 
-      this.ably.connection.on('failed', (error) => {
-        console.error('❌ Ably connection failed:', error);
-        this.isConnected = false;
-        this.config.onError?.(new Error(`Ably connection failed: ${error.message}`));
-      });
+      console.log(`📡 Subscribing to channel: ${channelName}`);
 
-      // Subscribe to connect events
-      this.channel.subscribe('connect', (message) => {
-        console.log('📨 Received Ably connect event:', message.data);
+      channel.subscribe('doctor-connect', (message) => {
+        console.log('👨‍⚕️ Received doctor connect event:', message.data);
         
         try {
-          const eventData = message.data as AblyConnectEvent;
-          
-          // Verify this is a doctor connect event
-          if (eventData.event === 'connect' && eventData.context.actor.type === 'doctor') {
-            console.log('👨‍⚕️ Doctor connected! Calling onDoctorConnect callback');
-            this.config.onDoctorConnect(eventData);
-          }
+          const event: AblyConnectEvent = {
+            event: 'connect',
+            metadata: message.data.metadata || [],
+            context: {
+              actor: {
+                id: message.data.doctorId || 'unknown',
+                name: message.data.doctorName || 'Doctor',
+                role: 'doctor',
+              },
+              appointmentId: this.options.appointmentId,
+              timestamp: new Date().toISOString(),
+            },
+          };
+
+          this.options.onDoctorConnect(event);
         } catch (error) {
-          console.error('❌ Error processing Ably connect event:', error);
-          this.config.onError?.(error as Error);
+          console.error('❌ Error processing doctor connect event:', error);
+          this.options.onError(error instanceof Error ? error : new Error('Unknown error processing doctor connect event'));
         }
       });
 
-      console.log('🎧 Ably video call service initialized and listening for doctor connect events');
+      console.log('✅ Ably video call service connected and listening');
 
     } catch (error) {
-      console.error('❌ Failed to initialize Ably video call service:', error);
-      this.config.onError?.(error as Error);
-      throw error;
+      console.error('❌ Failed to connect to Ably:', error);
+      const errorObj = error instanceof Error ? error : new Error('Unknown Ably connection error');
+      this.connectionError = errorObj;
+      this.options.onError(errorObj);
+      throw errorObj;
     }
   }
 
-  /**
-   * Disconnect from Ably
-   */
   async disconnect(): Promise<void> {
     try {
       console.log('🔌 Disconnecting from Ably...');
@@ -117,29 +123,27 @@ export class AblyVideoCallService {
       }
 
       if (this.ably) {
-        await this.ably.close();
+        this.ably.close();
         this.ably = null;
       }
 
       this.isConnected = false;
-      console.log('✅ Ably disconnected successfully');
+      this.connectionError = null;
+      console.log('✅ Disconnected from Ably');
     } catch (error) {
       console.error('❌ Error disconnecting from Ably:', error);
     }
   }
 
-  /**
-   * Get connection status
-   */
-  getConnectionStatus(): boolean {
-    return this.isConnected;
+  getConnectionStatus() {
+    return {
+      isConnected: this.isConnected,
+      connectionError: this.connectionError,
+    };
   }
 }
 
-/**
- * Hook to use Ably Video Call Service
- */
-export function useAblyVideoCallService(config: AblyVideoCallServiceConfig) {
-  return new AblyVideoCallService(config);
+// Hook wrapper for React components
+export function useAblyVideoCallService(options: AblyVideoCallServiceOptions) {
+  return new AblyVideoCallService(options);
 }
-

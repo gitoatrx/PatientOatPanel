@@ -80,6 +80,7 @@ interface UseVonageSessionResult {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   signalStrength: 'excellent' | 'good' | 'fair' | 'poor';
+  networkQuality: 'excellent' | 'good' | 'fair' | 'poor';
   audioLevel: number;
   audioDevices: Array<{ deviceId?: string; label?: string }>;
   currentAudioDevice: string | null;
@@ -362,7 +363,72 @@ export function useVonageSession({
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [signalStrength, setSignalStrength] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const [audioLevel, setAudioLevel] = useState(0);
+  const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Function to assess network quality from WebRTC stats
+  const assessNetworkQuality = useCallback(async (session: any) => {
+    try {
+      if (!session || !session.connection) return;
+
+      // Get WebRTC stats from the session
+      const stats = await session.getStats();
+      let rtt = 0;
+      let packetLoss = 0;
+      let jitter = 0;
+      let bitrate = 0;
+
+      // Parse stats to get network metrics
+      stats.forEach((report: any) => {
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          rtt = report.currentRoundTripTime * 1000 || 0; // Convert to ms
+        }
+        if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+          packetLoss = (report.packetsLost / (report.packetsReceived + report.packetsLost)) * 100 || 0;
+          jitter = report.jitter * 1000 || 0; // Convert to ms
+        }
+        if (report.type === 'outbound-rtp' && report.mediaType === 'audio') {
+          bitrate = report.bytesSent * 8 / 1000 || 0; // Convert to kbps
+        }
+      });
+
+      console.log('📊 WebRTC Stats:', { rtt, packetLoss, jitter, bitrate });
+
+      // Assess quality based on metrics
+      let quality: 'excellent' | 'good' | 'fair' | 'poor' = 'good';
+
+      // RTT assessment (lower is better)
+      if (rtt < 100) {
+        quality = 'excellent';
+      } else if (rtt < 200) {
+        quality = 'good';
+      } else if (rtt < 400) {
+        quality = 'fair';
+      } else {
+        quality = 'poor';
+      }
+
+      // Adjust based on packet loss (lower is better)
+      if (packetLoss > 5) {
+        quality = 'poor';
+      } else if (packetLoss > 2) {
+        quality = quality === 'excellent' ? 'good' : quality;
+      }
+
+      // Adjust based on jitter (lower is better)
+      if (jitter > 50) {
+        quality = quality === 'excellent' ? 'good' : quality === 'good' ? 'fair' : 'poor';
+      }
+
+      console.log('📊 Assessed network quality:', quality);
+      setNetworkQuality(quality);
+      setSignalStrength(quality);
+
+    } catch (error) {
+      console.warn('Failed to get WebRTC stats:', error);
+    }
+  }, []);
 
 
 
@@ -1076,6 +1142,41 @@ export function useVonageSession({
       session.on("sessionReconnected", handleSessionReconnected);
       session.on("sessionDisconnected", handleSessionDisconnected);
 
+      // Add network quality monitoring
+      session.on("networkQuality", (event: any) => {
+        console.log('📊 Network quality update:', event);
+        const quality = event.quality || 'good';
+        setNetworkQuality(quality);
+        setSignalStrength(quality); // Update signal strength based on network quality
+      });
+
+      // Start WebRTC stats monitoring
+      const startStatsMonitoring = () => {
+        if (statsIntervalRef.current) {
+          clearInterval(statsIntervalRef.current);
+        }
+        
+        // Monitor stats every 5 seconds
+        statsIntervalRef.current = setInterval(() => {
+          assessNetworkQuality(session);
+        }, 5000);
+        
+        // Initial assessment
+        assessNetworkQuality(session);
+      };
+
+      // Start monitoring when session is connected
+      if (session.connection) {
+        startStatsMonitoring();
+      } else {
+        // Wait for connection to be established
+        const handleSessionConnected = () => {
+          startStatsMonitoring();
+          session.off("sessionConnected", handleSessionConnected);
+        };
+        session.on("sessionConnected", handleSessionConnected);
+      }
+
       const videoInputs = await listVideoInputs(OT);
       videoDevicesRef.current = videoInputs;
       currentVideoDeviceRef.current = videoInputs[0]?.deviceId ?? null;
@@ -1168,16 +1269,8 @@ export function useVonageSession({
           const level = event.audioLevel || 0;
           setAudioLevel(level);
           
-          // Update signal strength based on audio level
-          if (level > 0.7) {
-            setSignalStrength('excellent');
-          } else if (level > 0.4) {
-            setSignalStrength('good');
-          } else if (level > 0.1) {
-            setSignalStrength('fair');
-          } else {
-            setSignalStrength('poor');
-          }
+          // Note: Signal strength is now based on network quality, not audio level
+          // Audio level is kept separate for microphone input monitoring
           
           // Detect speaking (threshold for speaking detection)
           const isSpeaking = level > 0.05 && !isMicMuted;
@@ -1888,6 +1981,15 @@ export function useVonageSession({
     setError(undefined);
   }, []);
 
+  // Cleanup stats monitoring
+  useEffect(() => {
+    return () => {
+      if (statsIntervalRef.current) {
+        clearInterval(statsIntervalRef.current);
+      }
+    };
+  }, []);
+
   const sendChatMessage = useCallback((content: string, type: 'text' | 'image' | 'file' = 'text', attachment?: any) => {
     console.log('�� sendChatMessage called:', {
       content,
@@ -2331,6 +2433,7 @@ export function useVonageSession({
       isAudioEnabled,
       isVideoEnabled,
       signalStrength,
+      networkQuality,
       audioLevel,
       audioDevices: audioDevicesRef.current,
       currentAudioDevice: currentAudioDeviceRef.current,
@@ -2341,6 +2444,6 @@ export function useVonageSession({
       stopTypingIndicator,
       clearChatHistory,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
+    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, networkQuality, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory, assessNetworkQuality],
   );
 }
