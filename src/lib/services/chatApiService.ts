@@ -81,10 +81,27 @@ export class ChatApiService {
     return messages.map(msg => ({
       id: msg.id.toString(),
       author: msg.sender_name,
-      timestamp: msg.sent_at,
+      timestamp: this.formatTimestamp(msg.sent_at),
       content: msg.message,
       isOwn: msg.sender_type === 'patient'
     }));
+  }
+
+  /**
+   * Format timestamp to match Vonage format (HH:MM AM/PM)
+   */
+  private formatTimestamp(isoString: string): string {
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.warn('Failed to format timestamp:', isoString, error);
+      return isoString; // Fallback to original string
+    }
   }
 }
 

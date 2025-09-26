@@ -46,6 +46,7 @@ export function TelehealthSessionContent({
   // Pre-join flow state
   const [showPreJoin, setShowPreJoin] = useState(true);
   const [pendingJoin, setPendingJoin] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   
   // Waiting room state
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
@@ -83,6 +84,24 @@ export function TelehealthSessionContent({
     localContainer,
   });
 
+  // Safe join handler that prevents multiple clicks
+  const handleJoinCall = useCallback(async () => {
+    if (isJoining || telehealth.isBusy || telehealth.isConnected) {
+      console.log('🚫 Join call blocked - already in progress or connected');
+      return;
+    }
+
+    try {
+      setIsJoining(true);
+      console.log('🚀 Starting join call process...');
+      await telehealth.join();
+    } catch (error) {
+      console.error('❌ Join call failed:', error);
+    } finally {
+      setIsJoining(false);
+    }
+  }, [isJoining, telehealth.isBusy, telehealth.isConnected, telehealth.join]);
+
   // Merge previous messages (API) with current messages (Vonage) for complete chat history
   const uiMessages: TelehealthChatMessage[] = useMemo(() => {
     // Start with previous messages from API (chat history)
@@ -90,9 +109,11 @@ export function TelehealthSessionContent({
     
     // Add Vonage messages (real-time) - avoid duplicates
     telehealth.chatMessages.forEach(vonageMsg => {
-      const exists = allMessages.some(apiMsg => 
-        apiMsg.content === vonageMsg.content && 
-        Math.abs(new Date(apiMsg.authoredAt).getTime() - new Date(vonageMsg.timestamp).getTime()) < 5000
+      // Check if this Vonage message already exists in allMessages (including other Vonage messages)
+      const exists = allMessages.some(existingMsg => 
+        existingMsg.content === vonageMsg.content && 
+        existingMsg.author === vonageMsg.author &&
+        Math.abs(new Date(existingMsg.authoredAt).getTime() - new Date(vonageMsg.timestamp).getTime()) < 5000
       );
       
       if (!exists) {
@@ -267,7 +288,13 @@ export function TelehealthSessionContent({
   };
 
   const onJoinWaitlist = async () => {
+    if (isJoining || telehealth.isBusy || telehealth.isConnected) {
+      console.log('🚫 Join waitlist blocked - already in progress or connected');
+      return;
+    }
+
     try {
+      setIsJoining(true);
       // 1. Request camera and microphone permissions
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       stream.getTracks().forEach(t => t.stop());
@@ -321,12 +348,19 @@ export function TelehealthSessionContent({
         console.error('❌ Error joining waitlist:', e);
         // You might want to show an error message to the user here
       }
+    } finally {
+      setIsJoining(false);
     }
   };
 
 
   // Development mode - Direct join call (bypasses waiting room)
   const onJoinCallDirect = async () => {
+    if (isJoining || telehealth.isBusy || telehealth.isConnected) {
+      console.log('🚫 [DEV] Direct join blocked - already in progress or connected');
+      return;
+    }
+
     try {
       console.log('🚀 [DEV] Joining call directly...');
       
@@ -380,9 +414,10 @@ export function TelehealthSessionContent({
               size="lg"
               className="w-full sm:w-auto"
               onClick={onJoinWaitlist}
+              disabled={isJoining || telehealth.isBusy}
               aria-label="Join the waitlist"
             >
-              Join The Waitlist
+              {isJoining || telehealth.isBusy ? "Joining..." : "Join The Waitlist"}
             </Button>
             
             {/* Development mode - Direct join button */}
@@ -393,9 +428,10 @@ export function TelehealthSessionContent({
                 size="lg"
                 className="w-full sm:w-auto"
                 onClick={onJoinCallDirect}
+                disabled={isJoining || telehealth.isBusy}
                 aria-label="Join call directly (dev mode)"
               >
-                🚀 Join Call (Dev)
+                {isJoining || telehealth.isBusy ? "Joining..." : "🚀 Join Call (Dev)"}
               </Button>
             )}
           </div>
@@ -501,10 +537,10 @@ export function TelehealthSessionContent({
                 <TelehealthCallControls
                   variant="overlay"
                   isConnected={telehealth.isConnected}
-                  isBusy={telehealth.isBusy}
+                  isBusy={telehealth.isBusy || isJoining}
                   isMicMuted={telehealth.isMicMuted}
                   isCameraOff={telehealth.isCameraOff}
-                  onJoin={() => { void telehealth.join(); }}
+                  onJoin={handleJoinCall}
                   onLeave={telehealth.leave}
                   onToggleMic={telehealth.toggleMic}
                   onToggleCamera={telehealth.toggleCamera}
