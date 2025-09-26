@@ -120,6 +120,7 @@ export function TelehealthChatPanel({
   const [draftMessage, setDraftMessage] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -149,24 +150,31 @@ export function TelehealthChatPanel({
     console.log('👥 Typing users changed:', typingUsers);
   }, [typingUsers]);
 
-  // Handle typing indicators
+  // Handle typing indicators with enhanced feedback
   const handleTyping = () => {
     if (!onTypingStart) {
       console.log('❌ No onTypingStart function provided');
       return;
     }
     
-    console.log('⌨️ Typing started');
-    onTypingStart();
+    // Set local typing state
+    if (!isUserTyping) {
+      setIsUserTyping(true);
+      console.log('⌨️ Typing started');
+      onTypingStart();
+    }
     
+    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
+    // Set new timeout to stop typing indicator after 2 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
       console.log('⌨️ Typing stopped');
+      setIsUserTyping(false);
       onTypingStop?.();
-    }, 1000);
+    }, 2000); // Increased to 2 seconds for better UX
   };
 
   // Handle file attachments
@@ -311,6 +319,7 @@ export function TelehealthChatPanel({
     onSendMessage(trimmed);
 
     setDraftMessage("");
+    setIsUserTyping(false);
     onTypingStop?.();
   };
 
@@ -509,28 +518,37 @@ export function TelehealthChatPanel({
           {typingUsers.length > 0 && (() => {
             console.log('👀 Showing typing indicator for:', typingUsers.map(u => u.name));
             return (
-              <div className={cn("flex gap-3 px-4 py-2 border-l-2", isDrawer ? "bg-slate-800/60 border-emerald-400/50" : "bg-gray-50/50 border-blue-200")}>
-              {/* Avatar for typing user */}
-              <div className="flex-shrink-0">
-                <ChatAvatar 
-                  name={typingUsers[0].name || "Participant"} 
-                  isOwn={false} 
-                  size="md" 
-                />
-              </div>
-              
-              {/* Typing indicator */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              <div className={cn(
+                "flex gap-3 px-4 py-3 border-l-2 transition-all duration-300 ease-in-out",
+                isDrawer 
+                  ? "bg-slate-800/60 border-emerald-400/50 backdrop-blur-sm" 
+                  : "bg-gray-50/50 border-blue-200 backdrop-blur-sm"
+              )}>
+                {/* Avatar for typing user */}
+                <div className="flex-shrink-0">
+                  <ChatAvatar 
+                    name={typingUsers[0].name || "Participant"} 
+                    isOwn={false} 
+                    size="md" 
+                  />
                 </div>
-                <span className={cn("text-sm font-medium animate-pulse", isDrawer ? "text-slate-300" : "text-gray-600")}>
-                  {typingUsers.map(user => user.name).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
-                </span>
+                
+                {/* Typing indicator with enhanced animation */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDuration: '1.4s' }}></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}></div>
+                  </div>
+                  <span className={cn(
+                    "text-sm font-medium transition-opacity duration-300",
+                    isDrawer ? "text-slate-300" : "text-gray-600"
+                  )}>
+                    {typingUsers.map(user => user.name).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing
+                    <span className="animate-pulse">...</span>
+                  </span>
+                </div>
               </div>
-            </div>
             );
           })()}
           
@@ -542,7 +560,13 @@ export function TelehealthChatPanel({
       <div className={cn("p-3", isDrawer ? "border-t border-slate-800 bg-slate-900" : "border-t border-gray-300 bg-gray-100")}>
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <div className="flex-1 relative">
-            <div className={cn("flex items-center rounded-full border shadow-sm pl-3", isDrawer ? "bg-slate-800 border-slate-700" : "bg-white border-gray-300")}>
+            <div className={cn(
+              "flex items-center rounded-full border shadow-sm pl-3 transition-all duration-200",
+              isDrawer 
+                ? "bg-slate-800 border-slate-700" 
+                : "bg-white border-gray-300",
+              isUserTyping && "ring-2 ring-blue-500/20 border-blue-400"
+            )}>
               {/* Text Input */}
               <Textarea
                 value={draftMessage}
@@ -573,6 +597,17 @@ export function TelehealthChatPanel({
               >
                 <Send className="h-4 w-4" />
               </Button>
+              
+              {/* Typing indicator for current user */}
+              {isUserTyping && (
+                <div className="flex items-center gap-1 mr-2">
+                  <div className="flex space-x-1">
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDuration: '1s' }}></div>
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1s' }}></div>
+                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1s' }}></div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </form>

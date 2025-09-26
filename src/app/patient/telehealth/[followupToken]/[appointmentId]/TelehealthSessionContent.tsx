@@ -48,6 +48,9 @@ export function TelehealthSessionContent({
   const [pendingJoin, setPendingJoin] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   
+  // Picture-in-Picture state
+  const [isPictureInPicture, setIsPictureInPicture] = useState(false);
+  
   // Waiting room state
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [doctorConnected, setDoctorConnected] = useState(false);
@@ -101,6 +104,70 @@ export function TelehealthSessionContent({
       setIsJoining(false);
     }
   }, [isJoining, telehealth.isBusy, telehealth.isConnected, telehealth.join]);
+
+  // Picture-in-Picture toggle handler
+  const handleTogglePictureInPicture = useCallback(async () => {
+    console.log('🎬 Main PiP: Toggle requested');
+    console.log('🎬 Main PiP: Current state:', { isPictureInPicture, documentPiP: !!document.pictureInPictureElement });
+    
+    try {
+      if (isPictureInPicture) {
+        console.log('🎬 Main PiP: Exiting Picture-in-Picture mode');
+        if (document.exitPictureInPicture) {
+          await document.exitPictureInPicture();
+          console.log('✅ Main PiP: Successfully exited Picture-in-Picture');
+        }
+      } else if (document.pictureInPictureEnabled) {
+        console.log('🎬 Main PiP: Entering Picture-in-Picture mode');
+        
+        // Try to find a video element first (preferred for PiP)
+        const videoElement = document.querySelector('[data-video-panel] video') as HTMLVideoElement;
+        console.log('🎬 Main PiP: Found video element:', videoElement);
+        
+        if (videoElement && videoElement.requestPictureInPicture) {
+          console.log('🎬 Main PiP: Using video element for PiP...');
+          await videoElement.requestPictureInPicture();
+          console.log('✅ Main PiP: Successfully entered Picture-in-Picture via video element');
+        } else {
+          // Fallback to video panel element
+          const videoPanel = document.querySelector('[data-video-panel]') as HTMLElement & {
+            requestPictureInPicture?: () => Promise<PictureInPictureWindow>;
+          };
+          
+          console.log('🎬 Main PiP: Video element not found, trying video panel:', videoPanel);
+          
+          if (videoPanel && videoPanel.requestPictureInPicture) {
+            console.log('🎬 Main PiP: Calling requestPictureInPicture on panel...');
+            await videoPanel.requestPictureInPicture();
+            console.log('✅ Main PiP: Successfully entered Picture-in-Picture via panel');
+          } else {
+            console.warn('❌ Main PiP: Neither video element nor panel supports requestPictureInPicture');
+            console.warn('❌ Main PiP: Available methods on panel:', Object.getOwnPropertyNames(videoPanel || {}));
+            
+            // Last resort: try to find any video element in the document
+            const anyVideo = document.querySelector('video') as HTMLVideoElement;
+            if (anyVideo && anyVideo.requestPictureInPicture) {
+              console.log('🎬 Main PiP: Found fallback video element:', anyVideo);
+              await anyVideo.requestPictureInPicture();
+              console.log('✅ Main PiP: Successfully entered Picture-in-Picture via fallback video');
+            } else {
+              console.error('❌ Main PiP: No video elements found that support Picture-in-Picture');
+            }
+          }
+        }
+      } else {
+        console.warn('❌ Main PiP: Picture-in-Picture is not supported or enabled');
+        console.warn('❌ Main PiP: Browser support check:', {
+          pictureInPictureEnabled: document.pictureInPictureEnabled,
+          isSecureContext: window.isSecureContext,
+          protocol: window.location.protocol,
+          userAgent: navigator.userAgent
+        });
+      }
+    } catch (error) {
+      console.error('❌ Main PiP: Error toggling Picture-in-Picture:', error);
+    }
+  }, [isPictureInPicture]);
 
   // Merge previous messages (API) with current messages (Vonage) for complete chat history
   const uiMessages: TelehealthChatMessage[] = useMemo(() => {
@@ -189,6 +256,36 @@ export function TelehealthSessionContent({
       }
     };
   }, [ablyService]);
+
+  // Handle Picture-in-Picture events
+  useEffect(() => {
+    const handlePictureInPictureChange = () => {
+      setIsPictureInPicture(!!document.pictureInPictureElement);
+    };
+
+    // Log browser support info
+    console.log('🔍 PiP Browser Support Check:', {
+      pictureInPictureEnabled: document.pictureInPictureEnabled,
+      isSecureContext: window.isSecureContext,
+      protocol: window.location.protocol,
+      userAgent: navigator.userAgent,
+      hasRequestPictureInPicture: 'requestPictureInPicture' in document.documentElement,
+      hasExitPictureInPicture: 'exitPictureInPicture' in document
+    });
+
+    // Check if PiP is supported
+    if (document.pictureInPictureEnabled) {
+      document.addEventListener("enterpictureinpicture", handlePictureInPictureChange);
+      document.addEventListener("leavepictureinpicture", handlePictureInPictureChange);
+    }
+
+    return () => {
+      if (document.pictureInPictureEnabled) {
+        document.removeEventListener("enterpictureinpicture", handlePictureInPictureChange);
+        document.removeEventListener("leavepictureinpicture", handlePictureInPictureChange);
+      }
+    };
+  }, []);
 
   // Permission helpers
   const queryPermission = useCallback(async (name: PermissionName): Promise<PermState> => {
@@ -522,8 +619,9 @@ export function TelehealthSessionContent({
   return (
     <div className="telehealth-full-viewport bg-background overflow-hidden p-0 lg:p-6 pb-[var(--safe-area-bottom)] md:pb-0 h-screen">
       <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-6">
-        <div className="flex-1 flex flex-col min-h-0 h-full">
-          <div className="flex-1 relative overflow-hidden bg-black sm:rounded-xl sm:shadow-lg h-full">
+        {/* Mobile/Tablet: Full screen video, Desktop: Normal layout */}
+        <div className="flex-1 flex flex-col min-h-0 h-full lg:flex-1">
+          <div className="flex-1 relative overflow-hidden bg-black sm:rounded-xl sm:shadow-lg h-full" data-video-panel>
             <TelehealthVideoPanel
               sessionTitle={sessionTitle}
               providerName={providerName}
@@ -554,6 +652,8 @@ export function TelehealthSessionContent({
                   isChatOpen={isChatOpen}
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
+                  onTogglePictureInPicture={handleTogglePictureInPicture}
+                  isPictureInPicture={isPictureInPicture}
                 />
               }
             />

@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, PictureInPicture } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
@@ -120,6 +120,7 @@ export function TelehealthVideoPanel({
   const [remoteHasVideo, setRemoteHasVideo] = useState(false);
   const [localHasVideo, setLocalHasVideo] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const [remoteTileCount, setRemoteTileCount] = useState(0);
   const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
@@ -151,6 +152,7 @@ export function TelehealthVideoPanel({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [viewportWidth]);
+
 
   useEffect(() => {
     onLocalContainerReady?.(localRef.current);
@@ -193,6 +195,29 @@ export function TelehealthVideoPanel({
     };
   }, []);
 
+  // Handle Picture-in-Picture events
+  useEffect(() => {
+    const handlePictureInPictureChange = () => {
+      const panel = panelRef.current;
+      if (panel) {
+        setIsPictureInPicture(document.pictureInPictureElement === panel);
+      }
+    };
+
+    // Check if PiP is supported
+    if (document.pictureInPictureEnabled) {
+      document.addEventListener("enterpictureinpicture", handlePictureInPictureChange);
+      document.addEventListener("leavepictureinpicture", handlePictureInPictureChange);
+    }
+
+    return () => {
+      if (document.pictureInPictureEnabled) {
+        document.removeEventListener("enterpictureinpicture", handlePictureInPictureChange);
+        document.removeEventListener("leavepictureinpicture", handlePictureInPictureChange);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const localElement = localRef.current;
     if (!localElement) return;
@@ -228,6 +253,69 @@ export function TelehealthVideoPanel({
       }
     } catch (error) {
       console.warn('Unable to toggle fullscreen', error);
+    }
+  }, []);
+
+  const handleTogglePictureInPicture = useCallback(async () => {
+    const panel = panelRef.current;
+    if (!panel) {
+      console.warn('❌ PiP: No panel element found');
+      return;
+    }
+
+    console.log('🎬 PiP: Toggle requested');
+    console.log('🎬 PiP: document.pictureInPictureEnabled:', document.pictureInPictureEnabled);
+    console.log('🎬 PiP: document.pictureInPictureElement:', document.pictureInPictureElement);
+    console.log('🎬 PiP: panel element:', panel);
+
+    try {
+      if (document.pictureInPictureElement === panel) {
+        console.log('🎬 PiP: Exiting Picture-in-Picture mode');
+        if (document.exitPictureInPicture) {
+          await document.exitPictureInPicture();
+          console.log('✅ PiP: Successfully exited Picture-in-Picture');
+        }
+      } else if (document.pictureInPictureEnabled) {
+        console.log('🎬 PiP: Entering Picture-in-Picture mode');
+        
+        // Try to find a video element first (preferred for PiP)
+        const videoElement = panel.querySelector('video') as HTMLVideoElement;
+        console.log('🎬 PiP: Found video element in panel:', videoElement);
+        
+        if (videoElement && videoElement.requestPictureInPicture) {
+          console.log('🎬 PiP: Using video element for PiP...');
+          await videoElement.requestPictureInPicture();
+          console.log('✅ PiP: Successfully entered Picture-in-Picture via video element');
+        } else {
+          // Fallback to panel element
+          const panelWithPiP = panel as HTMLDivElement & {
+            requestPictureInPicture?: () => Promise<PictureInPictureWindow>;
+          };
+          
+          console.log('🎬 PiP: Video element not found, trying panel element...');
+          
+          if (panelWithPiP.requestPictureInPicture) {
+            console.log('🎬 PiP: Calling requestPictureInPicture on panel...');
+            await panelWithPiP.requestPictureInPicture();
+            console.log('✅ PiP: Successfully entered Picture-in-Picture via panel');
+          } else {
+            console.warn('❌ PiP: Neither video element nor panel supports requestPictureInPicture');
+            console.warn('❌ PiP: Available methods on panel:', Object.getOwnPropertyNames(panel));
+          }
+        }
+      } else {
+        console.warn('❌ PiP: Picture-in-Picture is not supported or enabled in this browser');
+        console.warn('❌ PiP: Check if you are in a secure context (HTTPS) and browser supports PiP');
+      }
+    } catch (error) {
+      console.error('❌ PiP: Error toggling Picture-in-Picture:', error);
+      if (error instanceof Error) {
+        console.error('❌ PiP: Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
     }
   }, []);
 
@@ -348,7 +436,8 @@ export function TelehealthVideoPanel({
           gridTemplateColumns: `repeat(${remoteColumnCount}, minmax(0, 1fr))`,
           justifyItems: "stretch",
           alignItems: "stretch",
-          gridAutoRows: isMobileOrTablet && tileCount === 2 ? undefined : "1fr",
+          // For mobile with 2 users, use half height for each video
+          gridAutoRows: isMobileOrTablet && tileCount === 2 ? "50vh" : "1fr",
         }
       : undefined
   );
@@ -357,19 +446,28 @@ export function TelehealthVideoPanel({
     isFullscreen ? "h-[100svh] max-h-[100svh] w-full rounded-none" : "h-full rounded-none sm:rounded-none sm:shadow-none",
   );
   const remoteContainerClasses = cn(
-    "relative w-full bg-slate-800 overflow-hidden h-full min-h-0 pt-8 sm:pt-10",
+    "relative w-full bg-slate-800 overflow-hidden h-full min-h-0",
+    // Remove top padding on mobile for better space utilization
+    isMobileOrTablet ? "pt-2" : "pt-8 sm:pt-10",
     remoteLayoutClass,
   );
   const localPreviewClasses = cn(
     "relative overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-lg",
-    isFullscreen ? "h-36 w-48 sm:h-40 sm:w-56" : "h-28 w-40 sm:h-32 sm:w-44",
+    // Smaller camera preview on mobile for better space utilization
+    isMobileOrTablet 
+      ? (isFullscreen ? "h-24 w-32" : "h-20 w-28")
+      : (isFullscreen ? "h-36 w-48 sm:h-40 sm:w-56" : "h-28 w-40 sm:h-32 sm:w-44"),
   );
   const overlayControlsClasses = cn(
-    "pointer-events-none absolute inset-x-0 bottom-5 flex justify-center",
+    "pointer-events-none absolute inset-x-0 flex justify-center",
+    // Better positioning on mobile
+    isMobileOrTablet ? "bottom-3" : "bottom-5",
     isFullscreen && "bottom-10",
   );
   const fullscreenToggleClasses = cn(
-    "pointer-events-none absolute top-12 right-3 sm:top-14 flex gap-2",
+    "pointer-events-none absolute flex gap-2",
+    // Better positioning on mobile
+    isMobileOrTablet ? "top-3 right-3" : "top-12 right-3 sm:top-14",
     isFullscreen && "top-6 right-6",
   );
 
@@ -410,7 +508,7 @@ export function TelehealthVideoPanel({
           className={cn(
             "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
             // Mobile: top-left positioning, Desktop: bottom-right positioning
-            hasUserPositioned ? "" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5"),
+            hasUserPositioned ? "" : (isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")),
             isDragging && "cursor-grabbing scale-105 transition-none"
           )}
           style={hasUserPositioned ? {
@@ -451,11 +549,33 @@ export function TelehealthVideoPanel({
         </div>
 
         <div className={fullscreenToggleClasses}>
+          {/* Picture-in-Picture Button */}
+          <button
+            type="button"
+            onClick={handleTogglePictureInPicture}
+            className={cn(
+              "pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg backdrop-blur transition hover:bg-black/80",
+              document.pictureInPictureEnabled 
+                ? "bg-black/60" 
+                : "bg-red-600/60 cursor-not-allowed opacity-50"
+            )}
+            aria-label={isPictureInPicture ? 'Exit Picture-in-Picture' : 'Enter Picture-in-Picture'}
+            title={document.pictureInPictureEnabled 
+              ? (isPictureInPicture ? 'Exit Picture-in-Picture' : 'Enter Picture-in-Picture')
+              : 'Picture-in-Picture not supported in this browser'
+            }
+            disabled={!document.pictureInPictureEnabled}
+          >
+            <PictureInPicture className="h-4 w-4" />
+          </button>
+          
+          {/* Fullscreen Button */}
           <button
             type="button"
             onClick={handleToggleFullscreen}
             className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur transition hover:bg-black/80"
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Settings, RefreshCcw, MessageCircle, RotateCcw } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Settings, RefreshCcw, MessageCircle, RotateCcw, PictureInPicture } from "lucide-react";
 import { SignalStrengthIndicator } from "./SignalStrengthIndicator";
 import { MicrophoneSelector } from "./MicrophoneSelector";
 
@@ -33,6 +33,9 @@ interface TelehealthCallControlsProps {
   isChatOpen?: boolean;
   chatUnreadCount?: number;
   onToggleChat?: () => void;
+  // Picture-in-Picture controls
+  onTogglePictureInPicture?: () => void;
+  isPictureInPicture?: boolean;
 }
 
 export function TelehealthCallControls({
@@ -58,6 +61,8 @@ export function TelehealthCallControls({
   isChatOpen = false,
   chatUnreadCount = 0,
   onToggleChat,
+  onTogglePictureInPicture,
+  isPictureInPicture = false,
 }: TelehealthCallControlsProps) {
   const [micMuted, setMicMuted] = useState(micMutedProp ?? false);
   const [cameraOff, setCameraOff] = useState(cameraOffProp ?? false);
@@ -97,6 +102,31 @@ export function TelehealthCallControls({
   const deviceSwitchDisabled = controlsDisabled || !onOpenDeviceSettings;
 
   const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // Handle clicking outside settings menu and keyboard events
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowSettings(false);
+      }
+    };
+
+    if (showSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [showSettings]);
 
   return (
     <div className="space-y-3 relative">
@@ -168,7 +198,7 @@ export function TelehealthCallControls({
           {!isOverlay && <span className="ml-2">{micIsMuted ? "Unmute" : "Mute"}</span>}
         </Button>
   {/* Settings gear */}
-  <div className="order-3 relative">
+  <div className="order-3 relative" ref={settingsRef}>
           <Button
             type="button"
             variant="ghost"
@@ -185,29 +215,38 @@ export function TelehealthCallControls({
           </Button>
 
           {isOverlay && showSettings && (
-            <div className="absolute bottom-16 right-0 z-30 w-[88vw] max-w-[360px] rounded-xl bg-slate-900/95 text-white shadow-2xl border border-white/10 p-2 backdrop-blur">
-              <div className="px-3 py-2 text-[11px] font-semibold tracking-wide text-white/70">MICROPHONE</div>
-              <div className="max-h-60 overflow-auto">
-                {audioDevices.map((device) => (
-                  <button
-                    key={device.deviceId}
-                    onClick={() => { onSwitchMicrophone?.(device.deviceId || ""); setShowSettings(false); }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-white/10",
-                      (device.deviceId === currentAudioDevice) && "bg-white/5"
-                    )}
-                  >
-                    <span className="truncate pr-2">{device.label || `Microphone ${device.deviceId?.slice(-4)}`}</span>
-                    {device.deviceId === currentAudioDevice && (
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                    )}
-                  </button>
-                ))}
-                {audioDevices.length === 0 && (
-                  <div className="px-3 py-3 text-sm text-white/70">No microphones found</div>
-                )}
+            <>
+              {/* Settings Menu */}
+              <div className="absolute bottom-16 right-0 z-30 w-[88vw] max-w-[360px] rounded-xl bg-slate-900/95 text-white shadow-2xl border border-white/10 p-2 backdrop-blur">
+                <div className="px-3 py-2 text-[11px] font-semibold tracking-wide text-white/70">MICROPHONE</div>
+                <div className="max-h-60 overflow-auto">
+                  {audioDevices.map((device) => (
+                    <button
+                      key={device.deviceId}
+                      onClick={() => { onSwitchMicrophone?.(device.deviceId || ""); setShowSettings(false); }}
+                      className={cn(
+                        "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-white/10 transition-colors",
+                        (device.deviceId === currentAudioDevice) && "bg-white/5"
+                      )}
+                    >
+                      <span className="truncate pr-2">{device.label || `Microphone ${device.deviceId?.slice(-4)}`}</span>
+                      {device.deviceId === currentAudioDevice && (
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      )}
+                    </button>
+                  ))}
+                  {audioDevices.length === 0 && (
+                    <div className="px-3 py-3 text-sm text-white/70">No microphones found</div>
+                  )}
+                </div>
               </div>
-            </div>
+              
+              {/* Backdrop to close settings menu */}
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => setShowSettings(false)}
+              />
+            </>
           )}
         </div>
         {/* Camera */}
@@ -267,6 +306,23 @@ export function TelehealthCallControls({
           <span className="ml-2 hidden sm:inline">{joinLabel}</span>
         </Button>
 
+
+        {/* Picture-in-Picture Button */}
+        {onTogglePictureInPicture && document.pictureInPictureEnabled && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 rounded-full px-4 text-base"
+            onClick={onTogglePictureInPicture}
+            aria-label={isPictureInPicture ? 'Exit Picture-in-Picture' : 'Enter Picture-in-Picture'}
+            disabled={controlsDisabled}
+          >
+            <PictureInPicture className="h-5 w-5" />
+            <span className="ml-2 hidden sm:inline">
+              {isPictureInPicture ? 'Exit PiP' : 'PiP'}
+            </span>
+          </Button>
+        )}
 
         {/* Optional switch camera icon (panel view retains it) */}
         {!isOverlay && (
