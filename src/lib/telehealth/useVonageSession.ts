@@ -364,45 +364,21 @@ export function useVonageSession({
   const [audioLevel, setAudioLevel] = useState(0);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Chat persistence key based on session
-  const chatStorageKey = `telehealth_chat_${appointmentId}_${followupToken}`;
 
-  // Load chat messages from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedMessages = localStorage.getItem(chatStorageKey);
-      if (savedMessages) {
-        const parsedMessages = JSON.parse(savedMessages);
-        setChatMessages(parsedMessages);
-        console.log('📱 Loaded chat messages from localStorage:', parsedMessages.length);
-      }
-    } catch (error) {
-      console.error('Error loading chat messages from localStorage:', error);
-    }
-  }, [chatStorageKey]);
 
-  // Save chat messages to localStorage whenever they change
-  useEffect(() => {
-    if (chatMessages.length > 0) {
-      try {
-        localStorage.setItem(chatStorageKey, JSON.stringify(chatMessages));
-        console.log('💾 Saved chat messages to localStorage:', chatMessages.length);
-      } catch (error) {
-        console.error('Error saving chat messages to localStorage:', error);
-      }
-    }
-  }, [chatMessages, chatStorageKey]);
+
+
+
 
   // Clear chat messages when session ends
   const clearChatHistory = useCallback(() => {
     try {
-      localStorage.removeItem(chatStorageKey);
       setChatMessages([]);
-      console.log('🗑️ Cleared chat history from localStorage');
+      console.log('🗑️ Cleared chat history');
     } catch (error) {
       console.error('Error clearing chat history:', error);
     }
-  }, [chatStorageKey]);
+  }, []);
 
   // Monitor video state changes
   useEffect(() => {
@@ -1913,7 +1889,7 @@ export function useVonageSession({
   }, []);
 
   const sendChatMessage = useCallback((content: string, type: 'text' | 'image' | 'file' = 'text', attachment?: any) => {
-    console.log('🔴 sendChatMessage called:', {
+    console.log('�� sendChatMessage called:', {
       content,
       type,
       attachment,

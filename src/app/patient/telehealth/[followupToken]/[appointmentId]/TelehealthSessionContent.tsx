@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   TelehealthVideoPanel,
   TelehealthChatPanel,
@@ -10,6 +10,9 @@ import {
   type TelehealthChatMessage,
 } from "@/components/telehealth";
 import { useVonageSession, CALL_STATUSES, type CallStatus } from "@/lib/telehealth/useVonageSession";
+import { useChatApi } from "@/lib/services/chatApiService";
+import { useWaitingRoomService } from "@/lib/services/waitingRoomService";
+import { useAblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, Shield, X } from "lucide-react";
 
@@ -43,11 +46,26 @@ export function TelehealthSessionContent({
   // Pre-join flow state
   const [showPreJoin, setShowPreJoin] = useState(true);
   const [pendingJoin, setPendingJoin] = useState(false);
+  
+  // Waiting room state
+  const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
+  const [doctorConnected, setDoctorConnected] = useState(false);
+  const [ablyService, setAblyService] = useState<any>(null);
 
   // Permission status tracking
   type PermState = "granted" | "denied" | "prompt" | "unsupported";
   const [cameraPerm, setCameraPerm] = useState<PermState>("prompt");
   const [micPerm, setMicPerm] = useState<PermState>("prompt");
+
+  // Chat API integration (background persistence only)
+  const chatApi = useChatApi(appointmentId, followupToken);
+  
+  // State for previous chat messages (API) and loading status
+  const [previousMessages, setPreviousMessages] = useState<TelehealthChatMessage[]>([]);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
+  
+  // Waiting room service
+  const waitingRoomService = useWaitingRoomService(appointmentId);
 
   const handleRemoteContainerReady = useCallback((element: HTMLDivElement | null) => {
     setRemoteContainer(element);
@@ -65,16 +83,91 @@ export function TelehealthSessionContent({
     localContainer,
   });
 
-  // Convert Vonage chat messages to UI format
-  const uiMessages: TelehealthChatMessage[] = telehealth.chatMessages.map(msg => ({
-    id: msg.id,
-    author: msg.author,
-    authoredAt: msg.timestamp,
-    content: msg.content,
-    isOwn: msg.isOwn,
-  }));
+  // Merge previous messages (API) with current messages (Vonage) for complete chat history
+  const uiMessages: TelehealthChatMessage[] = useMemo(() => {
+    // Start with previous messages from API (chat history)
+    const allMessages = [...previousMessages];
+    
+    // Add Vonage messages (real-time) - avoid duplicates
+    telehealth.chatMessages.forEach(vonageMsg => {
+      const exists = allMessages.some(apiMsg => 
+        apiMsg.content === vonageMsg.content && 
+        Math.abs(new Date(apiMsg.authoredAt).getTime() - new Date(vonageMsg.timestamp).getTime()) < 5000
+      );
+      
+      if (!exists) {
+        allMessages.push({
+          id: vonageMsg.id,
+          author: vonageMsg.author,
+          authoredAt: vonageMsg.timestamp,
+          content: vonageMsg.content,
+          isOwn: vonageMsg.isOwn,
+        });
+      }
+    });
+    
+    // Sort by timestamp to maintain chronological order
+    return allMessages.sort((a, b) => 
+      new Date(a.authoredAt).getTime() - new Date(b.authoredAt).getTime()
+    );
+  }, [previousMessages, telehealth.chatMessages]);
 
   const unreadCount = uiMessages.slice(lastReadIndex).filter(m => !m.isOwn).length;
+
+
+  // Background API save for user messages (when user sends via Vonage)
+  useEffect(() => {
+    const userMessages = telehealth.chatMessages.filter(msg => msg.isOwn);
+    const lastUserMessage = userMessages[userMessages.length - 1];
+    
+    if (lastUserMessage) {
+      // Save user's message to API in background (don't block UI)
+      setTimeout(async () => {
+        try {
+          console.log('💾 Saving user message to API in background:', lastUserMessage.content);
+          await chatApi.sendMessage(lastUserMessage.content);
+          console.log('✅ User message saved to API');
+        } catch (error) {
+          console.warn('❌ Failed to save user message to API:', error);
+        }
+      }, 0);
+    }
+  }, [telehealth.chatMessages, chatApi]);
+
+  // Load previous chat messages ONCE when session starts (for chat history)
+  useEffect(() => {
+    if (appointmentId && followupToken && telehealth.isConnected && !messagesLoaded) {
+      console.log('📱 Loading previous chat history from API...');
+      
+      chatApi.getMessages()
+        .then(messages => {
+          console.log('📱 Loaded previous messages from API:', messages.length);
+          // Convert API messages to UI format
+          const convertedMessages = chatApi.convertToVonageFormat(messages).map(msg => ({
+            id: msg.id,
+            author: msg.author,
+            authoredAt: msg.timestamp,
+            content: msg.content,
+            isOwn: msg.isOwn,
+          }));
+          setPreviousMessages(convertedMessages); // Store in state for UI display
+          setMessagesLoaded(true); // Mark as loaded to prevent re-loading
+        })
+        .catch(error => {
+          console.warn('❌ Failed to load previous messages from API:', error);
+          setMessagesLoaded(true); // Mark as loaded even if failed
+        });
+    }
+  }, [appointmentId, followupToken, chatApi, telehealth.isConnected, messagesLoaded]);
+
+  // Cleanup Ably service on unmount
+  useEffect(() => {
+    return () => {
+      if (ablyService) {
+        ablyService.disconnect();
+      }
+    };
+  }, [ablyService]);
 
   // Permission helpers
   const queryPermission = useCallback(async (name: PermissionName): Promise<PermState> => {
@@ -175,14 +268,87 @@ export function TelehealthSessionContent({
 
   const onJoinWaitlist = async () => {
     try {
+      // 1. Request camera and microphone permissions
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       stream.getTracks().forEach(t => t.stop());
       setCameraPerm('granted');
       setMicPerm('granted');
+      
+      // 2. Mark patient as waiting in the waiting room via API
+      console.log('🚪 Joining waitlist - marking patient as waiting...');
+      await waitingRoomService.markPatientAsWaiting(followupToken);
+      console.log('✅ Patient successfully marked as waiting');
+      
+      // 3. Start listening for doctor connect events via Ably
+      console.log('🎧 Starting Ably listener for doctor connect events...');
+      const ablyService = useAblyVideoCallService({
+        appointmentId,
+        onDoctorConnect: async (event: AblyConnectEvent) => {
+          console.log('👨‍⚕️ Doctor connected event received:', event);
+          
+          // Automatically start the session when doctor connects
+          console.log('🚀 Doctor connected - starting session automatically...');
+          
+          // Disconnect from Ably since we're joining the session
+          if (ablyService) {
+            await ablyService.disconnect();
+            setAblyService(null);
+          }
+          
+          // Join the Vonage session directly
+          setPendingJoin(true);
+          setIsInWaitingRoom(false);
+          setDoctorConnected(false);
+        },
+        onError: (error: Error) => {
+          console.error('❌ Ably error:', error);
+        }
+      });
+      
+      await ablyService.connect();
+      setAblyService(ablyService);
+      
+      // 4. Enter waiting room state
+      setIsInWaitingRoom(true);
+      setShowPreJoin(false);
+      
+    } catch (e) {
+      console.error('❌ Failed to join waitlist:', e);
+      if (e instanceof Error && e.message.includes('Permission denied')) {
+        setShowPermissionModal(true);
+      } else {
+        // Handle API errors or other issues
+        console.error('❌ Error joining waitlist:', e);
+        // You might want to show an error message to the user here
+      }
+    }
+  };
+
+
+  // Development mode - Direct join call (bypasses waiting room)
+  const onJoinCallDirect = async () => {
+    try {
+      console.log('🚀 [DEV] Joining call directly...');
+      
+      // Request camera and microphone permissions
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      setCameraPerm('granted');
+      setMicPerm('granted');
+      
+      // Skip waiting room and API calls - go directly to session
       setShowPreJoin(false);
       setPendingJoin(true);
+      setIsInWaitingRoom(false);
+      setDoctorConnected(false);
+      
+      console.log('✅ [DEV] Direct join initiated');
+      
     } catch (e) {
-      setShowPermissionModal(true);
+      console.error('❌ [DEV] Failed to join call directly:', e);
+      if (e instanceof Error && e.message.includes('Permission denied')) {
+        setShowPermissionModal(true);
+      }
     }
   };
 
@@ -218,10 +384,59 @@ export function TelehealthSessionContent({
             >
               Join The Waitlist
             </Button>
+            
+            {/* Development mode - Direct join button */}
+            {process.env.NODE_ENV === 'development' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto"
+                onClick={onJoinCallDirect}
+                aria-label="Join call directly (dev mode)"
+              >
+                🚀 Join Call (Dev)
+              </Button>
+            )}
           </div>
           <div className="mt-6 text-xs sm:text-sm text-gray-500">
             If blocked, click the lock icon in your address bar and enable Camera and Microphone.
           </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const WaitingRoom = () => (
+    <div className="telehealth-full-viewport bg-background overflow-hidden p-4 lg:p-8 flex items-center justify-center">
+      <div className="w-full max-w-5xl grid grid-cols-1 gap-6">
+        <div className="bg-white rounded-xl shadow-lg p-6 lg:p-8 mx-auto text-center">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Shield className="h-5 w-5 text-blue-600" />
+            <h2 className="text-xl sm:text-2xl font-semibold">Waiting for your provider</h2>
+          </div>
+          <p className="text-gray-600 mb-4 text-sm sm:text-base">
+            You're now in the waiting room. We'll notify you when your provider is ready to start the session.
+          </p>
+          
+          {doctorConnected ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-2 text-green-600">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="font-medium">Your provider is ready! Starting session...</span>
+              </div>
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-2 text-gray-500">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <span>Waiting for provider to connect...</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -254,6 +469,15 @@ export function TelehealthSessionContent({
     return (
       <>
         <PreJoin />
+        <PermissionRequestModal isOpen={showPermissionModal} onClose={handlePermissionClose} onRetry={handlePermissionRetry} error={telehealth.error} />
+      </>
+    );
+  }
+
+  if (isInWaitingRoom) {
+    return (
+      <>
+        <WaitingRoom />
         <PermissionRequestModal isOpen={showPermissionModal} onClose={handlePermissionClose} onRetry={handlePermissionRetry} error={telehealth.error} />
       </>
     );

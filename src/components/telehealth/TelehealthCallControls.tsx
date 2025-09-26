@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Settings, RefreshCcw, MessageCircle } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Settings, RefreshCcw, MessageCircle, RotateCcw } from "lucide-react";
 import { SignalStrengthIndicator } from "./SignalStrengthIndicator";
 import { MicrophoneSelector } from "./MicrophoneSelector";
 
@@ -18,12 +18,16 @@ interface TelehealthCallControlsProps {
   onToggleCamera?: () => void;
   onOpenDeviceSettings?: () => void;
   onSwitchMicrophone?: (deviceId: string) => void;
+  onSwitchCamera?: () => void;
   variant?: "panel" | "overlay";
   // Signal strength and audio device props
   signalStrength?: 'excellent' | 'good' | 'fair' | 'poor';
   audioLevel?: number;
   audioDevices?: Array<{ deviceId?: string; label?: string }>;
   currentAudioDevice?: string | null;
+  // Video device props
+  videoDevices?: Array<{ deviceId?: string }>;
+  currentVideoDevice?: string | null;
   // Chat button controls
   showChatButton?: boolean;
   isChatOpen?: boolean;
@@ -42,11 +46,14 @@ export function TelehealthCallControls({
   onToggleCamera,
   onOpenDeviceSettings,
   onSwitchMicrophone,
+  onSwitchCamera,
   variant = "panel",
   signalStrength = 'good',
   audioLevel = 0,
   audioDevices = [],
   currentAudioDevice = null,
+  videoDevices = [],
+  currentVideoDevice = null,
   showChatButton = false,
   isChatOpen = false,
   chatUnreadCount = 0,
@@ -221,6 +228,24 @@ export function TelehealthCallControls({
           {cameraIsOff ? <VideoOff className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} /> : <Video className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />}
           {!isOverlay && <span className="ml-2">{cameraIsOff ? "Start video" : "Stop video"}</span>}
         </Button>
+
+        {/* Camera Swap - Only show when multiple cameras available */}
+        {videoDevices.length > 1 && (
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn(
+              "order-2.5 h-12 rounded-full px-4 text-base",
+              isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30"
+            )}
+            onClick={onSwitchCamera}
+            aria-label="Switch camera"
+            disabled={controlsDisabled}
+          >
+            <RotateCcw className={cn(isOverlay ? "h-6 w-6" : "h-5 w-5")} />
+            {!isOverlay && <span className="ml-2">Switch</span>}
+          </Button>
+        )}
 
       
       
