@@ -11,7 +11,7 @@ import {
 } from "@/components/telehealth";
 import { useVonageSession, CALL_STATUSES, type CallStatus } from "@/lib/telehealth/useVonageSession";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Shield } from "lucide-react";
+import { CheckCircle2, XCircle, Shield, X } from "lucide-react";
 
 interface TelehealthSessionContentProps {
   sessionId: string;
@@ -260,10 +260,10 @@ export function TelehealthSessionContent({
   }
 
   return (
-    <div className="telehealth-full-viewport bg-background overflow-hidden p-0 lg:p-6 pb-[var(--safe-area-bottom)] md:pb-0">
-      <div className="flex flex-col lg:flex-row h-full gap-4 lg:gap-6">
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 relative overflow-hidden bg-black sm:rounded-xl sm:shadow-lg">
+    <div className="telehealth-full-viewport bg-background overflow-hidden p-0 lg:p-6 pb-[var(--safe-area-bottom)] md:pb-0 h-screen">
+      <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-6">
+        <div className="flex-1 flex flex-col min-h-0 h-full">
+          <div className="flex-1 relative overflow-hidden bg-black sm:rounded-xl sm:shadow-lg h-full">
             <TelehealthVideoPanel
               sessionTitle={sessionTitle}
               providerName={providerName}
@@ -301,11 +301,20 @@ export function TelehealthSessionContent({
             {telehealth.error && !isPermissionError && (
               <div className="absolute bottom-4 left-4 right-4">
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
-                  <div className="flex items-center space-x-2">
-                    <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    <span>{telehealth.error}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <span>{telehealth.error}</span>
+                    </div>
+                    <button 
+                      onClick={() => telehealth.clearError()}
+                      className="text-red-500 hover:text-red-700 ml-2 p-1 rounded-full hover:bg-red-100 transition-colors"
+                      aria-label="Dismiss error"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -364,7 +373,7 @@ export function TelehealthSessionContent({
             variant="drawer"
             headerTitle="Meeting Chat"
             headerSubtitle={`${telehealth.participantCount} participants in room`}
-            participantNames={[...new Set(["You", providerName, ...telehealth.participants.map(p => `Participant ${p.connectionId.slice(-4)}`)])]}
+            participantNames={telehealth.participantCount > 0 ? [...new Set(["You", providerName, ...telehealth.participants.map(p => `Participant ${p.connectionId.slice(-4)}`)])] : []}
           />
         </div>
       </div>

@@ -132,12 +132,25 @@ export function TelehealthVideoPanel({
     return () => onRemoteContainerReady?.(null);
   }, [onRemoteContainerReady]);
 
-  // Track viewport width for responsive tiling decisions
+  // Track viewport width for responsive tiling decisions and auto-fullscreen on mobile/tablet
   useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
+    const onResize = () => {
+      const newWidth = window.innerWidth;
+      setViewportWidth(newWidth);
+      // Auto-enable fullscreen on mobile/tablet devices
+      if (newWidth < 1024) {
+        setIsFullscreen(true);
+      }
+    };
+    
+    // Set initial fullscreen state for mobile/tablet
+    if (viewportWidth < 1024) {
+      setIsFullscreen(true);
+    }
+    
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [viewportWidth]);
 
   useEffect(() => {
     onLocalContainerReady?.(localRef.current);
@@ -341,7 +354,7 @@ export function TelehealthVideoPanel({
   );
   const panelClasses = cn(
     "relative overflow-hidden bg-slate-800",
-    isFullscreen ? "h-[100svh] max-h-[100svh] w-full rounded-none" : "rounded-none sm:rounded-none sm:shadow-none",
+    isFullscreen ? "h-[100svh] max-h-[100svh] w-full rounded-none" : "h-full rounded-none sm:rounded-none sm:shadow-none",
   );
   const remoteContainerClasses = cn(
     "relative w-full bg-slate-800 overflow-hidden h-full min-h-0 pt-8 sm:pt-10",

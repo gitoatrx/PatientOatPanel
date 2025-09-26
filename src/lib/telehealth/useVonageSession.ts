@@ -2317,6 +2317,17 @@ export function useVonageSession({
     };
   }, [cleanup]);
 
+  // Auto-dismiss errors after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(undefined);
+      }, 5000); // Auto-dismiss after 5 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   return useMemo(
     () => ({
       join,
