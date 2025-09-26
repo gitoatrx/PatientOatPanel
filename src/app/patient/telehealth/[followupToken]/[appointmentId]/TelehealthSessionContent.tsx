@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   TelehealthVideoPanel,
   TelehealthChatPanel,
@@ -9,10 +9,10 @@ import {
   TelehealthChatLauncher,
   type TelehealthChatMessage,
 } from "@/components/telehealth";
-import { useVonageSession, CALL_STATUSES, type CallStatus } from "@/lib/telehealth/useVonageSession";
+import { useVonageSession } from "@/lib/telehealth/useVonageSession";
 import { useChatApi } from "@/lib/services/chatApiService";
 import { useWaitingRoomService } from "@/lib/services/waitingRoomService";
-import { useAblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
+import { AblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, Shield, X } from "lucide-react";
 
@@ -28,12 +28,9 @@ interface TelehealthSessionContentProps {
 }
 
 export function TelehealthSessionContent({
-  sessionId,
-  scheduledTime,
   providerName,
   sessionTitle,
   participants,
-  messages,
   followupToken,
   appointmentId,
 }: TelehealthSessionContentProps) {
@@ -54,7 +51,7 @@ export function TelehealthSessionContent({
   // Waiting room state
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [doctorConnected, setDoctorConnected] = useState(false);
-  const [ablyService, setAblyService] = useState<any>(null);
+  const [ablyService, setAblyService] = useState<AblyVideoCallService | null>(null);
 
   // Permission status tracking
   type PermState = "granted" | "denied" | "prompt" | "unsupported";
@@ -103,7 +100,7 @@ export function TelehealthSessionContent({
     } finally {
       setIsJoining(false);
     }
-  }, [isJoining, telehealth.isBusy, telehealth.isConnected, telehealth.join]);
+  }, [isJoining, telehealth.isBusy, telehealth.isConnected, telehealth]);
 
   // Picture-in-Picture toggle handler
   const handleTogglePictureInPicture = useCallback(async () => {
@@ -337,7 +334,7 @@ export function TelehealthSessionContent({
         setShowPermissionModal(false);
         setTimeout(() => { void telehealth.join(); }, 100);
       }
-    } catch (e) {
+    } catch {
       // keep modal open if user blocks again
     }
   };
@@ -354,35 +351,8 @@ export function TelehealthSessionContent({
       void telehealth.join();
       setPendingJoin(false);
     }
-  }, [showPreJoin, pendingJoin, remoteContainer, localContainer]);
+  }, [showPreJoin, pendingJoin, remoteContainer, localContainer, telehealth]);
 
-  /* removed test devices flow */
-  const onTestDevices = async () => {
-    // no-op
-    try {
-      // Give the hook time to bind and request media; then update statuses
-      await new Promise((r) => setTimeout(r, 0));
-      const [cam, mic] = await Promise.all([
-        queryPermission('camera' as PermissionName),
-        queryPermission('microphone' as PermissionName),
-      ]);
-      setCameraPerm(cam);
-      setMicPerm(mic);
-      if (cam !== 'granted' || mic !== 'granted') {
-        // Fallback: explicitly request to trigger the prompt
-        try {
-          const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          s.getTracks().forEach(t => t.stop());
-          setCameraPerm('granted');
-          setMicPerm('granted');
-        } catch {
-          setShowPermissionModal(true);
-        }
-      }
-    } finally {
-      // no-op
-    }
-  };
 
   const onJoinWaitlist = async () => {
     if (isJoining || telehealth.isBusy || telehealth.isConnected) {
@@ -405,7 +375,7 @@ export function TelehealthSessionContent({
       
       // 3. Start listening for doctor connect events via Ably
       console.log('🎧 Starting Ably listener for doctor connect events...');
-      const ablyService = useAblyVideoCallService({
+      const newAblyService = new AblyVideoCallService({
         appointmentId,
         onDoctorConnect: async (event: AblyConnectEvent) => {
           console.log('👨‍⚕️ Doctor connected event received:', event);
@@ -429,20 +399,20 @@ export function TelehealthSessionContent({
         }
       });
       
-      await ablyService.connect();
-      setAblyService(ablyService);
+      await newAblyService.connect();
+      setAblyService(newAblyService);
       
       // 4. Enter waiting room state
       setIsInWaitingRoom(true);
       setShowPreJoin(false);
       
-    } catch (e) {
-      console.error('❌ Failed to join waitlist:', e);
-      if (e instanceof Error && e.message.includes('Permission denied')) {
+    } catch (error) {
+      console.error('❌ Failed to join waitlist:', error);
+      if (error instanceof Error && error.message.includes('Permission denied')) {
         setShowPermissionModal(true);
       } else {
         // Handle API errors or other issues
-        console.error('❌ Error joining waitlist:', e);
+        console.error('❌ Error joining waitlist:', error);
         // You might want to show an error message to the user here
       }
     } finally {
@@ -475,9 +445,9 @@ export function TelehealthSessionContent({
       
       console.log('✅ [DEV] Direct join initiated');
       
-    } catch (e) {
-      console.error('❌ [DEV] Failed to join call directly:', e);
-      if (e instanceof Error && e.message.includes('Permission denied')) {
+    } catch (error) {
+      console.error('❌ [DEV] Failed to join call directly:', error);
+      if (error instanceof Error && error.message.includes('Permission denied')) {
         setShowPermissionModal(true);
       }
     }
@@ -549,7 +519,7 @@ export function TelehealthSessionContent({
             <h2 className="text-xl sm:text-2xl font-semibold">Waiting for your provider</h2>
           </div>
           <p className="text-gray-600 mb-4 text-sm sm:text-base">
-            You're now in the waiting room. We'll notify you when your provider is ready to start the session.
+            You&apos;re now in the waiting room. We&apos;ll notify you when your provider is ready to start the session.
           </p>
           
           {doctorConnected ? (
@@ -575,28 +545,6 @@ export function TelehealthSessionContent({
     </div>
   );
 
-  // Status display logic for badges (kept for potential overlays)
-  const getStatusDisplay = (status: CallStatus, participantCount: number) => {
-    switch (status) {
-      case CALL_STATUSES.IDLE:
-        return { label: "Ready to join", badgeClass: "bg-gray-500 text-white" };
-      case CALL_STATUSES.LOADING:
-        return { label: "Connecting", badgeClass: "bg-orange-500 text-white" };
-      case CALL_STATUSES.CONNECTED:
-        if (participantCount > 1) return { label: "Connected", badgeClass: "bg-green-500 text-white" };
-        return { label: "Connecting", badgeClass: "bg-orange-500 text-white" };
-      case CALL_STATUSES.RECONNECTING:
-        return { label: "Reconnecting", badgeClass: "bg-yellow-500 text-white" };
-      case CALL_STATUSES.ENDED:
-        return { label: "Call ended", badgeClass: "bg-gray-500 text-white" };
-      case CALL_STATUSES.ERROR:
-        return { label: "Error", badgeClass: "bg-red-500 text-white" };
-      default:
-        return { label: "Unknown", badgeClass: "bg-gray-500 text-white" };
-    }
-  };
-
-  const statusDisplay = getStatusDisplay(telehealth.callStatus, telehealth.participantCount);
 
   if (showPreJoin) {
     return (
@@ -621,7 +569,7 @@ export function TelehealthSessionContent({
       <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-6">
         {/* Mobile/Tablet: Full screen video, Desktop: Normal layout */}
         <div className="flex-1 flex flex-col min-h-0 h-full lg:flex-1">
-          <div className="flex-1 relative overflow-hidden bg-black sm:rounded-xl sm:shadow-lg h-full" data-video-panel>
+          <div className="flex-1 relative overflow-hidden bg-black sm:rounded-none lg:rounded-xl sm:shadow-lg h-full" data-video-panel>
             <TelehealthVideoPanel
               sessionTitle={sessionTitle}
               providerName={providerName}
@@ -733,7 +681,7 @@ export function TelehealthSessionContent({
             variant="drawer"
             headerTitle="Meeting Chat"
             headerSubtitle={`${telehealth.participantCount} participants in room`}
-            participantNames={telehealth.participantCount > 0 ? [...new Set(["You", providerName, ...telehealth.participants.map(p => `Participant ${p.connectionId.slice(-4)}`)])] : []}
+            participantNames={telehealth.participantCount > 0 ? [...new Set(["You", providerName, ...telehealth.participants.slice(0, Math.max(0, telehealth.participantCount - 2)).map(p => `Participant ${p.connectionId.slice(-4)}`)])] : []}
           />
         </div>
       </div>

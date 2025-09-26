@@ -418,6 +418,7 @@ export function TelehealthChatPanel({
                     <div
                       className={cn(
                         "inline-block max-w-[80%] px-3 py-2 rounded-2xl text-sm break-words leading-relaxed",
+                        "text-justify",
                         isDrawer
                           ? message.isOwn
                             ? "bg-emerald-600 text-white"
