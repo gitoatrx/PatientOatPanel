@@ -47,6 +47,9 @@ export function TelehealthSessionContent({
   
   // Picture-in-Picture state
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
+  const [hasUserGesture, setHasUserGesture] = useState(false);
+  const [pendingPiPRequest, setPendingPiPRequest] = useState(false);
+  const [userGestureTimestamp, setUserGestureTimestamp] = useState<number>(0);
   
   // Waiting room state
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
@@ -103,9 +106,23 @@ export function TelehealthSessionContent({
   }, [isJoining, telehealth.isBusy, telehealth.isConnected, telehealth]);
 
   // Picture-in-Picture toggle handler
-  const handleTogglePictureInPicture = useCallback(async () => {
-    console.log('🎬 Main PiP: Toggle requested');
-    console.log('🎬 Main PiP: Current state:', { isPictureInPicture, documentPiP: !!document.pictureInPictureElement });
+  const handleTogglePictureInPicture = useCallback(async (isUserGesture = false) => {
+    console.log('🎬 Main PiP: Toggle requested', { 
+      isUserGesture, 
+      hasUserGesture, 
+      userGestureTimestamp,
+      gestureAge: Date.now() - userGestureTimestamp,
+      isConnected: telehealth.isConnected,
+      isPictureInPicture,
+      documentPiP: !!document.pictureInPictureElement 
+    });
+    
+    // Mark that we have a user gesture if this is called from a user action
+    if (isUserGesture) {
+      setHasUserGesture(true);
+      setUserGestureTimestamp(Date.now());
+      console.log('🎬 Main PiP: User gesture detected, enabling PiP capability');
+    }
     
     try {
       if (isPictureInPicture) {
@@ -117,39 +134,20 @@ export function TelehealthSessionContent({
       } else if (document.pictureInPictureEnabled) {
         console.log('🎬 Main PiP: Entering Picture-in-Picture mode');
         
-        // Try to find a video element first (preferred for PiP)
-        const videoElement = document.querySelector('[data-video-panel] video') as HTMLVideoElement;
+        // Find the best video element for PiP
+        const videoElement = findBestVideoElementForPiP();
         console.log('🎬 Main PiP: Found video element:', videoElement);
         
         if (videoElement && videoElement.requestPictureInPicture) {
           console.log('🎬 Main PiP: Using video element for PiP...');
           await videoElement.requestPictureInPicture();
           console.log('✅ Main PiP: Successfully entered Picture-in-Picture via video element');
+          setPendingPiPRequest(false);
         } else {
-          // Fallback to video panel element
-          const videoPanel = document.querySelector('[data-video-panel]') as HTMLElement & {
-            requestPictureInPicture?: () => Promise<PictureInPictureWindow>;
-          };
-          
-          console.log('🎬 Main PiP: Video element not found, trying video panel:', videoPanel);
-          
-          if (videoPanel && videoPanel.requestPictureInPicture) {
-            console.log('🎬 Main PiP: Calling requestPictureInPicture on panel...');
-            await videoPanel.requestPictureInPicture();
-            console.log('✅ Main PiP: Successfully entered Picture-in-Picture via panel');
-          } else {
-            console.warn('❌ Main PiP: Neither video element nor panel supports requestPictureInPicture');
-            console.warn('❌ Main PiP: Available methods on panel:', Object.getOwnPropertyNames(videoPanel || {}));
-            
-            // Last resort: try to find any video element in the document
-            const anyVideo = document.querySelector('video') as HTMLVideoElement;
-            if (anyVideo && anyVideo.requestPictureInPicture) {
-              console.log('🎬 Main PiP: Found fallback video element:', anyVideo);
-              await anyVideo.requestPictureInPicture();
-              console.log('✅ Main PiP: Successfully entered Picture-in-Picture via fallback video');
-            } else {
-              console.error('❌ Main PiP: No video elements found that support Picture-in-Picture');
-            }
+          console.warn('❌ Main PiP: No suitable video element found for Picture-in-Picture');
+          if (!isUserGesture) {
+            console.warn('❌ Main PiP: Auto-activation failed - user gesture required');
+            setPendingPiPRequest(true);
           }
         }
       } else {
@@ -163,8 +161,39 @@ export function TelehealthSessionContent({
       }
     } catch (error) {
       console.error('❌ Main PiP: Error toggling Picture-in-Picture:', error);
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        console.warn('❌ Main PiP: Browser blocked PiP request - user gesture required');
+        if (!isUserGesture) {
+        setPendingPiPRequest(true);
+        }
+        return;
+      }
+      // Re-throw other errors
+      throw error;
     }
-  }, [isPictureInPicture]);
+  }, [isPictureInPicture, hasUserGesture]);
+
+  // Helper function to find the best video element for PiP
+  const findBestVideoElementForPiP = useCallback(() => {
+    // Priority order for video elements
+    const selectors = [
+      '[data-video-panel] video', // Video panel video
+      '#vonage-remote-container video', // Remote container video
+      '#vonage-local-container video', // Local container video
+      'video[srcObject]', // Any video with media stream
+      'video' // Any video element
+    ];
+
+    for (const selector of selectors) {
+      const video = document.querySelector(selector) as HTMLVideoElement;
+      if (video && typeof video.requestPictureInPicture === 'function' && video.readyState >= 2) {
+        console.log('🎬 Found suitable video element:', { selector, video, readyState: video.readyState });
+        return video;
+      }
+    }
+
+    return null;
+  }, []);
 
   // Merge previous messages (API) with current messages (Vonage) for complete chat history
   const uiMessages: TelehealthChatMessage[] = useMemo(() => {
@@ -229,12 +258,12 @@ export function TelehealthSessionContent({
           console.log('📱 Loaded previous messages from API:', messages.length);
           // Convert API messages to UI format
           const convertedMessages = chatApi.convertToVonageFormat(messages).map(msg => ({
-            id: msg.id,
-            author: msg.author,
-            authoredAt: msg.timestamp,
-            content: msg.content,
-            isOwn: msg.isOwn,
-          }));
+    id: msg.id,
+    author: msg.author,
+    authoredAt: msg.timestamp,
+    content: msg.content,
+    isOwn: msg.isOwn,
+  }));
           setPreviousMessages(convertedMessages); // Store in state for UI display
           setMessagesLoaded(true); // Mark as loaded to prevent re-loading
         })
@@ -254,35 +283,293 @@ export function TelehealthSessionContent({
     };
   }, [ablyService]);
 
-  // Handle Picture-in-Picture events
+  // Handle Picture-in-Picture events and auto-activation
   useEffect(() => {
     const handlePictureInPictureChange = () => {
       setIsPictureInPicture(!!document.pictureInPictureElement);
     };
 
-    // Log browser support info
-    console.log('🔍 PiP Browser Support Check:', {
+    const isAutoPiPActive = (video?: HTMLVideoElement | null) =>
+      Boolean(video && (video as HTMLVideoElement & { autoPictureInPicture?: boolean }).autoPictureInPicture);
+
+    // Setup Media Session API for automatic PiP (Chrome 134+)
+    const setupMediaSessionPiP = () => {
+      if ('mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession) {
+        try {
+          console.log('🎬 Setting up Media Session API for automatic PiP');
+          (navigator.mediaSession as any).setActionHandler('enterpictureinpicture', async () => {
+            console.log('🎬 Media Session: Auto PiP triggered by browser');
+            try {
+              const videoElement = findBestVideoElementForPiP();
+          if (videoElement && videoElement.requestPictureInPicture) {
+            await videoElement.requestPictureInPicture();
+                console.log('✅ Media Session: Auto PiP successful');
+              } else {
+                console.warn('❌ Media Session: No suitable video element found for auto PiP');
+              }
+            } catch (error) {
+              console.error('❌ Media Session: Auto PiP failed:', error);
+            }
+          });
+          console.log('✅ Media Session API configured for automatic PiP');
+        } catch (error) {
+          console.warn('❌ Media Session API not supported or failed:', error);
+        }
+      } else {
+        console.log('ℹ️ Media Session API not available - using fallback PiP approach');
+      }
+    };
+
+    // Setup media session metadata for better auto PiP eligibility
+    const setupMediaSessionMetadata = () => {
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: sessionTitle || 'Telehealth Session',
+            artist: providerName || 'Healthcare Provider',
+            album: 'Video Call',
+            artwork: [
+              { src: '/icons/telehealth-icon.png', sizes: '96x96', type: 'image/png' },
+              { src: '/icons/telehealth-icon.png', sizes: '128x128', type: 'image/png' },
+              { src: '/icons/telehealth-icon.png', sizes: '192x192', type: 'image/png' },
+              { src: '/icons/telehealth-icon.png', sizes: '256x256', type: 'image/png' },
+              { src: '/icons/telehealth-icon.png', sizes: '384x384', type: 'image/png' },
+              { src: '/icons/telehealth-icon.png', sizes: '512x512', type: 'image/png' },
+            ]
+          });
+          console.log('✅ Media Session metadata configured');
+        } catch (error) {
+          console.warn('❌ Failed to set media session metadata:', error);
+        }
+      }
+    };
+
+    // Setup media session when connected
+    if (telehealth.isConnected) {
+      setupMediaSessionMetadata();
+      setupMediaSessionPiP();
+    }
+
+    // Auto-activate PiP when tab becomes hidden (user switches to different tab)
+    const handleVisibilityChange = async () => {
+      console.log('🔄 Visibility change detected - document.hidden:', document.hidden, 'telehealth.isConnected:', telehealth.isConnected, 'isPictureInPicture:', isPictureInPicture);
+      console.log('🔄 Visibility change timestamp:', new Date().toISOString());
+      
+      // Only set pending request - don't try to activate PiP from visibility change
+      if (document.hidden && telehealth.isConnected && !isPictureInPicture) {
+        console.log('🔄 Tab hidden - setting pending PiP request for next user interaction');
+        setPendingPiPRequest(true);
+      } else {
+        console.log('🔄 Visibility change conditions not met:', {
+          hidden: document.hidden,
+          connected: telehealth.isConnected,
+          pipActive: isPictureInPicture
+        });
+      }
+    };
+
+    // Auto-activate PiP when window loses focus (user switches to different application)
+    const handleWindowBlur = async () => {
+      if (telehealth.isConnected && !isPictureInPicture) {
+        console.log('🔄 Window lost focus - setting pending PiP request for next user interaction');
+          setPendingPiPRequest(true);
+      }
+    };
+
+    // Auto-activate PiP when window is minimized (detected via resize)
+    const handleWindowResize = async () => {
+      // Check if window is minimized (height becomes very small)
+      if (window.outerHeight < 100 && telehealth.isConnected && !isPictureInPicture) {
+        console.log('🔄 Window minimized - setting pending PiP request for next user interaction');
+        setPendingPiPRequest(true);
+      }
+    };
+
+    // Track user gestures to enable PiP capability
+    const trackUserGesture = () => {
+      const now = Date.now();
+      setHasUserGesture(true);
+      setUserGestureTimestamp(now);
+      console.log('🎬 User gesture detected - PiP capability enabled', { timestamp: now });
+      
+      // If there's a pending PiP request, try to fulfill it now
+      if (pendingPiPRequest && telehealth.isConnected && !isPictureInPicture) {
+        console.log('🎬 Fulfilling pending PiP request with user gesture');
+        setPendingPiPRequest(false);
+        // Use setTimeout to ensure the user gesture context is preserved
+        setTimeout(() => {
+          handleTogglePictureInPicture(true).catch(error => {
+            console.warn('❌ Failed to fulfill pending PiP request:', error);
+            // If it fails, set the request back to pending
+          setPendingPiPRequest(true);
+          });
+        }, 0);
+      }
+    };
+
+    // Enhanced user gesture tracking with immediate PiP attempt
+    const trackUserGestureWithPiPAttempt = () => {
+      const now = Date.now();
+      setHasUserGesture(true);
+      setUserGestureTimestamp(now);
+      console.log('🎬 User gesture detected - attempting immediate PiP activation', { timestamp: now });
+      
+      // Try to activate PiP immediately if conditions are met
+      if (telehealth.isConnected && !isPictureInPicture && document.pictureInPictureEnabled) {
+        console.log('🎬 Attempting immediate PiP activation on user gesture');
+        handleTogglePictureInPicture(true).catch(error => {
+          console.warn('❌ Immediate PiP activation failed:', error);
+          // If immediate activation fails, set pending request for later
+          setPendingPiPRequest(true);
+        });
+      }
+    };
+
+    // Check if user gesture is still valid (within last 5 seconds)
+    const isUserGestureValid = () => {
+      const now = Date.now();
+      const gestureAge = now - userGestureTimestamp;
+      const isValid = hasUserGesture && gestureAge < 5000; // 5 seconds
+      console.log('🎬 User gesture validity check:', { 
+        hasUserGesture, 
+        gestureAge, 
+        isValid,
+        timestamp: userGestureTimestamp 
+      });
+      return isValid;
+    };
+
+    // Check browser support for automatic PiP
+    const checkAutoPiPSupport = () => {
+      const hasMediaSession = 'mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession;
+      const hasAutoPiP = 'autoPictureInPicture' in HTMLVideoElement.prototype;
+      const isChrome134Plus = /Chrome\/(\d+)/.test(navigator.userAgent) && parseInt(RegExp.$1) >= 134;
+      
+      console.log('🔍 Auto PiP Support Check:', {
       pictureInPictureEnabled: document.pictureInPictureEnabled,
       isSecureContext: window.isSecureContext,
       protocol: window.location.protocol,
       userAgent: navigator.userAgent,
       hasRequestPictureInPicture: 'requestPictureInPicture' in document.documentElement,
-      hasExitPictureInPicture: 'exitPictureInPicture' in document
-    });
+        hasExitPictureInPicture: 'exitPictureInPicture' in document,
+        hasMediaSession,
+        hasAutoPiP,
+        isChrome134Plus,
+        supportsAutoPiP: hasMediaSession && (hasAutoPiP || isChrome134Plus)
+      });
+
+      if (hasMediaSession && (hasAutoPiP || isChrome134Plus)) {
+        console.log('✅ Browser supports automatic PiP - no user gesture required for tab switching');
+      } else {
+        console.log('ℹ️ Browser does not support automatic PiP - using fallback with user gesture tracking');
+      }
+    };
+
+    checkAutoPiPSupport();
 
     // Check if PiP is supported
     if (document.pictureInPictureEnabled) {
+      // PiP state change listeners
       document.addEventListener("enterpictureinpicture", handlePictureInPictureChange);
       document.addEventListener("leavepictureinpicture", handlePictureInPictureChange);
+      
+      // Auto-activation listeners for when user leaves the tab/app
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      window.addEventListener("blur", handleWindowBlur);
+      window.addEventListener("resize", handleWindowResize);
+      
+      // User gesture tracking for PiP capability
+      const userGestureEvents = ['click', 'touchstart', 'keydown'];
+      userGestureEvents.forEach(eventType => {
+        document.addEventListener(eventType, trackUserGesture, { once: false, passive: true });
+      });
+
+      // Enhanced tracking for video-related interactions
+      const videoGestureEvents = ['click', 'touchstart'];
+      videoGestureEvents.forEach(eventType => {
+        document.addEventListener(eventType, trackUserGestureWithPiPAttempt, { once: false, passive: true });
+      });
+
+      // Add direct click handlers to video elements for immediate PiP activation
+      const addVideoClickHandlers = () => {
+        const videoElements = document.querySelectorAll('video');
+        videoElements.forEach(video => {
+          if (!video.hasAttribute('data-pip-click-handler')) {
+            video.setAttribute('data-pip-click-handler', 'true');
+            video.addEventListener('click', (e) => {
+              console.log('🎬 Video element clicked - attempting immediate PiP');
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // Mark user gesture and try PiP immediately
+              setHasUserGesture(true);
+              setUserGestureTimestamp(Date.now());
+              
+          if (telehealth.isConnected && !isPictureInPicture) {
+                handleTogglePictureInPicture(true).catch(error => {
+                  console.warn('❌ Video click PiP failed:', error);
+                });
+              }
+            }, { passive: false });
+          }
+        });
+      };
+
+      // Add click handlers to existing videos
+      addVideoClickHandlers();
+
+      // Monitor for new video elements and add handlers
+      const videoObserver = new MutationObserver(() => {
+        addVideoClickHandlers();
+      });
+      videoObserver.observe(document.body, { childList: true, subtree: true });
+      
+      // Store observer reference for cleanup
+      (window as any).__videoObserver = videoObserver;
+      
+      // Focus events for debugging
+      window.addEventListener("focus", () => {
+        console.log('🔄 Window gained focus - user returned');
+      });
     }
 
     return () => {
       if (document.pictureInPictureEnabled) {
+        // Remove PiP state change listeners
         document.removeEventListener("enterpictureinpicture", handlePictureInPictureChange);
         document.removeEventListener("leavepictureinpicture", handlePictureInPictureChange);
+        
+        // Remove auto-activation listeners
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        window.removeEventListener("blur", handleWindowBlur);
+        window.removeEventListener("resize", handleWindowResize);
+        
+        // Remove user gesture tracking listeners
+        const userGestureEvents = ['click', 'touchstart', 'keydown'];
+        userGestureEvents.forEach(eventType => {
+          document.removeEventListener(eventType, trackUserGesture);
+        });
+
+        // Remove enhanced video gesture tracking listeners
+        const videoGestureEvents = ['click', 'touchstart'];
+        videoGestureEvents.forEach(eventType => {
+          document.removeEventListener(eventType, trackUserGestureWithPiPAttempt);
+        });
+
+        // Clean up video click handlers
+        const videoElements = document.querySelectorAll('video[data-pip-click-handler]');
+        videoElements.forEach(video => {
+          video.removeAttribute('data-pip-click-handler');
+        });
+
+        // Clean up video observer
+        if ((window as any).__videoObserver) {
+          (window as any).__videoObserver.disconnect();
+          delete (window as any).__videoObserver;
+        }
       }
     };
-  }, []);
+  }, [telehealth.isConnected, isPictureInPicture, handleTogglePictureInPicture, pendingPiPRequest, hasUserGesture, userGestureTimestamp, findBestVideoElementForPiP]);
 
   // Permission helpers
   const queryPermission = useCallback(async (name: PermissionName): Promise<PermState> => {
@@ -365,8 +652,8 @@ export function TelehealthSessionContent({
       // 1. Request camera and microphone permissions
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       stream.getTracks().forEach(t => t.stop());
-      setCameraPerm('granted');
-      setMicPerm('granted');
+          setCameraPerm('granted');
+          setMicPerm('granted');
       
       // 2. Mark patient as waiting in the waiting room via API
       console.log('🚪 Joining waitlist - marking patient as waiting...');
@@ -409,7 +696,7 @@ export function TelehealthSessionContent({
     } catch (error) {
       console.error('❌ Failed to join waitlist:', error);
       if (error instanceof Error && error.message.includes('Permission denied')) {
-        setShowPermissionModal(true);
+          setShowPermissionModal(true);
       } else {
         // Handle API errors or other issues
         console.error('❌ Error joining waitlist:', error);
@@ -448,7 +735,7 @@ export function TelehealthSessionContent({
     } catch (error) {
       console.error('❌ [DEV] Failed to join call directly:', error);
       if (error instanceof Error && error.message.includes('Permission denied')) {
-        setShowPermissionModal(true);
+      setShowPermissionModal(true);
       }
     }
   };
@@ -499,7 +786,7 @@ export function TelehealthSessionContent({
                 aria-label="Join call directly (dev mode)"
               >
                 {isJoining || telehealth.isBusy ? "Joining..." : "🚀 Join Call (Dev)"}
-              </Button>
+            </Button>
             )}
           </div>
           <div className="mt-6 text-xs sm:text-sm text-gray-500">
@@ -600,8 +887,9 @@ export function TelehealthSessionContent({
                   isChatOpen={isChatOpen}
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
-                  onTogglePictureInPicture={handleTogglePictureInPicture}
+                  onTogglePictureInPicture={() => handleTogglePictureInPicture(true)}
                   isPictureInPicture={isPictureInPicture}
+                  pendingPiPRequest={pendingPiPRequest}
                 />
               }
             />
@@ -610,11 +898,11 @@ export function TelehealthSessionContent({
               <div className="absolute bottom-4 left-4 right-4">
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                      <span>{telehealth.error}</span>
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <span>{telehealth.error}</span>
                     </div>
                     <button 
                       onClick={() => telehealth.clearError()}

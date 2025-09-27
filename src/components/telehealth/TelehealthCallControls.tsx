@@ -37,6 +37,7 @@ interface TelehealthCallControlsProps {
   // Picture-in-Picture controls
   onTogglePictureInPicture?: () => void;
   isPictureInPicture?: boolean;
+  pendingPiPRequest?: boolean;
 }
 
 export function TelehealthCallControls({
@@ -64,6 +65,7 @@ export function TelehealthCallControls({
   onToggleChat,
   onTogglePictureInPicture,
   isPictureInPicture = false,
+  pendingPiPRequest = false,
 }: TelehealthCallControlsProps) {
   const [micMuted, setMicMuted] = useState(micMutedProp ?? false);
   const [cameraOff, setCameraOff] = useState(cameraOffProp ?? false);
@@ -224,26 +226,26 @@ export function TelehealthCallControls({
           {isOverlay && showSettings && (
             <>
               {/* Settings Menu */}
-              <div className="absolute bottom-16 right-0 z-30 w-[88vw] max-w-[360px] rounded-xl bg-slate-900/95 text-white shadow-2xl border border-white/10 p-2 backdrop-blur">
-                <div className="px-3 py-2 text-[11px] font-semibold tracking-wide text-white/70">MICROPHONE</div>
+              <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 z-30 w-[90vw] max-w-[320px] rounded-xl bg-slate-900/95 text-white shadow-2xl border border-white/10 p-2 backdrop-blur">
+                <div className="px-3 py-2 text-[11px] font-semibold tracking-wide text-white/70 text-center">MICROPHONE</div>
                 <div className="max-h-60 overflow-auto">
                   {audioDevices.map((device) => (
                     <button
                       key={device.deviceId}
                       onClick={() => { onSwitchMicrophone?.(device.deviceId || ""); setShowSettings(false); }}
                       className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 text-sm rounded-md hover:bg-white/10 transition-colors",
+                        "w-full flex items-center justify-between px-3 py-3 text-sm rounded-md hover:bg-white/10 transition-colors",
                         (device.deviceId === currentAudioDevice) && "bg-white/5"
                       )}
                     >
-                      <span className="truncate pr-2">{device.label || `Microphone ${device.deviceId?.slice(-4)}`}</span>
+                      <span className="truncate pr-2 text-left">{device.label || `Microphone ${device.deviceId?.slice(-4)}`}</span>
                       {device.deviceId === currentAudioDevice && (
-                        <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                       )}
                     </button>
                   ))}
                   {audioDevices.length === 0 && (
-                    <div className="px-3 py-3 text-sm text-white/70">No microphones found</div>
+                    <div className="px-3 py-3 text-sm text-white/70 text-center">No microphones found</div>
                   )}
                 </div>
               </div>
@@ -319,28 +321,42 @@ export function TelehealthCallControls({
             type="button"
             variant="ghost"
             className={cn(
-              "h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
+              "h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200 relative",
               isOverlay && "text-white hover:bg-white/20 bg-black/30",
               !isOverlay && document.pictureInPictureEnabled 
-                ? "bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white" 
+                ? pendingPiPRequest && !isPictureInPicture
+                  ? "bg-orange-600 hover:bg-orange-500 text-white animate-pulse"
+                  : isPictureInPicture
+                    ? "bg-blue-600 hover:bg-blue-500 text-white"
+                    : "bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white"
                 : "opacity-50 cursor-not-allowed bg-gray-700 text-gray-200"
             )}
-            onClick={() => {
-              console.log('🎬 PiP Button clicked!');
+            onClick={(e) => {
+              console.log('🎬 PiP Button clicked!', e.target, e.currentTarget);
+              console.log('🎬 PiP Button click event:', e);
+              console.log('🎬 PiP Button click coordinates:', e.clientX, e.clientY);
+              console.log('🎬 PiP Button element bounds:', e.currentTarget.getBoundingClientRect());
               if (document.pictureInPictureEnabled) {
                 onTogglePictureInPicture?.();
               } else {
                 console.warn('❌ PiP not supported in this browser');
               }
             }}
-            aria-label={isPictureInPicture ? 'Exit Picture-in-Picture' : 'Enter Picture-in-Picture'}
+            aria-label={isPictureInPicture ? 'Exit Picture-in-Picture' : pendingPiPRequest ? 'Click to activate Picture-in-Picture' : 'Enter Picture-in-Picture'}
             disabled={isBusy || !document.pictureInPictureEnabled}
             title={document.pictureInPictureEnabled 
-              ? (isPictureInPicture ? 'Exit Picture-in-Picture' : 'Enter Picture-in-Picture')
+              ? (isPictureInPicture 
+                  ? 'Exit Picture-in-Picture' 
+                  : pendingPiPRequest 
+                    ? 'Click to activate Picture-in-Picture (pending request)'
+                    : 'Enter Picture-in-Picture')
               : 'Picture-in-Picture not supported in this browser'
             }
           >
             <PictureInPicture className="h-7 w-7" />
+            {pendingPiPRequest && !isPictureInPicture && (
+              <div className="absolute -top-1 -right-1 h-3 w-3 bg-orange-500 rounded-full animate-ping" />
+            )}
             {/* <span className="ml-2 hidden sm:inline">
               {isPictureInPicture ? 'Exit PiP' : 'PiP'}
             </span> */}

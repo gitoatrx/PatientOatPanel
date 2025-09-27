@@ -64,3 +64,4 @@ export function useWaitingRoomService(appointmentId: string) {
   return new WaitingRoomService(appointmentId);
 }
 
+

@@ -43,6 +43,65 @@ export interface TypingUser {
   timestamp: number;
 }
 
+type PiPVideoElement = HTMLVideoElement & {
+  autoPictureInPicture?: boolean;
+  disablePictureInPicture?: boolean;
+  audioTracks?: any;
+  mozHasAudio?: boolean;
+  webkitAudioDecodedByteCount?: number;
+};
+
+const enablePiPSupportOnVideo = (video: HTMLVideoElement) => {
+  const pipVideo = video as PiPVideoElement;
+
+  // Ensure video is ready for PiP
+  pipVideo.playsInline = true;
+  pipVideo.setAttribute('playsinline', 'true');
+  
+  // Remove any PiP disabling attributes
+  pipVideo.removeAttribute('disablepictureinpicture');
+  pipVideo.removeAttribute('disablePictureInPicture');
+
+  // Enable PiP support
+  if ('disablePictureInPicture' in pipVideo) {
+    pipVideo.disablePictureInPicture = false;
+  }
+
+  // Set auto PiP if supported (Chrome 134+)
+  if ('autoPictureInPicture' in pipVideo) {
+    pipVideo.autoPictureInPicture = true;
+  } else {
+    pipVideo.setAttribute('autoPictureInPicture', 'true');
+  }
+
+  // Ensure video has proper attributes for PiP
+  pipVideo.setAttribute('data-pip-enabled', 'true');
+  
+  // Ensure video has audio for Chrome 134+ auto PiP requirements
+  if (pipVideo.muted) {
+    pipVideo.muted = false; // Unmute for auto PiP eligibility
+    console.log('🎬 Vonage: Unmuted video for auto PiP eligibility');
+  }
+
+  // Ensure video is playing for auto PiP eligibility
+  if (pipVideo.paused) {
+    pipVideo.play().catch(error => {
+      console.warn('🎬 Vonage: Could not auto-play video for PiP:', error);
+    });
+  }
+  
+  console.log('🎬 Vonage video element configured for PiP:', {
+    video: pipVideo,
+    hasRequestPictureInPicture: 'requestPictureInPicture' in pipVideo,
+    disablePictureInPicture: pipVideo.disablePictureInPicture,
+    autoPictureInPicture: pipVideo.autoPictureInPicture,
+    readyState: pipVideo.readyState,
+    muted: pipVideo.muted,
+    paused: pipVideo.paused,
+    hasAudio: pipVideo.audioTracks?.length > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
+  });
+};
+
 // Call status constants (matching doctor-side implementation)
 export const CALL_STATUSES = {
   IDLE: 'idle',
@@ -494,6 +553,8 @@ export function useVonageSession({
           videoElement.style.width = '100%';
           videoElement.style.height = '100%';
           videoElement.style.objectFit = 'cover';
+
+          enablePiPSupportOnVideo(videoElement);
 
           // Clear the container and add the preview
           localEl.innerHTML = '';
@@ -1479,6 +1540,8 @@ export function useVonageSession({
                   videoElement.style.width = '100%';
                   videoElement.style.height = '100%';
                   videoElement.style.objectFit = 'cover';
+
+                  enablePiPSupportOnVideo(videoElement);
                   
                   localEl.appendChild(videoElement);
                   console.log('✅ Fallback preview stream restored');
@@ -2275,6 +2338,8 @@ export function useVonageSession({
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
         videoElement.style.objectFit = 'cover';
+
+        enablePiPSupportOnVideo(videoElement);
 
         // Clear the container and add the preview
         localEl.innerHTML = '';

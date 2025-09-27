@@ -55,6 +55,11 @@ export class AblyVideoCallService {
         ably.connection.on('connected', () => {
           clearTimeout(timeout);
           console.log('✅ Connected to Ably');
+          console.log('🔗 Connection details:', {
+            connectionId: ably.connection.id,
+            key: ablyKey.substring(0, 10) + '...',
+            clientId: `patient-${this.options.appointmentId}`
+          });
           this.isConnected = true;
           this.connectionError = null;
           resolve();
@@ -71,14 +76,22 @@ export class AblyVideoCallService {
       });
 
       // Subscribe to doctor connect events
-      const channelName = `video-call-${this.options.appointmentId}`;
+      const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'video-call';
+      const channelName = `${channelPrefix}.${this.options.appointmentId}`;
       const channel = ably.channels.get(channelName);
       this.channel = channel;
 
-      console.log(`📡 Subscribing to channel: ${channelName}`);
+      console.log(`📡 Subscribing to channel: ${channelName} (prefix: ${channelPrefix})`);
 
-      channel.subscribe('doctor-connect', (message) => {
-        console.log('👨‍⚕️ Received doctor connect event:', message.data);
+      // Subscribe to connect events
+      channel.subscribe('connect', (message) => {
+        console.log('👨‍⚕️ Received connect event:', message.data);
+        console.log('📊 Message details:', {
+          event: message.name,
+          data: message.data,
+          timestamp: message.timestamp,
+          clientId: message.clientId
+        });
         
         try {
           const event: AblyConnectEvent = {
@@ -95,11 +108,22 @@ export class AblyVideoCallService {
             },
           };
 
+          console.log('✅ Processed connect event:', event);
           this.options.onDoctorConnect(event);
         } catch (error) {
-          console.error('❌ Error processing doctor connect event:', error);
-          this.options.onError(error instanceof Error ? error : new Error('Unknown error processing doctor connect event'));
+          console.error('❌ Error processing connect event:', error);
+          this.options.onError(error instanceof Error ? error : new Error('Unknown error processing connect event'));
         }
+      });
+
+      // Also listen for any other events on the channel for debugging
+      channel.subscribe((message) => {
+        console.log('📡 Received message on channel:', {
+          event: message.name,
+          data: message.data,
+          timestamp: message.timestamp,
+          clientId: message.clientId
+        });
       });
 
       console.log('✅ Ably video call service connected and listening');

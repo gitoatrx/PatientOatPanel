@@ -62,9 +62,9 @@ export function MicrophoneSelector({
       </Button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 w-72 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-lg z-50">
           <div className="p-2">
-            <div className="text-xs font-medium text-gray-500 mb-2 px-2">
+            <div className="text-xs font-medium text-gray-500 mb-2 px-2 text-center">
               Select Microphone
             </div>
             {audioDevices.map((device) => (
@@ -72,15 +72,15 @@ export function MicrophoneSelector({
                 key={device.deviceId}
                 onClick={() => handleDeviceSelect(device.deviceId!)}
                 className={cn(
-                  "w-full flex items-center justify-between px-2 py-2 text-sm rounded hover:bg-gray-50 transition-colors",
+                  "w-full flex items-center justify-between px-3 py-3 text-sm rounded hover:bg-gray-50 transition-colors",
                   device.deviceId === currentDevice && "bg-blue-50"
                 )}
               >
-                <span className="truncate">
+                <span className="truncate text-left pr-2">
                   {device.label || `Microphone ${device.deviceId?.slice(-4)}`}
                 </span>
                 {device.deviceId === currentDevice && (
-                  <Check className="h-4 w-4 text-blue-500" />
+                  <Check className="h-4 w-4 text-blue-500 flex-shrink-0" />
                 )}
               </button>
             ))}
