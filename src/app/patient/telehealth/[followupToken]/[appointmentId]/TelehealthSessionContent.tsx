@@ -103,7 +103,28 @@ export function TelehealthSessionContent({
     } finally {
       setIsJoining(false);
     }
-  }, [isJoining, telehealth.isBusy, telehealth.isConnected, telehealth]);
+  }, [isJoining, telehealth]);
+
+  // Helper function to find the best video element for PiP
+  const findBestVideoElementForPiP = useCallback(() => {
+    // Priority order for video elements
+    const selectors = [
+      '[data-video-panel] video', // Video panel video
+      '#vonage-remote-container video', // Remote container video
+      '#vonage-local-container video', // Local container video
+      'video[srcObject]', // Any video with media stream
+      'video' // Any video element
+    ];
+
+    for (const selector of selectors) {
+      const video = document.querySelector(selector) as HTMLVideoElement;
+      if (video && typeof video.requestPictureInPicture === 'function' && video.readyState >= 2) {
+        console.log('🎬 Found suitable video element:', { selector, video, readyState: video.readyState });
+        return video;
+      }
+    }
+    return null;
+  }, []);
 
   // Picture-in-Picture toggle handler
   const handleTogglePictureInPicture = useCallback(async (isUserGesture = false) => {
@@ -171,29 +192,7 @@ export function TelehealthSessionContent({
       // Re-throw other errors
       throw error;
     }
-  }, [isPictureInPicture, hasUserGesture]);
-
-  // Helper function to find the best video element for PiP
-  const findBestVideoElementForPiP = useCallback(() => {
-    // Priority order for video elements
-    const selectors = [
-      '[data-video-panel] video', // Video panel video
-      '#vonage-remote-container video', // Remote container video
-      '#vonage-local-container video', // Local container video
-      'video[srcObject]', // Any video with media stream
-      'video' // Any video element
-    ];
-
-    for (const selector of selectors) {
-      const video = document.querySelector(selector) as HTMLVideoElement;
-      if (video && typeof video.requestPictureInPicture === 'function' && video.readyState >= 2) {
-        console.log('🎬 Found suitable video element:', { selector, video, readyState: video.readyState });
-        return video;
-      }
-    }
-
-    return null;
-  }, []);
+  }, [isPictureInPicture, hasUserGesture, userGestureTimestamp, telehealth.isConnected, findBestVideoElementForPiP]);
 
   // Merge previous messages (API) with current messages (Vonage) for complete chat history
   const uiMessages: TelehealthChatMessage[] = useMemo(() => {
@@ -289,15 +288,13 @@ export function TelehealthSessionContent({
       setIsPictureInPicture(!!document.pictureInPictureElement);
     };
 
-    const isAutoPiPActive = (video?: HTMLVideoElement | null) =>
-      Boolean(video && (video as HTMLVideoElement & { autoPictureInPicture?: boolean }).autoPictureInPicture);
 
     // Setup Media Session API for automatic PiP (Chrome 134+)
     const setupMediaSessionPiP = () => {
       if ('mediaSession' in navigator && 'setActionHandler' in navigator.mediaSession) {
         try {
           console.log('🎬 Setting up Media Session API for automatic PiP');
-          (navigator.mediaSession as any).setActionHandler('enterpictureinpicture', async () => {
+          (navigator.mediaSession as MediaSession & { setActionHandler: (action: string, handler: () => void) => void }).setActionHandler('enterpictureinpicture', async () => {
             console.log('🎬 Media Session: Auto PiP triggered by browser');
             try {
               const videoElement = findBestVideoElementForPiP();
@@ -426,18 +423,6 @@ export function TelehealthSessionContent({
     };
 
     // Check if user gesture is still valid (within last 5 seconds)
-    const isUserGestureValid = () => {
-      const now = Date.now();
-      const gestureAge = now - userGestureTimestamp;
-      const isValid = hasUserGesture && gestureAge < 5000; // 5 seconds
-      console.log('🎬 User gesture validity check:', { 
-        hasUserGesture, 
-        gestureAge, 
-        isValid,
-        timestamp: userGestureTimestamp 
-      });
-      return isValid;
-    };
 
     // Check browser support for automatic PiP
     const checkAutoPiPSupport = () => {
@@ -525,7 +510,7 @@ export function TelehealthSessionContent({
       videoObserver.observe(document.body, { childList: true, subtree: true });
       
       // Store observer reference for cleanup
-      (window as any).__videoObserver = videoObserver;
+      (window as Window & { __videoObserver?: MutationObserver }).__videoObserver = videoObserver;
       
       // Focus events for debugging
       window.addEventListener("focus", () => {
@@ -563,13 +548,14 @@ export function TelehealthSessionContent({
         });
 
         // Clean up video observer
-        if ((window as any).__videoObserver) {
-          (window as any).__videoObserver.disconnect();
-          delete (window as any).__videoObserver;
+        const windowWithObserver = window as Window & { __videoObserver?: MutationObserver };
+        if (windowWithObserver.__videoObserver) {
+          windowWithObserver.__videoObserver.disconnect();
+          delete windowWithObserver.__videoObserver;
         }
       }
     };
-  }, [telehealth.isConnected, isPictureInPicture, handleTogglePictureInPicture, pendingPiPRequest, hasUserGesture, userGestureTimestamp, findBestVideoElementForPiP]);
+  }, [telehealth.isConnected, isPictureInPicture, handleTogglePictureInPicture, pendingPiPRequest, hasUserGesture, userGestureTimestamp, findBestVideoElementForPiP, providerName, sessionTitle]);
 
   // Permission helpers
   const queryPermission = useCallback(async (name: PermissionName): Promise<PermState> => {

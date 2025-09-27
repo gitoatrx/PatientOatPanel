@@ -21,7 +21,7 @@ type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
 type PiPEnabledVideo = HTMLVideoElement & {
   autoPictureInPicture?: boolean;
   disablePictureInPicture?: boolean;
-  audioTracks?: any;
+  audioTracks?: MediaStreamTrack[];
   mozHasAudio?: boolean;
   webkitAudioDecodedByteCount?: number;
 };
@@ -73,7 +73,7 @@ const ensurePictureInPictureReady = (video: HTMLVideoElement) => {
     readyState: pipVideo.readyState,
     muted: pipVideo.muted,
     paused: pipVideo.paused,
-    hasAudio: pipVideo.audioTracks?.length > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
+    hasAudio: (pipVideo.audioTracks?.length ?? 0) > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
   });
 };
 
