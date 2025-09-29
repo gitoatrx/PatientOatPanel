@@ -1,19 +1,28 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
   sessionTitle: string;
   providerName: string;
-  participants: Array<{ name: string; role: string }>;
+  participants: Array<{ connectionId: string; streamId?: string; hasVideo: boolean; hasAudio: boolean; isLocal: boolean; }>;
   localParticipantName?: string;
   statusMessage?: string;
   onRemoteContainerReady?: (element: HTMLDivElement | null) => void;
   onLocalContainerReady?: (element: HTMLDivElement | null) => void;
   overlayControls?: ReactNode;
   signalStrength?: 'excellent' | 'good' | 'fair' | 'poor';
+  pendingPiPRequest?: boolean;
+  isPictureInPicture?: boolean;
+  onTogglePictureInPicture?: () => void;
+  setPendingPiPRequest?: (value: boolean) => void;
+  onParticipantVideoReady?: (connectionId: string, el: HTMLVideoElement | null) => void;
+  enablePiPFollowSpeaker?: () => void;
+  pipFollowsSpeaker?: boolean;
+  activeSpeakerId?: string | null;
+  participantAudioLevels?: Map<string, number>;
 }
 
 type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
@@ -45,18 +54,15 @@ const ensurePictureInPictureReady = (video: HTMLVideoElement) => {
   // Set auto PiP if supported (Chrome 134+)
   if ('autoPictureInPicture' in pipVideo) {
     pipVideo.autoPictureInPicture = true;
-  } else {
-    pipVideo.setAttribute('autoPictureInPicture', 'true');
   }
+  // Set HTML attribute for better compatibility (boolean attribute)
+  pipVideo.setAttribute('autopictureinpicture', '');
 
   // Ensure video has proper attributes for PiP
   pipVideo.setAttribute('data-pip-enabled', 'true');
   
-  // Ensure video has audio for Chrome 134+ auto PiP requirements
-  if (pipVideo.muted) {
-    pipVideo.muted = false; // Unmute for auto PiP eligibility
-    console.log('🎬 Unmuted video for auto PiP eligibility');
-  }
+  // Do NOT forcibly unmute here - let the app control audio policy
+  // Chrome doesn't require unmuting for PiP eligibility
 
   // Ensure video is playing for auto PiP eligibility
   if (pipVideo.paused) {
@@ -174,6 +180,15 @@ export function TelehealthVideoPanel({
   onLocalContainerReady,
   overlayControls,
   signalStrength,
+  pendingPiPRequest = false,
+  isPictureInPicture = false,
+  onTogglePictureInPicture,
+  setPendingPiPRequest,
+  onParticipantVideoReady,
+  enablePiPFollowSpeaker,
+  pipFollowsSpeaker = false,
+  activeSpeakerId,
+  participantAudioLevels,
 }: TelehealthVideoPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
@@ -276,6 +291,27 @@ export function TelehealthVideoPanel({
 
     return () => observer.disconnect();
   }, []);
+
+  // Register participant videos for speaker following
+  useEffect(() => {
+    if (!onParticipantVideoReady) return;
+
+    // Register remote videos
+    const remoteVideos = remoteRef.current?.querySelectorAll('video') || [];
+    remoteVideos.forEach((video, index) => {
+      const participant = participants[index];
+      if (participant?.connectionId) {
+        onParticipantVideoReady(participant.connectionId, video as HTMLVideoElement);
+      }
+    });
+
+    // Register local video
+    const localVideo = localRef.current?.querySelector('video') as HTMLVideoElement;
+    if (localVideo) {
+      // Use a special ID for local participant
+      onParticipantVideoReady('local', localVideo);
+    }
+  }, [participants, onParticipantVideoReady, remoteHasVideo, localHasVideo]);
 
   const handleToggleFullscreen = useCallback(async () => {
     const panel = panelRef.current;
@@ -390,11 +426,12 @@ export function TelehealthVideoPanel({
   const participantCount = participants.length;
   const participantLabel = `${participantCount} ${participantCount === 1 ? "participant" : "participants"}`;
   const providerFirstName = providerName.split(" ")[0] ?? providerName;
+  // Since participants don't have names in the new structure, we'll use connectionId for identification
   const remoteNames = participants
-    .map(p => p.name)
-    .filter(n => n && n !== localParticipantName);
-  const hasNamedLocalParticipant = participants.some((participant) => participant.name === localParticipantName);
-  const remoteParticipantCount = Math.max(1, participantCount - (hasNamedLocalParticipant ? 1 : 0));
+    .filter(p => !p.isLocal)
+    .map(p => `Participant ${p.connectionId.slice(-4)}`);
+  const hasLocalParticipant = participants.some((participant) => participant.isLocal);
+  const remoteParticipantCount = Math.max(1, participantCount - (hasLocalParticipant ? 1 : 0));
   const tileCount = Math.max(1, remoteTileCount || remoteParticipantCount);
   // Meet/Zoom-like tiling: near-square grid using sqrt
   const calcColumns = (n: number) => {
@@ -543,6 +580,60 @@ export function TelehealthVideoPanel({
              px-3 py-3">{overlayControls}</div>
           </div>
         ) : null}
+
+        {/* PiP nudge banner */}
+        {pendingPiPRequest && !isPictureInPicture && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white rounded-lg px-4 py-3 flex flex-col items-center gap-2 shadow-lg max-w-sm">
+            <span className="text-sm text-center">Keep this call visible?</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { 
+                  setPendingPiPRequest?.(false); 
+                  void onTogglePictureInPicture?.(); 
+                }}
+                className="h-7 px-3 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+              >
+                Current View
+              </button>
+              {enablePiPFollowSpeaker && (
+                <button
+                  onClick={() => { 
+                    setPendingPiPRequest?.(false); 
+                    void enablePiPFollowSpeaker(); 
+                  }}
+                  className="h-7 px-3 bg-blue-500/80 hover:bg-blue-500 rounded text-sm font-medium transition-colors"
+                >
+                  Follow Speaker
+                </button>
+              )}
+              <button
+                aria-label="Dismiss"
+                className="ml-1 opacity-70 hover:opacity-100"
+                onClick={() => setPendingPiPRequest?.(false)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PiP Follow Speaker indicator */}
+        {pipFollowsSpeaker && isPictureInPicture && (
+          <div className="absolute top-4 right-4 bg-blue-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="text-xs font-medium">
+              {activeSpeakerId ? `Following ${activeSpeakerId.slice(-4)}` : 'Following Speaker'}
+            </span>
+          </div>
+        )}
+
+        {/* Active Speaker indicator (when not in PiP) */}
+        {activeSpeakerId && !isPictureInPicture && (
+          <div className="absolute top-4 left-4 bg-green-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="text-xs font-medium">Speaking: {activeSpeakerId.slice(-4)}</span>
+          </div>
+        )}
     </div>
   );
 }
