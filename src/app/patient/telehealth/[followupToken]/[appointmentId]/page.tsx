@@ -1,33 +1,10 @@
 import { Metadata } from "next";
-import type { TelehealthChatMessage } from "@/components/telehealth";
 import { TelehealthSessionContent } from "@/app/patient/telehealth/[followupToken]/[appointmentId]/TelehealthSessionContent";
 
 export const metadata: Metadata = {
   title: "Patient Telehealth Session",
   description: "Join your telehealth appointment with your healthcare provider",
 };
-
-const mockMessages: TelehealthChatMessage[] = [
-  {
-    id: "1",
-    author: "RAPHAEL AJAYI",
-    authoredAt: "10:01",
-    content: "Hello, thanks for joining today.",
-  },
-  {
-    id: "2",
-    author: "You",
-    authoredAt: "10:02",
-    content: "Hi doctor, I can see and hear you well.",
-    isOwn: true,
-  },
-  {
-    id: "3",
-    author: "RAPHAEL AJAYI",
-    authoredAt: "10:03",
-    content: "Great! Let's review your symptoms before we begin.",
-  },
-];
 
 const mockParticipants = [
   { name: "RAPHAEL AJAYI", role: "Doctor" },
@@ -58,7 +35,7 @@ export default async function PatientTelehealthSessionPage({ params }: PatientTe
       providerName={PROVIDER_NAME}
       sessionTitle={SESSION_TITLE}
       participants={mockParticipants}
-      messages={mockMessages}
+      messages={[]}
       followupToken={followupToken}
       appointmentId={appointmentId}
     />

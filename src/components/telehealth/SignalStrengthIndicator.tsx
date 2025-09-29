@@ -4,13 +4,11 @@ import { cn } from "@/lib/utils";
 
 interface SignalStrengthIndicatorProps {
   strength: 'excellent' | 'good' | 'fair' | 'poor';
-  audioLevel?: number;
   className?: string;
 }
 
 export function SignalStrengthIndicator({ 
   strength, 
-  audioLevel = 0, 
   className 
 }: SignalStrengthIndicatorProps) {
   const getSignalBars = () => {
@@ -86,16 +84,6 @@ export function SignalStrengthIndicator({
       <span className="text-xs font-medium text-gray-600">
         {label}
       </span>
-      
-      {/* Audio Level Indicator (optional) */}
-      {audioLevel > 0 && (
-        <div className="flex items-center gap-1">
-          <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-xs text-blue-600">
-            {Math.round(audioLevel * 100)}%
-          </span>
-        </div>
-      )}
     </div>
   );
 }

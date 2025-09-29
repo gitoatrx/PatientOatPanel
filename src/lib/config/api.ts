@@ -33,6 +33,12 @@ export const API_CONFIG = {
     GET_FOLLOWUP_QUESTIONS: '/clinic/followups',
     SAVE_FOLLOWUP_ANSWERS: '/clinic/followups',
     TELEHEALTH_PATIENT_SESSION_BASE: '/clinic/appointments',
+    // Chat endpoints
+    CHAT_MESSAGES: '/clinic/appointments',
+    // Waiting room endpoints
+    WAITING_ROOM_PATIENT: '/clinic/appointments',
+    // Video events endpoints
+    VIDEO_EVENTS_PATIENT: '/clinic/appointments',
   },
 
   // Request Configuration
@@ -119,4 +125,23 @@ export const getFollowupQuestionsUrl = (clinicId: number, appointmentId: number,
 
 export const getFollowupAnswersUrl = (clinicId: number, appointmentId: number, token: string): string => {
   return `${API_CONFIG.ENDPOINTS.SAVE_FOLLOWUP_ANSWERS}/${clinicId}/${appointmentId}/${token}/answers`;
+};
+
+// Helper function for chat endpoints
+export const getChatMessagesUrl = (appointmentId: string, token: string): string => {
+  const safeAppointmentId = encodeURIComponent(appointmentId);
+  const safeToken = encodeURIComponent(token);
+  return `${API_CONFIG.ENDPOINTS.CHAT_MESSAGES}/${safeAppointmentId}/video/chat/patient?token=${safeToken}`;
+};
+
+// Helper function for waiting room endpoints
+export const getWaitingRoomPatientUrl = (appointmentId: string): string => {
+  const safeAppointmentId = encodeURIComponent(appointmentId);
+  return `${API_CONFIG.ENDPOINTS.WAITING_ROOM_PATIENT}/${safeAppointmentId}/video/waiting-room/patient`;
+};
+
+// Helper function for video events endpoints
+export const getVideoEventsPatientUrl = (appointmentId: string): string => {
+  const safeAppointmentId = encodeURIComponent(appointmentId);
+  return `${API_CONFIG.ENDPOINTS.VIDEO_EVENTS_PATIENT}/${safeAppointmentId}/video/events/patient`;
 };

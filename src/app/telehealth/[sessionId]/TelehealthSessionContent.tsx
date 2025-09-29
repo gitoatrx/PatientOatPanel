@@ -9,6 +9,7 @@ import {
   type TelehealthChatMessage,
 } from "@/components/telehealth";
 import { useVonageSession, type ChatMessage } from "@/lib/telehealth/useVonageSession";
+import { X } from "lucide-react";
 
 interface TelehealthSessionContentProps {
   sessionId: string;
@@ -86,11 +87,11 @@ export function TelehealthSessionContent({
   };
 
       return (
-        <div className="h-screen bg-background overflow-hidden p-2 sm:p-4 lg:p-8">
+        <div className="h-screen bg-background overflow-hidden p-0 lg:p-8">
           {/* Split Screen Layout - Responsive */}
-          <div className="flex flex-col lg:flex-row h-full gap-2 sm:gap-4">
+          <div className="flex flex-col lg:flex-row h-full gap-0 lg:gap-4">
             {/* Left Side - Video Panel */}
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 h-full">
               {/* Video Header */}
               {/* <div className="px-6 py-2">
                 <div>
@@ -104,11 +105,17 @@ export function TelehealthSessionContent({
               </div> */}
 
               {/* Video Content */}
-              <div className="flex-1 relative rounded-lg overflow-hidden">
+              <div className="flex-1 relative rounded-lg overflow-hidden h-full">
                 <TelehealthVideoPanel
                   sessionTitle={sessionTitle}
                   providerName={providerName}
-                  participants={participants}
+                  participants={participants.map((p, index) => ({
+                    connectionId: `participant-${index}`,
+                    streamId: undefined,
+                    hasVideo: true,
+                    hasAudio: true,
+                    isLocal: false
+                  }))}
                   localParticipantName="You"
                   statusMessage={telehealth.statusMessage}
                   onRemoteContainerReady={handleRemoteContainerReady}
@@ -134,7 +141,16 @@ export function TelehealthSessionContent({
                 {telehealth.error && !isPermissionError && (
                   <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4">
                     <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 sm:px-4 sm:py-3 text-sm text-rose-700">
-                      {telehealth.error}
+                      <div className="flex items-center justify-between">
+                        <span>{telehealth.error}</span>
+                        <button 
+                          onClick={() => telehealth.clearError()}
+                          className="text-rose-500 hover:text-rose-700 ml-2 p-1 rounded-full hover:bg-rose-100 transition-colors"
+                          aria-label="Dismiss error"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ChevronLeft, LogOut } from "lucide-react";
+import { BimbleLogoIcon } from "../../../../../../public/icons/icons";
 // import { gsap } from "gsap"; // COMMENTED OUT FOR TESTING
 import { BaseErrorBoundary } from "@/components/error-boundaries/BaseErrorBoundary";
 import { hasActiveSession, logout } from "@/lib/utils/auth-utils";
@@ -173,11 +174,7 @@ export function PatientStepShell({
                     aria-label="123Walkin home"
                     className="cursor-pointer"
                   >
-                    <img 
-                      src="/123Walkin.png" 
-                      alt="123Walkin" 
-                      className="w-7 h-7 object-contain border-1 rounded-full"
-                    />
+                    <BimbleLogoIcon className="w-7 h-7" />
                   </Link>
                 </div>
                 <div className="w-24 flex justify-end">

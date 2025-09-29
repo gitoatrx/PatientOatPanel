@@ -11,6 +11,7 @@ import React, { useState, useEffect } from "react";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { useEnterKey } from "@/lib/hooks/useEnterKey";
 
 const emailSchema = z.object({
   email: z

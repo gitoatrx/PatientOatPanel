@@ -43,6 +43,65 @@ export interface TypingUser {
   timestamp: number;
 }
 
+type PiPVideoElement = HTMLVideoElement & {
+  autoPictureInPicture?: boolean;
+  disablePictureInPicture?: boolean;
+  audioTracks?: MediaStreamTrack[];
+  mozHasAudio?: boolean;
+  webkitAudioDecodedByteCount?: number;
+};
+
+const enablePiPSupportOnVideo = (video: HTMLVideoElement) => {
+  const pipVideo = video as PiPVideoElement;
+
+  // Ensure video is ready for PiP
+  pipVideo.playsInline = true;
+  pipVideo.setAttribute('playsinline', 'true');
+  
+  // Remove any PiP disabling attributes
+  pipVideo.removeAttribute('disablepictureinpicture');
+  pipVideo.removeAttribute('disablePictureInPicture');
+
+  // Enable PiP support
+  if ('disablePictureInPicture' in pipVideo) {
+    pipVideo.disablePictureInPicture = false;
+  }
+
+  // Set auto PiP if supported (Chrome 134+)
+  if ('autoPictureInPicture' in pipVideo) {
+    pipVideo.autoPictureInPicture = true;
+  } else {
+    pipVideo.setAttribute('autoPictureInPicture', 'true');
+  }
+
+  // Ensure video has proper attributes for PiP
+  pipVideo.setAttribute('data-pip-enabled', 'true');
+  
+  // Ensure video has audio for Chrome 134+ auto PiP requirements
+  if (pipVideo.muted) {
+    pipVideo.muted = false; // Unmute for auto PiP eligibility
+    console.log('🎬 Vonage: Unmuted video for auto PiP eligibility');
+  }
+
+  // Ensure video is playing for auto PiP eligibility
+  if (pipVideo.paused) {
+    pipVideo.play().catch(error => {
+      console.warn('🎬 Vonage: Could not auto-play video for PiP:', error);
+    });
+  }
+  
+  console.log('🎬 Vonage video element configured for PiP:', {
+    video: pipVideo,
+    hasRequestPictureInPicture: 'requestPictureInPicture' in pipVideo,
+    disablePictureInPicture: pipVideo.disablePictureInPicture,
+    autoPictureInPicture: pipVideo.autoPictureInPicture,
+    readyState: pipVideo.readyState,
+    muted: pipVideo.muted,
+    paused: pipVideo.paused,
+    hasAudio: (pipVideo.audioTracks?.length ?? 0) > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
+  });
+};
+
 // Call status constants (matching doctor-side implementation)
 export const CALL_STATUSES = {
   IDLE: 'idle',
@@ -80,6 +139,7 @@ interface UseVonageSessionResult {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   signalStrength: 'excellent' | 'good' | 'fair' | 'poor';
+  networkQuality: 'excellent' | 'good' | 'fair' | 'poor';
   audioLevel: number;
   audioDevices: Array<{ deviceId?: string; label?: string }>;
   currentAudioDevice: string | null;
@@ -362,47 +422,88 @@ export function useVonageSession({
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [signalStrength, setSignalStrength] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const [audioLevel, setAudioLevel] = useState(0);
+  const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Chat persistence key based on session
-  const chatStorageKey = `telehealth_chat_${appointmentId}_${followupToken}`;
-
-  // Load chat messages from localStorage on mount
-  useEffect(() => {
+  // Function to assess network quality from WebRTC stats
+  const assessNetworkQuality = useCallback(async (session: any) => {
     try {
-      const savedMessages = localStorage.getItem(chatStorageKey);
-      if (savedMessages) {
-        const parsedMessages = JSON.parse(savedMessages);
-        setChatMessages(parsedMessages);
-        console.log('📱 Loaded chat messages from localStorage:', parsedMessages.length);
-      }
-    } catch (error) {
-      console.error('Error loading chat messages from localStorage:', error);
-    }
-  }, [chatStorageKey]);
+      if (!session || !session.connection) return;
 
-  // Save chat messages to localStorage whenever they change
-  useEffect(() => {
-    if (chatMessages.length > 0) {
-      try {
-        localStorage.setItem(chatStorageKey, JSON.stringify(chatMessages));
-        console.log('💾 Saved chat messages to localStorage:', chatMessages.length);
-      } catch (error) {
-        console.error('Error saving chat messages to localStorage:', error);
+      // Get WebRTC stats from the session
+      const stats = await session.getStats();
+      let rtt = 0;
+      let packetLoss = 0;
+      let jitter = 0;
+      let bitrate = 0;
+
+      // Parse stats to get network metrics
+      stats.forEach((report: any) => {
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          rtt = report.currentRoundTripTime * 1000 || 0; // Convert to ms
+        }
+        if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+          packetLoss = (report.packetsLost / (report.packetsReceived + report.packetsLost)) * 100 || 0;
+          jitter = report.jitter * 1000 || 0; // Convert to ms
+        }
+        if (report.type === 'outbound-rtp' && report.mediaType === 'audio') {
+          bitrate = report.bytesSent * 8 / 1000 || 0; // Convert to kbps
+        }
+      });
+
+      console.log('📊 WebRTC Stats:', { rtt, packetLoss, jitter, bitrate });
+
+      // Assess quality based on metrics
+      let quality: 'excellent' | 'good' | 'fair' | 'poor' = 'good';
+
+      // RTT assessment (lower is better)
+      if (rtt < 100) {
+        quality = 'excellent';
+      } else if (rtt < 200) {
+        quality = 'good';
+      } else if (rtt < 400) {
+        quality = 'fair';
+      } else {
+        quality = 'poor';
       }
+
+      // Adjust based on packet loss (lower is better)
+      if (packetLoss > 5) {
+        quality = 'poor';
+      } else if (packetLoss > 2) {
+        quality = quality === 'excellent' ? 'good' : quality;
+      }
+
+      // Adjust based on jitter (lower is better)
+      if (jitter > 50) {
+        quality = quality === 'excellent' ? 'good' : quality === 'good' ? 'fair' : 'poor';
+      }
+
+      console.log('📊 Assessed network quality:', quality);
+      setNetworkQuality(quality);
+      setSignalStrength(quality);
+
+    } catch (error) {
+      console.warn('Failed to get WebRTC stats:', error);
     }
-  }, [chatMessages, chatStorageKey]);
+  }, []);
+
+
+
+
+
+
 
   // Clear chat messages when session ends
   const clearChatHistory = useCallback(() => {
     try {
-      localStorage.removeItem(chatStorageKey);
       setChatMessages([]);
-      console.log('🗑️ Cleared chat history from localStorage');
+      console.log('🗑️ Cleared chat history');
     } catch (error) {
       console.error('Error clearing chat history:', error);
     }
-  }, [chatStorageKey]);
+  }, []);
 
   // Monitor video state changes
   useEffect(() => {
@@ -452,6 +553,8 @@ export function useVonageSession({
           videoElement.style.width = '100%';
           videoElement.style.height = '100%';
           videoElement.style.objectFit = 'cover';
+
+          enablePiPSupportOnVideo(videoElement);
 
           // Clear the container and add the preview
           localEl.innerHTML = '';
@@ -1100,6 +1203,41 @@ export function useVonageSession({
       session.on("sessionReconnected", handleSessionReconnected);
       session.on("sessionDisconnected", handleSessionDisconnected);
 
+      // Add network quality monitoring
+      session.on("networkQuality", (event: any) => {
+        console.log('📊 Network quality update:', event);
+        const quality = event.quality || 'good';
+        setNetworkQuality(quality);
+        setSignalStrength(quality); // Update signal strength based on network quality
+      });
+
+      // Start WebRTC stats monitoring
+      const startStatsMonitoring = () => {
+        if (statsIntervalRef.current) {
+          clearInterval(statsIntervalRef.current);
+        }
+        
+        // Monitor stats every 5 seconds
+        statsIntervalRef.current = setInterval(() => {
+          assessNetworkQuality(session);
+        }, 5000);
+        
+        // Initial assessment
+        assessNetworkQuality(session);
+      };
+
+      // Start monitoring when session is connected
+      if (session.connection) {
+        startStatsMonitoring();
+      } else {
+        // Wait for connection to be established
+        const handleSessionConnected = () => {
+          startStatsMonitoring();
+          session.off("sessionConnected", handleSessionConnected);
+        };
+        session.on("sessionConnected", handleSessionConnected);
+      }
+
       const videoInputs = await listVideoInputs(OT);
       videoDevicesRef.current = videoInputs;
       currentVideoDeviceRef.current = videoInputs[0]?.deviceId ?? null;
@@ -1192,16 +1330,8 @@ export function useVonageSession({
           const level = event.audioLevel || 0;
           setAudioLevel(level);
           
-          // Update signal strength based on audio level
-          if (level > 0.7) {
-            setSignalStrength('excellent');
-          } else if (level > 0.4) {
-            setSignalStrength('good');
-          } else if (level > 0.1) {
-            setSignalStrength('fair');
-          } else {
-            setSignalStrength('poor');
-          }
+          // Note: Signal strength is now based on network quality, not audio level
+          // Audio level is kept separate for microphone input monitoring
           
           // Detect speaking (threshold for speaking detection)
           const isSpeaking = level > 0.05 && !isMicMuted;
@@ -1410,6 +1540,8 @@ export function useVonageSession({
                   videoElement.style.width = '100%';
                   videoElement.style.height = '100%';
                   videoElement.style.objectFit = 'cover';
+
+                  enablePiPSupportOnVideo(videoElement);
                   
                   localEl.appendChild(videoElement);
                   console.log('✅ Fallback preview stream restored');
@@ -1912,8 +2044,17 @@ export function useVonageSession({
     setError(undefined);
   }, []);
 
+  // Cleanup stats monitoring
+  useEffect(() => {
+    return () => {
+      if (statsIntervalRef.current) {
+        clearInterval(statsIntervalRef.current);
+      }
+    };
+  }, []);
+
   const sendChatMessage = useCallback((content: string, type: 'text' | 'image' | 'file' = 'text', attachment?: any) => {
-    console.log('🔴 sendChatMessage called:', {
+    console.log('�� sendChatMessage called:', {
       content,
       type,
       attachment,
@@ -2198,6 +2339,8 @@ export function useVonageSession({
         videoElement.style.height = '100%';
         videoElement.style.objectFit = 'cover';
 
+        enablePiPSupportOnVideo(videoElement);
+
         // Clear the container and add the preview
         localEl.innerHTML = '';
         localEl.appendChild(videoElement);
@@ -2317,6 +2460,17 @@ export function useVonageSession({
     };
   }, [cleanup]);
 
+  // Auto-dismiss errors after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(undefined);
+      }, 5000); // Auto-dismiss after 5 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   return useMemo(
     () => ({
       join,
@@ -2344,6 +2498,7 @@ export function useVonageSession({
       isAudioEnabled,
       isVideoEnabled,
       signalStrength,
+      networkQuality,
       audioLevel,
       audioDevices: audioDevicesRef.current,
       currentAudioDevice: currentAudioDeviceRef.current,
@@ -2354,6 +2509,6 @@ export function useVonageSession({
       stopTypingIndicator,
       clearChatHistory,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory],
+    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, networkQuality, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory, assessNetworkQuality],
   );
 }

@@ -5,9 +5,9 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/use-toast";
 
 export const metadata: Metadata = {
-  title: "123Walkin Clinic - OATRx",
+  title: "123Walkin Clinic - Bimble",
   description:
-    "123Walkin Clinic - OATRx is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
+    "123Walkin Clinic - Bimble is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
 };
 
 export default function RootLayout({

@@ -1,22 +1,88 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
   sessionTitle: string;
   providerName: string;
-  participants: Array<{ name: string; role: string }>;
+  participants: Array<{ connectionId: string; streamId?: string; hasVideo: boolean; hasAudio: boolean; isLocal: boolean; }>;
   localParticipantName?: string;
   statusMessage?: string;
   onRemoteContainerReady?: (element: HTMLDivElement | null) => void;
   onLocalContainerReady?: (element: HTMLDivElement | null) => void;
   overlayControls?: ReactNode;
   signalStrength?: 'excellent' | 'good' | 'fair' | 'poor';
+  pendingPiPRequest?: boolean;
+  isPictureInPicture?: boolean;
+  onTogglePictureInPicture?: () => void;
+  setPendingPiPRequest?: (value: boolean) => void;
+  onParticipantVideoReady?: (connectionId: string, el: HTMLVideoElement | null) => void;
+  enablePiPFollowSpeaker?: () => void;
+  pipFollowsSpeaker?: boolean;
+  activeSpeakerId?: string | null;
+  participantAudioLevels?: Map<string, number>;
 }
 
 type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
+
+type PiPEnabledVideo = HTMLVideoElement & {
+  autoPictureInPicture?: boolean;
+  disablePictureInPicture?: boolean;
+  audioTracks?: MediaStreamTrack[];
+  mozHasAudio?: boolean;
+  webkitAudioDecodedByteCount?: number;
+};
+
+const ensurePictureInPictureReady = (video: HTMLVideoElement) => {
+  const pipVideo = video as PiPEnabledVideo;
+
+  // Ensure video is ready for PiP
+  pipVideo.playsInline = true;
+  pipVideo.setAttribute('playsinline', 'true');
+  
+  // Remove any PiP disabling attributes
+  pipVideo.removeAttribute('disablepictureinpicture');
+  pipVideo.removeAttribute('disablePictureInPicture');
+
+  // Enable PiP support
+  if ('disablePictureInPicture' in pipVideo) {
+    pipVideo.disablePictureInPicture = false;
+  }
+
+  // Set auto PiP if supported (Chrome 134+)
+  if ('autoPictureInPicture' in pipVideo) {
+    pipVideo.autoPictureInPicture = true;
+  }
+  // Set HTML attribute for better compatibility (boolean attribute)
+  pipVideo.setAttribute('autopictureinpicture', '');
+
+  // Ensure video has proper attributes for PiP
+  pipVideo.setAttribute('data-pip-enabled', 'true');
+  
+  // Do NOT forcibly unmute here - let the app control audio policy
+  // Chrome doesn't require unmuting for PiP eligibility
+
+  // Ensure video is playing for auto PiP eligibility
+  if (pipVideo.paused) {
+    pipVideo.play().catch(error => {
+      console.warn('🎬 Could not auto-play video for PiP:', error);
+    });
+  }
+  
+  console.log('🎬 Video element configured for PiP:', {
+    video: pipVideo,
+    hasRequestPictureInPicture: 'requestPictureInPicture' in pipVideo,
+    disablePictureInPicture: pipVideo.disablePictureInPicture,
+    autoPictureInPicture: pipVideo.autoPictureInPicture,
+    readyState: pipVideo.readyState,
+    muted: pipVideo.muted,
+    paused: pipVideo.paused,
+    hasAudio: (pipVideo.audioTracks?.length ?? 0) > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
+  });
+};
+
 const normalizeVideoElements = (
   container: HTMLDivElement | null,
   opts?: { strength?: TileStrength; names?: string[] }
@@ -26,6 +92,7 @@ const normalizeVideoElements = (
   const isTiled = container.dataset.tiled === "true";
   const videos = container.querySelectorAll("video");
   videos.forEach((video, index) => {
+    ensurePictureInPictureReady(video);
     video.style.width = "100%";
     video.style.height = "100%";
     video.style.maxHeight = "100%";
@@ -113,6 +180,15 @@ export function TelehealthVideoPanel({
   onLocalContainerReady,
   overlayControls,
   signalStrength,
+  pendingPiPRequest = false,
+  isPictureInPicture = false,
+  onTogglePictureInPicture,
+  setPendingPiPRequest,
+  onParticipantVideoReady,
+  enablePiPFollowSpeaker,
+  pipFollowsSpeaker = false,
+  activeSpeakerId,
+  participantAudioLevels,
 }: TelehealthVideoPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
@@ -132,12 +208,26 @@ export function TelehealthVideoPanel({
     return () => onRemoteContainerReady?.(null);
   }, [onRemoteContainerReady]);
 
-  // Track viewport width for responsive tiling decisions
+  // Track viewport width for responsive tiling decisions and auto-fullscreen on mobile/tablet
   useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
+    const onResize = () => {
+      const newWidth = window.innerWidth;
+      setViewportWidth(newWidth);
+      // Auto-enable fullscreen on mobile/tablet devices
+      if (newWidth < 1024) {
+        setIsFullscreen(true);
+      }
+    };
+    
+    // Set initial fullscreen state for mobile/tablet
+    if (viewportWidth < 1024) {
+      setIsFullscreen(true);
+    }
+    
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [viewportWidth]);
+
 
   useEffect(() => {
     onLocalContainerReady?.(localRef.current);
@@ -180,6 +270,7 @@ export function TelehealthVideoPanel({
     };
   }, []);
 
+
   useEffect(() => {
     const localElement = localRef.current;
     if (!localElement) return;
@@ -201,6 +292,27 @@ export function TelehealthVideoPanel({
     return () => observer.disconnect();
   }, []);
 
+  // Register participant videos for speaker following
+  useEffect(() => {
+    if (!onParticipantVideoReady) return;
+
+    // Register remote videos
+    const remoteVideos = remoteRef.current?.querySelectorAll('video') || [];
+    remoteVideos.forEach((video, index) => {
+      const participant = participants[index];
+      if (participant?.connectionId) {
+        onParticipantVideoReady(participant.connectionId, video as HTMLVideoElement);
+      }
+    });
+
+    // Register local video
+    const localVideo = localRef.current?.querySelector('video') as HTMLVideoElement;
+    if (localVideo) {
+      // Use a special ID for local participant
+      onParticipantVideoReady('local', localVideo);
+    }
+  }, [participants, onParticipantVideoReady, remoteHasVideo, localHasVideo]);
+
   const handleToggleFullscreen = useCallback(async () => {
     const panel = panelRef.current;
     if (!panel) return;
@@ -217,6 +329,7 @@ export function TelehealthVideoPanel({
       console.warn('Unable to toggle fullscreen', error);
     }
   }, []);
+
 
   const handleMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -313,11 +426,12 @@ export function TelehealthVideoPanel({
   const participantCount = participants.length;
   const participantLabel = `${participantCount} ${participantCount === 1 ? "participant" : "participants"}`;
   const providerFirstName = providerName.split(" ")[0] ?? providerName;
+  // Since participants don't have names in the new structure, we'll use connectionId for identification
   const remoteNames = participants
-    .map(p => p.name)
-    .filter(n => n && n !== localParticipantName);
-  const hasNamedLocalParticipant = participants.some((participant) => participant.name === localParticipantName);
-  const remoteParticipantCount = Math.max(1, participantCount - (hasNamedLocalParticipant ? 1 : 0));
+    .filter(p => !p.isLocal)
+    .map(p => `Participant ${p.connectionId.slice(-4)}`);
+  const hasLocalParticipant = participants.some((participant) => participant.isLocal);
+  const remoteParticipantCount = Math.max(1, participantCount - (hasLocalParticipant ? 1 : 0));
   const tileCount = Math.max(1, remoteTileCount || remoteParticipantCount);
   // Meet/Zoom-like tiling: near-square grid using sqrt
   const calcColumns = (n: number) => {
@@ -335,28 +449,38 @@ export function TelehealthVideoPanel({
           gridTemplateColumns: `repeat(${remoteColumnCount}, minmax(0, 1fr))`,
           justifyItems: "stretch",
           alignItems: "stretch",
-          gridAutoRows: isMobileOrTablet && tileCount === 2 ? undefined : "1fr",
+          // For mobile with 2 users, use half height for each video
+          gridAutoRows: isMobileOrTablet && tileCount === 2 ? "50vh" : "1fr",
         }
       : undefined
   );
   const panelClasses = cn(
     "relative overflow-hidden bg-slate-800",
-    isFullscreen ? "h-[100svh] max-h-[100svh] w-full rounded-none" : "rounded-none sm:rounded-none sm:shadow-none",
+    isFullscreen ? "h-[100svh] max-h-[100svh] w-full rounded-none" : "h-full rounded-none sm:rounded-none sm:shadow-none",
   );
   const remoteContainerClasses = cn(
-    "relative w-full bg-slate-800 overflow-hidden h-full min-h-0 pt-8 sm:pt-10",
+    "relative w-full bg-slate-800 overflow-hidden h-full min-h-0",
+    // Remove top padding on mobile for better space utilization
+    isMobileOrTablet ? "pt-2" : "pt-8 sm:pt-10",
     remoteLayoutClass,
   );
   const localPreviewClasses = cn(
     "relative overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-lg",
-    isFullscreen ? "h-36 w-48 sm:h-40 sm:w-56" : "h-28 w-40 sm:h-32 sm:w-44",
+    // Smaller camera preview on mobile for better space utilization
+    isMobileOrTablet 
+      ? (isFullscreen ? "h-24 w-32" : "h-20 w-28")
+      : (isFullscreen ? "h-36 w-48 sm:h-40 sm:w-56" : "h-28 w-40 sm:h-32 sm:w-44"),
   );
   const overlayControlsClasses = cn(
-    "pointer-events-none absolute inset-x-0 bottom-5 flex justify-center",
+    "pointer-events-none absolute inset-x-0 flex justify-center",
+    // Better positioning on mobile
+    isMobileOrTablet ? "bottom-3" : "bottom-5",
     isFullscreen && "bottom-10",
   );
   const fullscreenToggleClasses = cn(
-    "pointer-events-none absolute top-12 right-3 sm:top-14 flex gap-2",
+    "pointer-events-none absolute flex gap-2",
+    // Better positioning on mobile
+    isMobileOrTablet ? "top-3 right-3" : "top-12 right-3 sm:top-14",
     isFullscreen && "top-6 right-6",
   );
 
@@ -397,7 +521,7 @@ export function TelehealthVideoPanel({
           className={cn(
             "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
             // Mobile: top-left positioning, Desktop: bottom-right positioning
-            hasUserPositioned ? "" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5"),
+            hasUserPositioned ? "" : (isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")),
             isDragging && "cursor-grabbing scale-105 transition-none"
           )}
           style={hasUserPositioned ? {
@@ -438,11 +562,13 @@ export function TelehealthVideoPanel({
         </div>
 
         <div className={fullscreenToggleClasses}>
+          {/* Fullscreen Button */}
           <button
             type="button"
             onClick={handleToggleFullscreen}
             className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur transition hover:bg-black/80"
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
@@ -454,6 +580,60 @@ export function TelehealthVideoPanel({
              px-3 py-3">{overlayControls}</div>
           </div>
         ) : null}
+
+        {/* PiP nudge banner */}
+        {pendingPiPRequest && !isPictureInPicture && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white rounded-lg px-4 py-3 flex flex-col items-center gap-2 shadow-lg max-w-sm">
+            <span className="text-sm text-center">Keep this call visible?</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { 
+                  setPendingPiPRequest?.(false); 
+                  void onTogglePictureInPicture?.(); 
+                }}
+                className="h-7 px-3 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+              >
+                Current View
+              </button>
+              {enablePiPFollowSpeaker && (
+                <button
+                  onClick={() => { 
+                    setPendingPiPRequest?.(false); 
+                    void enablePiPFollowSpeaker(); 
+                  }}
+                  className="h-7 px-3 bg-blue-500/80 hover:bg-blue-500 rounded text-sm font-medium transition-colors"
+                >
+                  Follow Speaker
+                </button>
+              )}
+              <button
+                aria-label="Dismiss"
+                className="ml-1 opacity-70 hover:opacity-100"
+                onClick={() => setPendingPiPRequest?.(false)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PiP Follow Speaker indicator */}
+        {pipFollowsSpeaker && isPictureInPicture && (
+          <div className="absolute top-4 right-4 bg-blue-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="text-xs font-medium">
+              {activeSpeakerId ? `Following ${activeSpeakerId.slice(-4)}` : 'Following Speaker'}
+            </span>
+          </div>
+        )}
+
+        {/* Active Speaker indicator (when not in PiP) */}
+        {activeSpeakerId && !isPictureInPicture && (
+          <div className="absolute top-4 left-4 bg-green-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="text-xs font-medium">Speaking: {activeSpeakerId.slice(-4)}</span>
+          </div>
+        )}
     </div>
   );
 }

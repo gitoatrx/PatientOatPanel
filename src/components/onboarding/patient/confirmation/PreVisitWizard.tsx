@@ -18,6 +18,7 @@ import {
   Star,
   Zap,
 } from "lucide-react";
+import { BimbleLogoIcon } from "../../../../../public/icons/icons";
 import { Button } from "@/components/ui/button";
 import { healthCheckInWizard } from "@/data/wizardQuestions";
 import { StepRenderer } from "./StepRenderer";
@@ -402,11 +403,7 @@ function IntroStep({ onNext, doctorName, followupQuestions = [] }: { onNext: () 
           whileHover={{ scale: 1.05, rotate: 5 }}
           transition={{ type: "spring", stiffness: 300 }}
         >
-          <img 
-            src="/123Walkin.png" 
-            alt="123Walkin" 
-            className="w-12 h-12 object-contain"
-          />
+          <BimbleLogoIcon className="w-12 h-12" />
         </motion.div>
 
         <div className="space-y-3">
