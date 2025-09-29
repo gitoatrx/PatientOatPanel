@@ -17,9 +17,9 @@ export enum PatientOnboardingStep {
   DateOfBirth = 6, // From config: dateOfBirth
   Email = 7, // From config: email
   Address = 8, // From config: address
-  HealthConcern = 9, // From config: healthConcern
-  VisitType = 10, // From config: visitType
-  EmergencyContact = 11, // From config: emergencyContact
+  EmergencyContact = 9, // From config: emergencyContact
+  HealthConcern = 10, // From config: healthConcern
+  VisitType = 11, // From config: visitType
   DoctorSelection = 12, // From config: doctorSelection
   AppointmentDateTime = 13, // From config: appointmentDateTime
   Review = 14, // From config: review

@@ -4,14 +4,14 @@
 export const COUNTRY_CODE_CONFIG = {
   // Development environment - India
   DEVELOPMENT: {
-    CODE: '+91',
+    CODE: '',
     NAME: 'India',
     DESCRIPTION: 'Development environment - India country code'
   },
 
   // Production environment - Canada/US
   PRODUCTION: {
-    CODE: '+1',
+    CODE: '',
     NAME: 'Canada/US',
     DESCRIPTION: 'Production environment - Canada/US country code'
   }

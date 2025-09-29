@@ -213,7 +213,7 @@ export function PatientDoctorSelectionStep() {
   };
 
   const handleBack = () => {
-    router.push("/onboarding/patient/emergency-contact");
+    router.push("/onboarding/patient/visit-type");
   };
 
   // Show loading state while fetching progress data

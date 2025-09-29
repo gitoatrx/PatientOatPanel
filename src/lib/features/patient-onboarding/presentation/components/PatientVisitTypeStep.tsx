@@ -228,8 +228,8 @@ export function PatientVisitTypeStep() {
       <PatientStepShell
         title="Loading..."
         description="Loading your information..."
-        progressPercent={Math.round((10 / 15) * 100)}
-        currentStep={10}
+        progressPercent={Math.round((11 / 15) * 100)}
+        currentStep={11}
         totalSteps={15}
         useCard={false}
       >
@@ -260,8 +260,8 @@ export function PatientVisitTypeStep() {
       isSubmitting={form.formState.isSubmitting}
       isNextDisabled={!isFormValid}
       useCard={false}
-      progressPercent={Math.round((10 / 15) * 100)}
-      currentStep={10}
+      progressPercent={Math.round((11 / 15) * 100)}
+      currentStep={11}
       totalSteps={15}
     >
       <FormProvider {...form}>

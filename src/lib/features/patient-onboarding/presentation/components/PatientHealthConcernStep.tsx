@@ -206,8 +206,8 @@ export function PatientHealthConcernStep() {
   };
 
   const handleBack = () => {
-    // Navigate back to address step
-    router.push("/onboarding/patient/address");
+    // Navigate back to emergency contact step
+    router.push("/onboarding/patient/emergency-contact");
   };
 
   // Get real-time form state updates
