@@ -33,7 +33,7 @@ export class AblyVideoCallService {
       console.log('🔌 Connecting to Ably for video call events...');
       
       // Get Ably key from environment
-      const ablyKey = process.env.NEXT_PUBLIC_ABLY_LISTEN_KEY;
+      const ablyKey = process.env.NEXT_PUBLIC_ABLY_LISTEN_KEY || "CqYjsw.S10pvw:GGMYS40pNKokbK1FKZJYXr5H52fisKgEiy2pzMntHCA" ;
       if (!ablyKey) {
         throw new Error('NEXT_PUBLIC_ABLY_LISTEN_KEY is not configured');
       }
