@@ -109,7 +109,13 @@ export function TelehealthSessionContent({
                 <TelehealthVideoPanel
                   sessionTitle={sessionTitle}
                   providerName={providerName}
-                  participants={participants}
+                  participants={participants.map((p, index) => ({
+                    connectionId: `participant-${index}`,
+                    streamId: undefined,
+                    hasVideo: true,
+                    hasAudio: true,
+                    isLocal: false
+                  }))}
                   localParticipantName="You"
                   statusMessage={telehealth.statusMessage}
                   onRemoteContainerReady={handleRemoteContainerReady}

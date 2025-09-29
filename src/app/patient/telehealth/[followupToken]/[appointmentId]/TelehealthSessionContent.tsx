@@ -12,6 +12,7 @@ import {
 import { useVonageSession } from "@/lib/telehealth/useVonageSession";
 import { useChatApi } from "@/lib/services/chatApiService";
 import { useWaitingRoomService } from "@/lib/services/waitingRoomService";
+import { useVideoEventsService } from "@/lib/services/videoEventsService";
 import { AblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, Shield, X } from "lucide-react";
@@ -30,7 +31,7 @@ interface TelehealthSessionContentProps {
 export function TelehealthSessionContent({
   providerName,
   sessionTitle,
-  participants,
+  participants: _participants,
   followupToken,
   appointmentId,
 }: TelehealthSessionContentProps) {
@@ -80,6 +81,7 @@ export function TelehealthSessionContent({
   
   // Waiting room service
   const waitingRoomService = useWaitingRoomService(appointmentId);
+  const videoEventsService = useVideoEventsService(appointmentId);
 
   const handleRemoteContainerReady = useCallback((element: HTMLDivElement | null) => {
     setRemoteContainer(element);
@@ -124,10 +126,9 @@ export function TelehealthSessionContent({
     candidates.push(...Array.from(document.querySelectorAll('video')) as HTMLVideoElement[]);
 
     return candidates.find(v =>
-      typeof (v as any).requestPictureInPicture === 'function' &&
+      typeof (v as HTMLVideoElement & { requestPictureInPicture?: () => Promise<PictureInPictureWindow> }).requestPictureInPicture === 'function' &&
       v.readyState >= 2 &&
-      // @ts-ignore
-      !v.disablePictureInPicture
+      !(v as HTMLVideoElement & { disablePictureInPicture?: boolean }).disablePictureInPicture
     ) || null;
   }, [remoteContainer, localContainer]);
 
@@ -164,9 +165,9 @@ export function TelehealthSessionContent({
       }
 
       // Safari fallback
-      // @ts-ignore
+      // @ts-expect-error - webkitSupportsPresentationMode is a WebKit-specific property
       if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
-        // @ts-ignore
+        // @ts-expect-error - webkitSetPresentationMode is a WebKit-specific method
         video.webkitSetPresentationMode('picture-in-picture');
         setIsPictureInPicture(true);
         setPendingPiPRequest(false);
@@ -208,16 +209,16 @@ export function TelehealthSessionContent({
     if (!video) return 0;
 
     // Try to get audio level from the video element
-    // @ts-ignore - webkitAudioDecodedByteCount is a WebKit-specific property
+    // @ts-expect-error - webkitAudioDecodedByteCount is a WebKit-specific property
     if (video.webkitAudioDecodedByteCount !== undefined) {
-      // @ts-ignore
+      // @ts-expect-error - webkitAudioDecodedByteCount is a WebKit-specific property
       return Math.min(video.webkitAudioDecodedByteCount / 1000000, 1); // Normalize to 0-1
     }
 
     // Fallback: check if audio is playing and estimate level
-    // @ts-ignore - audioTracks is a non-standard property
+    // @ts-expect-error - audioTracks is a non-standard property
     if (video.audioTracks && video.audioTracks.length > 0) {
-      // @ts-ignore - mozHasAudio is a Firefox-specific property
+      // @ts-expect-error - mozHasAudio is a Firefox-specific property
       return video.mozHasAudio ? 0.5 : 0;
     }
 
@@ -286,7 +287,6 @@ export function TelehealthSessionContent({
     el.style.display = 'none';
     el.playsInline = true;
     el.muted = true; // avoid echo
-    // @ts-ignore experimental attr is harmless
     el.setAttribute('autopictureinpicture', '');
     document.body.appendChild(el);
 
@@ -371,9 +371,9 @@ export function TelehealthSessionContent({
         await carrier.requestPictureInPicture();
       } else {
         // Safari fallback
-        // @ts-ignore
+        // @ts-expect-error - webkitSupportsPresentationMode is a WebKit-specific property
         if (carrier.webkitSupportsPresentationMode && typeof carrier.webkitSetPresentationMode === 'function') {
-          // @ts-ignore
+          // @ts-expect-error - webkitSetPresentationMode is a WebKit-specific method
           carrier.webkitSetPresentationMode('picture-in-picture');
         }
       }
@@ -411,9 +411,9 @@ export function TelehealthSessionContent({
       }
 
       // Safari fallback
-      // @ts-ignore
+      // @ts-expect-error - webkitSupportsPresentationMode is a WebKit-specific property
       if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
-        // @ts-ignore
+        // @ts-expect-error - webkitSetPresentationMode is a WebKit-specific method
         video.webkitSetPresentationMode('picture-in-picture');
         console.log('✅ Auto PiP triggered successfully (Safari)');
       }
@@ -430,12 +430,12 @@ export function TelehealthSessionContent({
     const onEnter = () => setIsPictureInPicture(true);
     const onLeave = () => setIsPictureInPicture(false);
 
-    video.addEventListener('enterpictureinpicture', onEnter as any);
-    video.addEventListener('leavepictureinpicture', onLeave as any);
+    video.addEventListener('enterpictureinpicture', onEnter as EventListener);
+    video.addEventListener('leavepictureinpicture', onLeave as EventListener);
 
     return () => {
-      video.removeEventListener('enterpictureinpicture', onEnter as any);
-      video.removeEventListener('leavepictureinpicture', onLeave as any);
+      video.removeEventListener('enterpictureinpicture', onEnter as EventListener);
+      video.removeEventListener('leavepictureinpicture', onLeave as EventListener);
     };
   }, [findBestVideoElementForPiP]);
 
@@ -458,7 +458,7 @@ export function TelehealthSessionContent({
 
     // Handle "enterpictureinpicture" from system media controls (user-driven)
     try {
-      // @ts-ignore
+      // @ts-expect-error - enterpictureinpicture is a non-standard action handler
       navigator.mediaSession?.setActionHandler?.('enterpictureinpicture', async () => {
         if (!document.pictureInPictureElement && video?.requestPictureInPicture) {
           try {
@@ -471,9 +471,8 @@ export function TelehealthSessionContent({
 
     // Experimental Auto-PiP (Chromium desktop). Harmless no-op elsewhere.
     try {
-      // @ts-ignore
       if ('autoPictureInPicture' in HTMLVideoElement.prototype) {
-        // @ts-ignore
+        // @ts-expect-error - autoPictureInPicture is a non-standard property
         video.autoPictureInPicture = true; // allow Chrome to auto-pop PiP on tab/app switch.
       }
       // Also set the HTML attribute for better compatibility
@@ -643,9 +642,9 @@ export function TelehealthSessionContent({
     if (!carrier) return;
 
     // Events fire on the video element
-    carrier.addEventListener('leavepictureinpicture', onLeave as any);
+    carrier.addEventListener('leavepictureinpicture', onLeave as EventListener);
     return () => {
-      carrier.removeEventListener('leavepictureinpicture', onLeave as any);
+      carrier.removeEventListener('leavepictureinpicture', onLeave as EventListener);
     };
   }, [stopAudioLevelMonitoring]);
 
@@ -746,8 +745,24 @@ export function TelehealthSessionContent({
       
       // 2. Mark patient as waiting in the waiting room via API
       console.log('🚪 Joining waitlist - marking patient as waiting...');
-      await waitingRoomService.markPatientAsWaiting(followupToken);
+      const waitingResponse = await waitingRoomService.markPatientAsWaiting(followupToken);
       console.log('✅ Patient successfully marked as waiting');
+      
+      // 2.5. Trigger video event for patient waiting
+      if (waitingResponse.success && waitingResponse.data) {
+        console.log('🎬 Triggering video event for patient waiting...');
+        try {
+          await videoEventsService.triggerPatientWaitingEvent(followupToken, {
+            id: waitingResponse.data.id,
+            is_waiting: waitingResponse.data.is_waiting,
+            waiting_since: waitingResponse.data.waiting_since
+          });
+          console.log('✅ Video event triggered successfully');
+        } catch (videoEventError) {
+          console.error('❌ Failed to trigger video event:', videoEventError);
+          // Don't fail the entire flow if video event fails
+        }
+      }
       
       // 3. Start listening for doctor connect events via Ably
       console.log('🎧 Starting Ably listener for doctor connect events...');

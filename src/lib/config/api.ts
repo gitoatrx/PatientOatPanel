@@ -37,6 +37,8 @@ export const API_CONFIG = {
     CHAT_MESSAGES: '/clinic/appointments',
     // Waiting room endpoints
     WAITING_ROOM_PATIENT: '/clinic/appointments',
+    // Video events endpoints
+    VIDEO_EVENTS_PATIENT: '/clinic/appointments',
   },
 
   // Request Configuration
@@ -136,4 +138,10 @@ export const getChatMessagesUrl = (appointmentId: string, token: string): string
 export const getWaitingRoomPatientUrl = (appointmentId: string): string => {
   const safeAppointmentId = encodeURIComponent(appointmentId);
   return `${API_CONFIG.ENDPOINTS.WAITING_ROOM_PATIENT}/${safeAppointmentId}/video/waiting-room/patient`;
+};
+
+// Helper function for video events endpoints
+export const getVideoEventsPatientUrl = (appointmentId: string): string => {
+  const safeAppointmentId = encodeURIComponent(appointmentId);
+  return `${API_CONFIG.ENDPOINTS.VIDEO_EVENTS_PATIENT}/${safeAppointmentId}/video/events/patient`;
 };
