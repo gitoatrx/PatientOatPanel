@@ -81,32 +81,45 @@ export function FormPhoneInput({
       >
         {label}
       </label>
-      <input
-        id={name}
-        type={type}
-        value={displayValue}
-        onChange={handleChange}
-        onBlur={(e) => {
-          register(name, options).onBlur(e);
-          // Trigger validation on blur
-          setValue(name, fieldValue, {
-            shouldValidate: true,
-            shouldTouch: true,
-          });
-        }}
-        {...props}
-        className={cn(
-          "w-full p-4 border border-border rounded-lg transition-colors text-base bg-background text-foreground placeholder:text-muted-foreground",
-          // Disabled styling: greyed background and no country code/formatting changes
-          "disabled:bg-muted disabled:text-muted-foreground disabled:border-muted disabled:cursor-not-allowed disabled:opacity-80",
+      <div className="flex relative">
+        {/* Country Code Box */}
+        <div className={cn(
+          "flex items-center justify-center px-2 py-4 border border-r-0 rounded-l-lg bg-muted/30 text-muted-foreground select-none w-16",
           fieldError
-            ? "border-destructive focus:border-destructive"
-            : "focus:border-primary",
-          className,
-        )}
-        aria-describedby={errorId}
-        placeholder={getPhonePlaceholder()}
-      />
+            ? "border-destructive"
+            : "border-border"
+        )}>
+          <span className="text-base font-semibold tracking-wide">+1</span>
+        </div>
+        {/* Phone Number Input */}
+        <input
+          id={name}
+          type={type}
+          value={displayValue}
+          onChange={handleChange}
+          onBlur={(e) => {
+            register(name, options).onBlur(e);
+            // Trigger validation on blur
+            setValue(name, fieldValue, {
+              shouldValidate: true,
+              shouldTouch: true,
+            });
+          }}
+          {...props}
+          className={cn(
+            "flex-1 p-4 border border-border rounded-r-lg text-base bg-background text-foreground placeholder:text-muted-foreground",
+            "focus:outline-none",
+            // Disabled styling: greyed background and no country code/formatting changes
+            "disabled:bg-muted disabled:text-muted-foreground disabled:border-muted disabled:cursor-not-allowed disabled:opacity-80",
+            fieldError
+              ? "border-destructive focus:border-destructive"
+              : "focus:border-primary",
+            className,
+          )}
+          aria-describedby={errorId}
+          placeholder={getPhonePlaceholder()}
+        />
+      </div>
       <AnimatePresence>
         {fieldError && (
           <motion.p
