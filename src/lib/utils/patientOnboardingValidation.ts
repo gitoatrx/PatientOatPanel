@@ -185,10 +185,10 @@ export function validateOnboardingStep(
         healthCardSchema.parse(data);
         break;
       case 8:
-        healthConcernSchema.parse(data);
+        emergencyContactSchema.parse(data);
         break;
       case 9:
-        emergencyContactSchema.parse(data);
+        healthConcernSchema.parse(data);
         break;
       case 10:
         visitTypeSchema.parse(data);

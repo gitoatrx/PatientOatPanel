@@ -135,8 +135,8 @@ export function PatientEmergencyContactStep() {
       
       // Check if user doesn't want to provide emergency contact
       if (values.emergencyContactRelationship === "none") {
-        // Navigate to doctor selection step
-        router.push("/onboarding/patient/doctor-selection");
+        // Navigate to health concern step
+        router.push("/onboarding/patient/health-concern");
         return;
       }
       
@@ -182,8 +182,8 @@ export function PatientEmergencyContactStep() {
         // Debug: Check if route mapping is working
         if (!nextRoute) {
           console.error(`No route found for step: ${nextStep}`);
-          // Fallback to doctor selection
-          router.push("/onboarding/patient/doctor-selection");
+          // Fallback to health concern step
+          router.push("/onboarding/patient/health-concern");
         } else {
           router.push(nextRoute);
         }
@@ -239,8 +239,8 @@ export function PatientEmergencyContactStep() {
   };
 
   const handleBack = () => {
-    // Navigate back to visit type step
-    router.push("/onboarding/patient/visit-type");
+    // Navigate back to address step
+    router.push("/onboarding/patient/address");
   };
 
   // Get real-time form state updates
@@ -257,8 +257,8 @@ export function PatientEmergencyContactStep() {
       <PatientStepShell
         title="Loading..."
         description="Loading your information..."
-        progressPercent={Math.round((11 / 15) * 100)}
-        currentStep={11}
+        progressPercent={Math.round((9 / 15) * 100)}
+        currentStep={9}
         totalSteps={15}
         useCard={false}
       >
@@ -289,8 +289,8 @@ export function PatientEmergencyContactStep() {
       isSubmitting={form.formState.isSubmitting}
       isNextDisabled={!isValid}
       useCard={false}
-      progressPercent={Math.round((11 / 15) * 100)}
-      currentStep={11}
+      progressPercent={Math.round((9 / 15) * 100)}
+      currentStep={9}
       totalSteps={15}
     >
         <FormProvider {...form}>

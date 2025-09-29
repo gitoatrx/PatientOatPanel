@@ -58,8 +58,8 @@ export function PatientAppointmentStep() {
 
   const handleBack = () => {
     console.log("Back button clicked");
-    // Navigate back to emergency contact step
-    router.push("/onboarding/patient/emergency-contact");
+    // Navigate back to doctor selection step
+    router.push("/onboarding/patient/doctor-selection");
   };
 
   // Get real-time form state updates
