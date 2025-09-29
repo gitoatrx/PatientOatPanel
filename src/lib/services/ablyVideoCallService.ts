@@ -76,7 +76,7 @@ export class AblyVideoCallService {
       });
 
       // Subscribe to doctor connect events
-      const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'video-call';
+      const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'clinic-video-call';
       const channelName = `${channelPrefix}.${this.options.appointmentId}`;
       const channel = ably.channels.get(channelName);
       this.channel = channel;
