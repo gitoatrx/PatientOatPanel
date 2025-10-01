@@ -336,7 +336,9 @@ export function TelehealthCallControls({
               console.log('🎬 PiP Button click event:', e);
               console.log('🎬 PiP Button click coordinates:', e.clientX, e.clientY);
               console.log('🎬 PiP Button element bounds:', e.currentTarget.getBoundingClientRect());
+              console.log('🎬 PiP Button state:', { isBusy, pictureInPictureEnabled: document.pictureInPictureEnabled, isPictureInPicture, pendingPiPRequest });
               if (document.pictureInPictureEnabled) {
+                console.log('🎬 Calling onTogglePictureInPicture...');
                 onTogglePictureInPicture?.();
               } else {
                 console.warn('❌ PiP not supported in this browser');

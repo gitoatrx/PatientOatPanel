@@ -46,21 +46,8 @@ export function TelehealthSessionContent({
   const [pendingJoin, setPendingJoin] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   
-  // Picture-in-Picture state
-  const [isPictureInPicture, setIsPictureInPicture] = useState(false);
-  const [pendingPiPRequest, setPendingPiPRequest] = useState(false);
+  // Picture-in-Picture state (now managed by the hook)
   const [pipPreferenceEnabled, setPipPreferenceEnabled] = useState(false);
-  const [pipFollowsSpeaker, setPipFollowsSpeaker] = useState(false);
-  
-  // PiP Follow Speaker refs and state
-  const participantVideosRef = React.useRef(new Map<string, HTMLVideoElement>());
-  const pipCarrierVideoRef = React.useRef<HTMLVideoElement | null>(null);
-  const pipCarrierStreamRef = React.useRef<MediaStream | null>(null);
-  
-  // Active speaker detection
-  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
-  const [participantAudioLevels, setParticipantAudioLevels] = useState(new Map<string, number>());
-  const audioLevelCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   
   // Waiting room state
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
@@ -99,6 +86,7 @@ export function TelehealthSessionContent({
     localContainer,
   });
 
+
   // Safe join handler that prevents multiple clicks
   const handleJoinCall = useCallback(async () => {
     if (isJoining || telehealth.isBusy || telehealth.isConnected) {
@@ -117,333 +105,52 @@ export function TelehealthSessionContent({
     }
   }, [isJoining, telehealth]);
 
-  // Helper function to find the best video element for PiP
-  const findBestVideoElementForPiP = useCallback(() => {
-    const candidates: HTMLVideoElement[] = [];
-    if (remoteContainer) candidates.push(...Array.from(remoteContainer.querySelectorAll('video')) as HTMLVideoElement[]);
-    if (localContainer) candidates.push(...Array.from(localContainer.querySelectorAll('video')) as HTMLVideoElement[]);
-    candidates.push(...Array.from(document.querySelectorAll('[data-video-panel] video')) as HTMLVideoElement[]);
-    candidates.push(...Array.from(document.querySelectorAll('video')) as HTMLVideoElement[]);
-
-    return candidates.find(v =>
-      typeof (v as HTMLVideoElement & { requestPictureInPicture?: () => Promise<PictureInPictureWindow> }).requestPictureInPicture === 'function' &&
-      v.readyState >= 2 &&
-      !(v as HTMLVideoElement & { disablePictureInPicture?: boolean }).disablePictureInPicture
-    ) || null;
-  }, [remoteContainer, localContainer]);
-
-  // Picture-in-Picture toggle handler (pure click handler)
+  // Simple PiP toggle handler (delegate to hook)
   const handleTogglePictureInPicture = useCallback(async () => {
-    const video = findBestVideoElementForPiP();
-    if (!video) return;
+    // Go directly to PiP without showing the nudge banner
+    // Enable follow speaker and trigger PiP directly
+    telehealth.enablePiPFollowSpeaker();
+    // The video panel will handle the actual PiP request
+    console.log('🎬 PiP toggle requested - follow speaker enabled');
+  }, [telehealth]);
 
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsPictureInPicture(false);
-        setPipFollowsSpeaker(false);
-        
-        // If user manually exits PiP, they might want to disable auto-trigger
-        // We'll keep the preference enabled but log this action
-        console.log('🎬 User manually exited PiP - preference remains enabled for future auto-trigger');
-        return;
-      }
 
-      // Ensure it's playing (some browsers require this)
-      if (video.paused) { try { await video.play(); } catch {} }
 
-      if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
-        await video.requestPictureInPicture();
-        setIsPictureInPicture(true);
-        setPendingPiPRequest(false);
-        
-        // Remember user preference for future auto-activation
-        setPipPreferenceEnabled(true);
-        localStorage.setItem('pip-preference-enabled', 'true');
-        console.log('🎬 PiP preference enabled - will auto-trigger on future tab switches');
-        return;
-      }
-
-      // Safari fallback
-      // @ts-expect-error - webkitSupportsPresentationMode is a WebKit-specific property
-      if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
-        // @ts-expect-error - webkitSetPresentationMode is a WebKit-specific method
-        video.webkitSetPresentationMode('picture-in-picture');
-        setIsPictureInPicture(true);
-        setPendingPiPRequest(false);
-        
-        // Remember user preference for future auto-activation
-        setPipPreferenceEnabled(true);
-        localStorage.setItem('pip-preference-enabled', 'true');
-        console.log('🎬 PiP preference enabled (Safari) - will auto-trigger on future tab switches');
-      }
-    } catch (err) {
-      console.warn('PiP toggle failed:', err);
-    }
-  }, [findBestVideoElementForPiP]);
-
-  // Register participant videos for speaker following
-  const handleParticipantVideoReady = useCallback((id: string, el: HTMLVideoElement | null) => {
-    const map = participantVideosRef.current;
-    if (el) {
-      map.set(id, el);
-      console.log('🎬 Registered participant video:', id);
-    } else {
-      map.delete(id);
-      console.log('🎬 Unregistered participant video:', id);
-    }
+  // Current View PiP handler (for explicit "Current View" button)
+  const handleCurrentViewPiP = useCallback(async () => {
+    // This will be handled by the TelehealthVideoPanel component
+    console.log('🎬 Current View PiP requested - handled by video panel');
   }, []);
 
-  // Utility: get a video track for a participant
-  const getParticipantVideoTrack = useCallback((participantId: string): MediaStreamTrack | null => {
-    const v = participantVideosRef.current.get(participantId);
-    const stream = (v?.srcObject as MediaStream) || null;
-    if (!stream) return null;
-    const track = stream.getVideoTracks()[0] || null;
-    return track;
-  }, []);
-
-  // Utility: get audio level for a participant
-  const getParticipantAudioLevel = useCallback((participantId: string): number => {
-    const video = participantVideosRef.current.get(participantId);
-    if (!video) return 0;
-
-    // Try to get audio level from the video element
-    // @ts-expect-error - webkitAudioDecodedByteCount is a WebKit-specific property
-    if (video.webkitAudioDecodedByteCount !== undefined) {
-      // @ts-expect-error - webkitAudioDecodedByteCount is a WebKit-specific property
-      return Math.min(video.webkitAudioDecodedByteCount / 1000000, 1); // Normalize to 0-1
-    }
-
-    // Fallback: check if audio is playing and estimate level
-    // @ts-expect-error - audioTracks is a non-standard property
-    if (video.audioTracks && video.audioTracks.length > 0) {
-      // @ts-expect-error - mozHasAudio is a Firefox-specific property
-      return video.mozHasAudio ? 0.5 : 0;
-    }
-
-    // If we have audio tracks in the stream, assume some level
-    const stream = video.srcObject as MediaStream;
-    if (stream && stream.getAudioTracks().length > 0) {
-      return 0.3; // Default moderate level
-    }
-
-    return 0;
-  }, []);
-
-  // Active speaker detection logic
-  const detectActiveSpeaker = useCallback(() => {
-    const levels = new Map<string, number>();
-    let maxLevel = 0;
-    let activeSpeaker: string | null = null;
-
-    // Check audio levels for all participants
-    telehealth.participants.forEach(participant => {
-      if (!participant.isLocal) {
-        const level = getParticipantAudioLevel(participant.connectionId);
-        levels.set(participant.connectionId, level);
-        
-        if (level > maxLevel && level > 0.1) { // Threshold to avoid noise
-          maxLevel = level;
-          activeSpeaker = participant.connectionId;
-        }
-      }
-    });
-
-    setParticipantAudioLevels(levels);
-
-    // Only update active speaker if there's a significant change
-    if (activeSpeaker !== activeSpeakerId) {
-      setActiveSpeakerId(activeSpeaker);
-      console.log('🎤 Active speaker changed:', { 
-        from: activeSpeakerId, 
-        to: activeSpeaker, 
-        level: maxLevel 
-      });
-    }
-  }, [telehealth.participants, getParticipantAudioLevel, activeSpeakerId]);
-
-  // Start/stop audio level monitoring
-  const startAudioLevelMonitoring = useCallback(() => {
-    if (audioLevelCheckIntervalRef.current) return; // Already running
-
-    console.log('🎤 Starting audio level monitoring for active speaker detection');
-    audioLevelCheckIntervalRef.current = setInterval(detectActiveSpeaker, 500); // Check every 500ms
-  }, [detectActiveSpeaker]);
-
-  const stopAudioLevelMonitoring = useCallback(() => {
-    if (audioLevelCheckIntervalRef.current) {
-      clearInterval(audioLevelCheckIntervalRef.current);
-      audioLevelCheckIntervalRef.current = null;
-      console.log('🎤 Stopped audio level monitoring');
-    }
-  }, []);
-
-  // Create the carrier video element just-in-time
-  const ensureCarrier = useCallback((): HTMLVideoElement => {
-    if (pipCarrierVideoRef.current) return pipCarrierVideoRef.current;
-
-    const el = document.createElement('video');
-    el.style.display = 'none';
-    el.playsInline = true;
-    el.muted = true; // avoid echo
-    el.setAttribute('autopictureinpicture', '');
-    document.body.appendChild(el);
-
-    pipCarrierVideoRef.current = el;
-    console.log('🎬 Created carrier video element for PiP');
-    return el;
-  }, []);
-
-  // Put the current speaker in the carrier stream
-  const setCarrierToParticipant = useCallback(async (participantId: string): Promise<boolean> => {
-    const track = getParticipantVideoTrack(participantId);
-    if (!track) {
-      console.warn('🎬 No video track found for participant:', participantId);
-      return false;
-    }
-
-    let stream = pipCarrierStreamRef.current;
-    const carrier = ensureCarrier();
-
-    if (!stream) {
-      stream = new MediaStream();
-      pipCarrierStreamRef.current = stream;
-      carrier.srcObject = stream;
-    }
-
-    // Replace existing track with the new one
-    const existing = stream.getVideoTracks()[0];
-    if (existing && existing.id !== track.id) {
-      stream.removeTrack(existing);
-      existing.stop(); // optional
-    }
-    if (!existing || existing.id !== track.id) {
-      stream.addTrack(track);
-    }
-
-    // Make sure it's playing
-    try { 
-      if (carrier.paused) await carrier.play(); 
-    } catch (e) {
-      console.warn('🎬 Failed to play carrier video:', e);
-    }
-
-    console.log('🎬 Set carrier to participant:', participantId);
-    return true;
-  }, [getParticipantVideoTrack, ensureCarrier]);
-
-  // One-click: Enable PiP (Follow Speaker)
-  const enablePiPFollowSpeaker = useCallback(async () => {
-    // Start audio level monitoring for active speaker detection
-    startAudioLevelMonitoring();
-    
-    // Get the active speaker ID - use detected active speaker or fallback to first remote participant
-    let activeId = activeSpeakerId;
-    
-    if (!activeId) {
-      // Fallback: use the first remote participant
-      activeId = telehealth.participants.find(p => !p.isLocal)?.connectionId || null;
-      console.log('🎬 No active speaker detected, using first remote participant:', activeId);
-    } else {
-      console.log('🎬 Using detected active speaker for PiP:', activeId);
-    }
-    
-    if (!activeId) {
-      console.warn('🎬 No participants found for PiP follow');
-      return;
-    }
-
-    const ok = await setCarrierToParticipant(activeId);
-    if (!ok) {
-      console.warn('🎬 Failed to set carrier to participant');
-      return;
-    }
-
-    const carrier = ensureCarrier();
-
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      }
-
-      if (document.pictureInPictureEnabled && carrier.requestPictureInPicture) {
-        await carrier.requestPictureInPicture();
-      } else {
-        // Safari fallback
-        // @ts-expect-error - webkitSupportsPresentationMode is a WebKit-specific property
-        if (carrier.webkitSupportsPresentationMode && typeof carrier.webkitSetPresentationMode === 'function') {
-          // @ts-expect-error - webkitSetPresentationMode is a WebKit-specific method
-          carrier.webkitSetPresentationMode('picture-in-picture');
-        }
-      }
-      
-      setPipFollowsSpeaker(true);
-      setPendingPiPRequest(false);
-      setIsPictureInPicture(true);
-      
-      // Remember user preference for future auto-activation
-      setPipPreferenceEnabled(true);
-      localStorage.setItem('pip-preference-enabled', 'true');
-      console.log('🎬 PiP follow speaker enabled - will auto-trigger on future tab switches');
-    } catch (e) {
-      console.warn('🎬 Enable PiP follow speaker failed:', e);
-    }
-  }, [telehealth.participants, activeSpeakerId, setCarrierToParticipant, ensureCarrier, startAudioLevelMonitoring]);
-
-  // Auto-trigger PiP when user has enabled preference
-  const autoTriggerPiP = useCallback(async () => {
-    if (!pipPreferenceEnabled || isPictureInPicture) return;
-    
-    const video = findBestVideoElementForPiP();
-    if (!video) return;
-
-    try {
-      console.log('🎬 Auto-triggering PiP based on user preference');
-      
-      // Ensure it's playing (some browsers require this)
-      if (video.paused) { try { await video.play(); } catch {} }
-
-      if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
-        await video.requestPictureInPicture();
-        console.log('✅ Auto PiP triggered successfully');
-        return;
-      }
-
-      // Safari fallback
-      // @ts-expect-error - webkitSupportsPresentationMode is a WebKit-specific property
-      if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
-        // @ts-expect-error - webkitSetPresentationMode is a WebKit-specific method
-        video.webkitSetPresentationMode('picture-in-picture');
-        console.log('✅ Auto PiP triggered successfully (Safari)');
-      }
-    } catch (err) {
-      console.warn('Auto PiP trigger failed:', err);
-    }
-  }, [pipPreferenceEnabled, isPictureInPicture, findBestVideoElementForPiP]);
-
-  // Listen for PiP events on the video element
+  // Note: All PiP functions are now handled directly by the hook
+  
+  // Debug: Check PiP support and video elements
   useEffect(() => {
-    const video = findBestVideoElementForPiP();
-    if (!video) return;
+    console.log('🔍 PiP Support Check:', {
+      pictureInPictureEnabled: document.pictureInPictureEnabled,
+      hasRequestPictureInPicture: 'requestPictureInPicture' in HTMLVideoElement.prototype,
+      hasExitPictureInPicture: 'exitPictureInPicture' in document,
+      userAgent: navigator.userAgent
+    });
+    
+    // Check for video elements after a delay
+    setTimeout(() => {
+      const videoElements = document.querySelectorAll('video');
+      console.log('🔍 Video Elements Found:', Array.from(videoElements).map(v => ({
+        hasSrcObject: !!v.srcObject,
+        isHidden: v.classList.contains('hidden'),
+        dimensions: `${v.videoWidth}x${v.videoHeight}`,
+        container: v.closest('#vonage-local-container') ? 'local' : 'other',
+        element: v
+      })));
+    }, 2000);
+  }, []);
 
-    const onEnter = () => setIsPictureInPicture(true);
-    const onLeave = () => setIsPictureInPicture(false);
+  // Listen for PiP events (now handled by the hook)
 
-    video.addEventListener('enterpictureinpicture', onEnter as EventListener);
-    video.addEventListener('leavepictureinpicture', onLeave as EventListener);
-
-    return () => {
-      video.removeEventListener('enterpictureinpicture', onEnter as EventListener);
-      video.removeEventListener('leavepictureinpicture', onLeave as EventListener);
-    };
-  }, [findBestVideoElementForPiP]);
-
-  // Progressive Auto-PiP (Chromium) + Media Session handler
+  // Media Session metadata (nice-to-have)
   useEffect(() => {
     if (!telehealth.isConnected) return;
-    const video = findBestVideoElementForPiP();
-    if (!video) return;
 
     // Media Session metadata (nice-to-have)
     if ('mediaSession' in navigator) {
@@ -455,30 +162,7 @@ export function TelehealthSessionContent({
         });
       } catch {}
     }
-
-    // Handle "enterpictureinpicture" from system media controls (user-driven)
-    try {
-      // @ts-expect-error - enterpictureinpicture is a non-standard action handler
-      navigator.mediaSession?.setActionHandler?.('enterpictureinpicture', async () => {
-        if (!document.pictureInPictureElement && video?.requestPictureInPicture) {
-          try {
-            if (video.paused) { try { await video.play(); } catch {} }
-            await video.requestPictureInPicture();
-          } catch (e) { console.warn('MediaSession PiP failed', e); }
-        }
-      });
-    } catch {}
-
-    // Experimental Auto-PiP (Chromium desktop). Harmless no-op elsewhere.
-    try {
-      if ('autoPictureInPicture' in HTMLVideoElement.prototype) {
-        // @ts-expect-error - autoPictureInPicture is a non-standard property
-        video.autoPictureInPicture = true; // allow Chrome to auto-pop PiP on tab/app switch.
-      }
-      // Also set the HTML attribute for better compatibility
-      video.setAttribute('autopictureinpicture', '');
-    } catch {}
-  }, [telehealth.isConnected, findBestVideoElementForPiP, providerName, sessionTitle]);
+  }, [telehealth.isConnected, providerName, sessionTitle]);
 
   // Merge previous messages (API) with current messages (Vonage) for complete chat history
   const uiMessages: TelehealthChatMessage[] = useMemo(() => {
@@ -559,31 +243,23 @@ export function TelehealthSessionContent({
     }
   }, [appointmentId, followupToken, chatApi, telehealth.isConnected, messagesLoaded]);
 
-  // Cleanup Ably service and audio monitoring on unmount
+  // Cleanup Ably service on unmount
   useEffect(() => {
     return () => {
       if (ablyService) {
         ablyService.disconnect();
       }
-      // Stop audio level monitoring
-      stopAudioLevelMonitoring();
     };
-  }, [ablyService, stopAudioLevelMonitoring]);
+  }, [ablyService]);
 
-  // On tab switch / app blur: auto-trigger PiP if preference enabled, otherwise show nudge
+  // On tab switch / app blur: show PiP nudge
   useEffect(() => {
     const handleTabSwitch = async () => {
       if (!telehealth.isConnected || document.pictureInPictureElement) return;
       
-      if (pipPreferenceEnabled) {
-        // User has enabled PiP preference - auto-trigger
-        console.log('🎬 Tab switch detected - auto-triggering PiP based on user preference');
-        await autoTriggerPiP();
-              } else {
-        // User hasn't enabled PiP preference yet - show nudge
-        console.log('🎬 Tab switch detected - showing PiP nudge');
-        setPendingPiPRequest(true);
-      }
+      // Show PiP nudge on tab switch
+      console.log('🎬 Tab switch detected - showing PiP nudge');
+      telehealth.setPendingPiPRequest(true);
     };
 
     const onVis = () => { if (document.hidden) handleTabSwitch(); };
@@ -601,52 +277,7 @@ export function TelehealthSessionContent({
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('resize', onResize);
     };
-  }, [telehealth.isConnected, pipPreferenceEnabled, autoTriggerPiP]);
-
-  // Switch inside PiP when speaker changes (throttled)
-  useEffect(() => {
-    if (!pipFollowsSpeaker || !activeSpeakerId) return;
-    
-    // Only update if our carrier is actually the one in PiP
-    const isCarrierInPiP = document.pictureInPictureElement === pipCarrierVideoRef.current;
-    if (!isCarrierInPiP) return;
-
-    // Throttle switching to avoid strobe effect
-    const SWITCH_THROTTLE_MS = 1200;
-    let lastSwitchAt = 0;
-    
-      const now = Date.now();
-    if (now - lastSwitchAt < SWITCH_THROTTLE_MS) return;
-    lastSwitchAt = now;
-
-    console.log('🎤 Switching PiP to active speaker:', activeSpeakerId);
-    (async () => {
-      await setCarrierToParticipant(activeSpeakerId);
-    })();
-  }, [activeSpeakerId, pipFollowsSpeaker, setCarrierToParticipant]);
-
-  // Clean up on PiP exit / call end
-  useEffect(() => {
-    const onLeave = () => {
-      setIsPictureInPicture(false);
-      setPipFollowsSpeaker(false);
-      // Stop carrier track
-      const s = pipCarrierStreamRef.current;
-      s?.getTracks().forEach(t => t.stop());
-      // Stop audio level monitoring
-      stopAudioLevelMonitoring();
-      console.log('🎬 PiP exited - cleaned up carrier stream and audio monitoring');
-    };
-
-    const carrier = pipCarrierVideoRef.current;
-    if (!carrier) return;
-
-    // Events fire on the video element
-    carrier.addEventListener('leavepictureinpicture', onLeave as EventListener);
-    return () => {
-      carrier.removeEventListener('leavepictureinpicture', onLeave as EventListener);
-    };
-  }, [stopAudioLevelMonitoring]);
+  }, [telehealth.isConnected]);
 
   // Permission helpers
   const queryPermission = useCallback(async (name: PermissionName): Promise<PermState> => {
@@ -972,15 +603,17 @@ export function TelehealthSessionContent({
               onRemoteContainerReady={handleRemoteContainerReady}
               onLocalContainerReady={handleLocalContainerReady}
               signalStrength={telehealth.signalStrength}
-              pendingPiPRequest={pendingPiPRequest}
-              isPictureInPicture={isPictureInPicture}
-              onTogglePictureInPicture={handleTogglePictureInPicture}
-              setPendingPiPRequest={setPendingPiPRequest}
-              onParticipantVideoReady={handleParticipantVideoReady}
-              enablePiPFollowSpeaker={enablePiPFollowSpeaker}
-              pipFollowsSpeaker={pipFollowsSpeaker}
-              activeSpeakerId={activeSpeakerId}
-              participantAudioLevels={participantAudioLevels}
+              pendingPiPRequest={telehealth.pendingPiPRequest}
+              isPictureInPicture={telehealth.isPictureInPicture}
+              onTogglePictureInPicture={telehealth.togglePictureInPicture}
+              onCurrentViewPiP={handleCurrentViewPiP}
+              setPendingPiPRequest={telehealth.setPendingPiPRequest}
+              onParticipantVideoReady={telehealth.onParticipantVideoReady}
+              enablePiPFollowSpeaker={telehealth.enablePiPFollowSpeaker}
+              pipFollowsSpeaker={telehealth.pipFollowsSpeaker}
+              activeSpeakerId={telehealth.activeSpeakerId}
+              participantAudioLevels={new Map()}
+              getVideoElementById={telehealth.getVideoElementById}
               overlayControls={
                 <TelehealthCallControls
                   variant="overlay"
@@ -1002,9 +635,54 @@ export function TelehealthSessionContent({
                   isChatOpen={isChatOpen}
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
-                  onTogglePictureInPicture={handleTogglePictureInPicture}
-                  isPictureInPicture={isPictureInPicture}
-                  pendingPiPRequest={pendingPiPRequest}
+                  onTogglePictureInPicture={() => {
+                    console.log('🎬 PiP button clicked!');
+                    
+                    // Enable follow speaker mode
+                    telehealth.enablePiPFollowSpeaker();
+                    
+                    // Find the best video element for PiP
+                    let targetVideo = null;
+                    
+                    // First try to find active speaker's video
+                    if (telehealth.activeSpeakerId) {
+                      const speakerVideo = document.querySelector(`[data-connection-id="${telehealth.activeSpeakerId}"] video`) as HTMLVideoElement;
+                      if (speakerVideo) {
+                        targetVideo = speakerVideo;
+                        console.log('🎬 Using active speaker video for PiP');
+                      }
+                    }
+                    
+                    // Fallback to local video
+                    if (!targetVideo) {
+                      targetVideo = document.querySelector('#vonage-local-container video') as HTMLVideoElement;
+                      if (targetVideo) {
+                        console.log('🎬 Using local video for PiP');
+                      }
+                    }
+                    
+                    // Final fallback to any video
+                    if (!targetVideo) {
+                      targetVideo = document.querySelector('video') as HTMLVideoElement;
+                      if (targetVideo) {
+                        console.log('🎬 Using first available video for PiP');
+                      }
+                    }
+                    
+                    if (targetVideo) {
+                      console.log('🎬 Requesting PiP on video element...');
+                      try {
+                        targetVideo.requestPictureInPicture();
+                        console.log('✅ PiP requested successfully');
+                      } catch (err: any) {
+                        console.error('❌ PiP request failed:', err?.name, err?.message, err);
+                      }
+                    } else {
+                      console.warn('🎬 No video element found');
+                    }
+                  }}
+                  isPictureInPicture={telehealth.isPictureInPicture}
+                  pendingPiPRequest={telehealth.pendingPiPRequest}
                 />
               }
             />

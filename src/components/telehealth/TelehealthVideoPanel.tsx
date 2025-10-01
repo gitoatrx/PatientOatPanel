@@ -17,13 +17,17 @@ interface TelehealthVideoPanelProps {
   pendingPiPRequest?: boolean;
   isPictureInPicture?: boolean;
   onTogglePictureInPicture?: () => void;
+  onCurrentViewPiP?: () => void;
   setPendingPiPRequest?: (value: boolean) => void;
   onParticipantVideoReady?: (connectionId: string, el: HTMLVideoElement | null) => void;
   enablePiPFollowSpeaker?: () => void;
   pipFollowsSpeaker?: boolean;
   activeSpeakerId?: string | null;
   participantAudioLevels?: Map<string, number>;
+  getVideoElementById?: (connectionId: string) => HTMLVideoElement | null;
+  registerPiPToggle?: (fn: () => void) => void;
 }
+
 
 type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
 
@@ -183,12 +187,15 @@ export function TelehealthVideoPanel({
   pendingPiPRequest = false,
   isPictureInPicture = false,
   onTogglePictureInPicture,
+  onCurrentViewPiP,
   setPendingPiPRequest,
   onParticipantVideoReady,
   enablePiPFollowSpeaker,
   pipFollowsSpeaker = false,
   activeSpeakerId,
   participantAudioLevels,
+  getVideoElementById,
+  registerPiPToggle,
 }: TelehealthVideoPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +209,172 @@ export function TelehealthVideoPanel({
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [hasUserPositioned, setHasUserPositioned] = useState(false);
+  
+  // Simple PiP state
+  const [localIsPictureInPicture, setLocalIsPictureInPicture] = useState(false);
+
+  // Simple follow-speaker effect
+  useEffect(() => {
+    if (!pipFollowsSpeaker || !activeSpeakerId) return;
+    
+    // If PiP is active and active speaker changes, swap the video
+    if (document.pictureInPictureElement) {
+      const speakerVideo = document.querySelector(`[data-connection-id="${activeSpeakerId}"] video`) as HTMLVideoElement;
+      if (speakerVideo && speakerVideo.srcObject) {
+        // Get the current PiP video element
+        const pipVideo = document.pictureInPictureElement as HTMLVideoElement;
+        if (pipVideo && pipVideo.srcObject !== speakerVideo.srcObject) {
+          console.log('🎬 Swapping PiP to active speaker:', activeSpeakerId);
+          pipVideo.srcObject = speakerVideo.srcObject as MediaStream;
+        }
+      }
+    }
+  }, [pipFollowsSpeaker, activeSpeakerId]);
+
+  // PiP control functions - COMMENTED OUT FOR SIMPLICITY
+  /*
+  const handleCurrentViewPiP = useCallback(() => {
+    const v = pipRef.current;
+    console.log('🎬 handleCurrentViewPiP called!');
+    if (!v) {
+      console.error('🎬 pipRef.current is null!');
+      return;
+    }
+
+    // Check browser support first
+    console.log('🎬 Browser PiP support check:', {
+      pictureInPictureEnabled: document.pictureInPictureEnabled,
+      hasRequestPiP: typeof v.requestPictureInPicture === 'function',
+      currentPiPElement: document.pictureInPictureElement
+    });
+
+    // ensure stream: remote -> fallback local (SYNCHRONOUS only)
+    if (!v.srcObject) {
+      console.log('🎬 No srcObject, looking for streams...');
+      const el = getVideoElementById?.(activeSpeakerId ?? '') as HTMLVideoElement | null;
+      if (el?.srcObject) {
+        v.srcObject = el.srcObject as MediaStream;
+        console.log('🎬 Set PiP video srcObject from active speaker');
+      }
+      if (!v.srcObject) {
+        const localEl = localRef.current?.querySelector('video') as HTMLVideoElement | null;
+        if (localEl?.srcObject) {
+          v.srcObject = localEl.srcObject as MediaStream;
+          console.log('🎬 Set PiP video srcObject from LOCAL preview');
+        } else {
+          console.warn('🎬 No local or remote stream available for PiP yet');
+          return;
+        }
+      }
+    } else {
+      console.log('🎬 PiP video already has srcObject');
+    }
+
+    // make the element "ready" (SYNCHRONOUS only)
+    v.muted = true;            // avoid autoplay block
+    v.playsInline = true;
+    v.autoplay = true;
+    
+    console.log('🎬 Video element configured:', {
+      muted: v.muted,
+      playsInline: v.playsInline,
+      autoplay: v.autoplay,
+      readyState: v.readyState,
+      hasSrcObject: !!v.srcObject
+    });
+
+    // Check if video is ready for PiP
+    if (v.readyState < 2) {
+      console.warn('🎬 Video not ready for PiP (readyState < 2), trying anyway...');
+    }
+
+    // Request PiP IMMEDIATELY - no awaits before this!
+    try {
+      console.log('🎬 Requesting PiP...');
+      const win = (v as any).requestPictureInPicture();
+      console.log('✅ Entered PiP', win);
+      
+      // Use ref to track state without triggering re-render
+      pipStateRef.current = true;
+      
+      // Update state in next tick to avoid render issues
+      setTimeout(() => {
+        setLocalIsPictureInPicture(true);
+      }, 0);
+      
+    } catch (err: any) {
+      console.error('❌ requestPictureInPicture failed:', err?.name, err?.message, err);
+      pipStateRef.current = false;
+    }
+  }, [getVideoElementById, activeSpeakerId]);
+
+  // Set up autopictureinpicture for the hidden PiP video
+  useEffect(() => {
+    if (pipRef.current) {
+      console.log('🎬 Setting up hidden PiP video element:', pipRef.current);
+      pipRef.current.setAttribute('autopictureinpicture', '');
+      // If supported, also set runtime flag:
+      (pipRef.current as any).autoPictureInPicture = true;
+      console.log('🎬 Hidden PiP video setup complete');
+    } else {
+      console.warn('🎬 pipRef.current is null during setup');
+    }
+  }, []);
+
+  // Handle PiP toggle
+  const handleTogglePictureInPicture = useCallback(async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setLocalIsPictureInPicture(false);
+        return;
+      }
+      
+      // Default to Follow Speaker mode
+      if (enablePiPFollowSpeaker) {
+        enablePiPFollowSpeaker();
+        await handleCurrentViewPiP();
+      }
+    } catch (err) {
+      console.warn('🎬 PiP toggle failed:', err);
+    }
+  }, [enablePiPFollowSpeaker, handleCurrentViewPiP]);
+
+  // Note: Registration system removed - PiP is now handled directly by parent
+
+  // Swap PiP video stream when active speaker changes
+  useEffect(() => {
+    if (!pipFollowsSpeaker || !localIsPictureInPicture || !activeSpeakerId || !getVideoElementById) return;
+    
+    // Get the video element for the active speaker using the registry
+    const activeSpeakerVideo = getVideoElementById(activeSpeakerId);
+    
+    if (activeSpeakerVideo && pipRef.current && activeSpeakerVideo.srcObject) {
+      // Swap the stream without leaving PiP
+      if (pipRef.current.srcObject !== activeSpeakerVideo.srcObject) {
+        pipRef.current.srcObject = activeSpeakerVideo.srcObject as MediaStream;
+        console.log('🎬 Swapped PiP stream to active speaker:', activeSpeakerId);
+        
+        // Ensure it's playing
+        pipRef.current.play().catch(() => {});
+      }
+    }
+  }, [pipFollowsSpeaker, localIsPictureInPicture, activeSpeakerId, getVideoElementById]);
+  */
+
+  // Listen for PiP events
+  useEffect(() => {
+    const handleEnterPiP = () => setLocalIsPictureInPicture(true);
+    const handleLeavePiP = () => setLocalIsPictureInPicture(false);
+
+    document.addEventListener('enterpictureinpicture', handleEnterPiP);
+    document.addEventListener('leavepictureinpicture', handleLeavePiP);
+
+    return () => {
+      document.removeEventListener('enterpictureinpicture', handleEnterPiP);
+      document.removeEventListener('leavepictureinpicture', handleLeavePiP);
+    };
+  }, []);
 
   useEffect(() => {
     onRemoteContainerReady?.(remoteRef.current);
@@ -292,26 +465,8 @@ export function TelehealthVideoPanel({
     return () => observer.disconnect();
   }, []);
 
-  // Register participant videos for speaker following
-  useEffect(() => {
-    if (!onParticipantVideoReady) return;
-
-    // Register remote videos
-    const remoteVideos = remoteRef.current?.querySelectorAll('video') || [];
-    remoteVideos.forEach((video, index) => {
-      const participant = participants[index];
-      if (participant?.connectionId) {
-        onParticipantVideoReady(participant.connectionId, video as HTMLVideoElement);
-      }
-    });
-
-    // Register local video
-    const localVideo = localRef.current?.querySelector('video') as HTMLVideoElement;
-    if (localVideo) {
-      // Use a special ID for local participant
-      onParticipantVideoReady('local', localVideo);
-    }
-  }, [participants, onParticipantVideoReady, remoteHasVideo, localHasVideo]);
+  // Note: Participant video registration is now handled by the hook
+  // when streams are created/destroyed, so we don't need to do it here
 
   const handleToggleFullscreen = useCallback(async () => {
     const panel = panelRef.current;
@@ -490,6 +645,7 @@ export function TelehealthVideoPanel({
 
   return (
     <div ref={panelRef} className={cn(panelClasses, "h-full")}>
+        
         <div
           ref={remoteRef}
           id="vonage-remote-container"
@@ -581,44 +737,10 @@ export function TelehealthVideoPanel({
           </div>
         ) : null}
 
-        {/* PiP nudge banner */}
-        {pendingPiPRequest && !isPictureInPicture && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white rounded-lg px-4 py-3 flex flex-col items-center gap-2 shadow-lg max-w-sm">
-            <span className="text-sm text-center">Keep this call visible?</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { 
-                  setPendingPiPRequest?.(false); 
-                  void onTogglePictureInPicture?.(); 
-                }}
-                className="h-7 px-3 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
-              >
-                Current View
-              </button>
-              {enablePiPFollowSpeaker && (
-                <button
-                  onClick={() => { 
-                    setPendingPiPRequest?.(false); 
-                    void enablePiPFollowSpeaker(); 
-                  }}
-                  className="h-7 px-3 bg-blue-500/80 hover:bg-blue-500 rounded text-sm font-medium transition-colors"
-                >
-                  Follow Speaker
-                </button>
-              )}
-              <button
-                aria-label="Dismiss"
-                className="ml-1 opacity-70 hover:opacity-100"
-                onClick={() => setPendingPiPRequest?.(false)}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* PiP nudge banner removed - PiP button works directly */}
 
-        {/* PiP Follow Speaker indicator */}
-        {pipFollowsSpeaker && isPictureInPicture && (
+        {/* PiP Follow Speaker indicator - always active */}
+        {localIsPictureInPicture && (
           <div className="absolute top-4 right-4 bg-blue-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <span className="text-xs font-medium">
@@ -628,7 +750,7 @@ export function TelehealthVideoPanel({
         )}
 
         {/* Active Speaker indicator (when not in PiP) */}
-        {activeSpeakerId && !isPictureInPicture && (
+        {activeSpeakerId && !localIsPictureInPicture && (
           <div className="absolute top-4 left-4 bg-green-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <span className="text-xs font-medium">Speaking: {activeSpeakerId.slice(-4)}</span>

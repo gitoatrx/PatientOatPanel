@@ -149,6 +149,17 @@ interface UseVonageSessionResult {
   sendTypingIndicator: () => void;
   stopTypingIndicator: () => void;
   clearChatHistory: () => void;
+  // PiP and speaker detection props
+  onParticipantVideoReady: (id: string, el: HTMLVideoElement | null) => void;
+  activeSpeakerId: string | null;
+  enablePiPFollowSpeaker: () => void;
+  disablePiPFollowSpeaker: () => void;
+  pipFollowsSpeaker: boolean;
+  getVideoElementById: (connectionId: string) => HTMLVideoElement | null;
+  isPictureInPicture: boolean;
+  pendingPiPRequest: boolean;
+  setPendingPiPRequest: (value: boolean) => void;
+  togglePictureInPicture: () => Promise<void>;
 }
 
 type VonagePublisher = {
@@ -425,6 +436,143 @@ export function useVonageSession({
   const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // PiP and speaker detection state
+  const participantVideoMap = useRef(new Map<string, HTMLVideoElement>());
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+  const [pipFollowsSpeaker, setPipFollowsSpeaker] = useState(true); // Auto-follow speaker by default
+  const [isPictureInPicture, setIsPictureInPicture] = useState(false);
+  const [pendingPiPRequest, setPendingPiPRequest] = useState(false);
+
+  // Register participant video elements for PiP
+  const onParticipantVideoReady = useCallback((id: string, el: HTMLVideoElement | null) => {
+    if (!el) { 
+      participantVideoMap.current.delete(id); 
+      console.log('🎬 Unregistered participant video:', id);
+      return; 
+    }
+    participantVideoMap.current.set(id, el);
+    console.log('🎬 Registered participant video:', id);
+  }, []);
+
+  // PiP control functions
+  const enablePiPFollowSpeaker = useCallback(() => {
+    setPipFollowsSpeaker(true);
+    console.log('🎬 PiP Follow Speaker enabled');
+  }, []);
+
+  const disablePiPFollowSpeaker = useCallback(() => {
+    setPipFollowsSpeaker(false);
+    console.log('🎬 PiP Follow Speaker disabled');
+  }, []);
+
+  // PiP toggle function
+  const togglePictureInPicture = useCallback(async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPictureInPicture(false);
+        setPipFollowsSpeaker(false);
+        return;
+      }
+      
+      // When entering PiP, automatically enable follow speaker
+      setPipFollowsSpeaker(true);
+      
+      // Find a video element to request PiP on
+      const videoElements = document.querySelectorAll('video');
+      let targetVideo = null;
+      
+      // Try to find a video with a stream
+      for (const video of videoElements) {
+        if (video.srcObject && !video.classList.contains('hidden')) {
+          targetVideo = video;
+          break;
+        }
+      }
+      
+      if (targetVideo) {
+        console.log('🎬 Requesting PiP on video element:', targetVideo);
+        await targetVideo.requestPictureInPicture();
+        setIsPictureInPicture(true);
+        console.log('🎬 PiP entered successfully');
+      } else {
+        console.warn('🎬 No suitable video element found for PiP');
+        setPendingPiPRequest(true);
+      }
+    } catch (err) {
+      console.warn('🎬 PiP toggle failed:', err);
+      setPendingPiPRequest(true);
+    }
+  }, []);
+
+  // Getter function for video elements by connection ID
+  const getVideoElementById = useCallback((connectionId: string): HTMLVideoElement | null => {
+    return participantVideoMap.current.get(connectionId) || null;
+  }, []);
+
+  // Listen for PiP events
+  useEffect(() => {
+    const handleEnterPiP = () => setIsPictureInPicture(true);
+    const handleLeavePiP = () => setIsPictureInPicture(false);
+
+    document.addEventListener('enterpictureinpicture', handleEnterPiP);
+    document.addEventListener('leavepictureinpicture', handleLeavePiP);
+
+    return () => {
+      document.removeEventListener('enterpictureinpicture', handleEnterPiP);
+      document.removeEventListener('leavepictureinpicture', handleLeavePiP);
+    };
+  }, []);
+
+  // Active speaker detection from audio level events
+  useEffect(() => {
+    let lastSpeakerChangeTime = 0;
+    const SPEAKER_CHANGE_THROTTLE = 1000; // Minimum 1 second between speaker changes
+    const audioLevels = new Map<string, number>();
+    
+    const handleAudioLevel = (event: CustomEvent) => {
+      const { connectionId, audioLevel, isSpeaking } = event.detail || {};
+      
+      if (!connectionId) return;
+      
+      // Store audio level for this participant
+      audioLevels.set(connectionId, audioLevel || 0);
+      
+      // Find the participant with the highest audio level
+      let maxLevel = 0;
+      let loudestSpeaker: string | null = null;
+      
+      for (const [id, level] of audioLevels.entries()) {
+        if (level > maxLevel && level > 0.05) { // Threshold to avoid noise
+          maxLevel = level;
+          loudestSpeaker = id;
+        }
+      }
+      
+      // Update active speaker with throttling
+      const now = Date.now();
+      if (loudestSpeaker && now - lastSpeakerChangeTime > SPEAKER_CHANGE_THROTTLE) {
+        setActiveSpeakerId(prev => {
+          if (prev !== loudestSpeaker) {
+            console.log('🎤 Active speaker changed:', { from: prev, to: loudestSpeaker, level: maxLevel });
+            lastSpeakerChangeTime = now;
+            return loudestSpeaker;
+          }
+          return prev;
+        });
+      }
+    };
+
+    // Listen to both remote and local audio level events
+    document.addEventListener('remoteParticipantAudioLevel', handleAudioLevel as EventListener);
+    document.addEventListener('speakingStatusUpdate', handleAudioLevel as EventListener);
+    
+    return () => {
+      document.removeEventListener('remoteParticipantAudioLevel', handleAudioLevel as EventListener);
+      document.removeEventListener('speakingStatusUpdate', handleAudioLevel as EventListener);
+    };
+  }, []);
 
   // Function to assess network quality from WebRTC stats
   const assessNetworkQuality = useCallback(async (session: any) => {
@@ -899,8 +1047,11 @@ export function useVonageSession({
         });
         logInfo('remote stream container appended', { streamId, connectionId, childCount: remoteEl.children.length });
 
-        // Add participant info overlay to the new remote stream
-        addParticipantInfoOverlay(wrapper, `Participant ${connectionId.slice(-4)}`, 'remote', connectionId);
+            // Add participant info overlay to the new remote stream
+            addParticipantInfoOverlay(wrapper, `Participant ${connectionId.slice(-4)}`, 'remote', connectionId);
+
+            // Register the video element for PiP when it's ready
+            // We'll register it after the video element is created by the subscription
 
         console.log('🔴 ABOUT TO SUBSCRIBE TO STREAM:', {
           stream: stream,
@@ -964,6 +1115,77 @@ export function useVonageSession({
             console.log('📺 Remote stream ID:', streamId);
             console.log('🔗 Doctor connection ID:', connectionId);
 
+            // Register the video element for PiP after subscription
+            setTimeout(() => {
+              const videoElement = wrapper.querySelector('video') as HTMLVideoElement;
+              if (videoElement) {
+                onParticipantVideoReady(connectionId, videoElement);
+                console.log('🎬 Registered remote video element for PiP:', connectionId);
+              }
+            }, 100);
+
+            // 🎤 Add audio level monitoring for remote participant speaker detection
+            // Wait a bit for the video element to be fully set up
+            setTimeout(() => {
+              const videoElement = wrapper.querySelector('video') as HTMLVideoElement;
+              if (videoElement && videoElement.srcObject) {
+                console.log('🎤 Setting up audio level monitoring for remote participant:', connectionId);
+                
+                try {
+                  // Monitor audio levels for this remote participant using Web Audio API
+                  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                  const analyser = audioContext.createAnalyser();
+                  const source = audioContext.createMediaStreamSource(videoElement.srcObject as MediaStream);
+                  source.connect(analyser);
+                  
+                  analyser.fftSize = 256;
+                  analyser.smoothingTimeConstant = 0.8;
+                  const bufferLength = analyser.frequencyBinCount;
+                  const dataArray = new Uint8Array(bufferLength);
+                  
+                  let lastAudioLevel = 0;
+                  
+                  const checkAudioLevel = () => {
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    // Calculate RMS (Root Mean Square) for better audio level detection
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                      sum += dataArray[i] * dataArray[i];
+                    }
+                    const rms = Math.sqrt(sum / bufferLength);
+                    const normalizedLevel = rms / 255;
+                    
+                    // Apply smoothing to avoid rapid fluctuations
+                    const smoothedLevel = lastAudioLevel * 0.7 + normalizedLevel * 0.3;
+                    lastAudioLevel = smoothedLevel;
+                    
+                    // Dispatch audio level event for this participant
+                    document.dispatchEvent(new CustomEvent('remoteParticipantAudioLevel', {
+                      detail: { 
+                        connectionId, 
+                        audioLevel: smoothedLevel,
+                        isSpeaking: smoothedLevel > 0.05 // Lower threshold for better detection
+                      }
+                    }));
+                  };
+                  
+                  // Check audio level every 150ms for better performance
+                  const audioLevelInterval = setInterval(checkAudioLevel, 150);
+                  
+                  // Store interval reference for cleanup
+                  (wrapper as any).audioLevelInterval = audioLevelInterval;
+                  (wrapper as any).audioContext = audioContext;
+                  
+                  console.log('🎤 Audio level monitoring started for participant:', connectionId);
+                } catch (error) {
+                  console.warn('🎤 Failed to set up audio level monitoring for participant:', connectionId, error);
+                }
+              } else {
+                console.warn('🎤 Video element not ready for audio level monitoring:', connectionId);
+              }
+            }, 500); // Wait 500ms for video element to be ready
+
             const newParticipant: Participant = {
               connectionId,
               streamId,
@@ -998,6 +1220,20 @@ export function useVonageSession({
         if (streamId) {
           const maybeNode = remoteEl.querySelector<HTMLElement>(`[data-stream-id="${streamId}"]`);
           if (maybeNode) {
+            // 🎤 Clean up audio level monitoring for this participant
+            const audioLevelInterval = (maybeNode as any).audioLevelInterval;
+            const audioContext = (maybeNode as any).audioContext;
+            
+            if (audioLevelInterval) {
+              clearInterval(audioLevelInterval);
+              console.log('🎤 Audio level monitoring stopped for participant:', connectionId);
+            }
+            
+            if (audioContext && audioContext.state !== 'closed') {
+              audioContext.close().catch(console.warn);
+              console.log('🎤 Audio context closed for participant:', connectionId);
+            }
+            
             maybeNode.remove();
           }
         }
@@ -1354,6 +1590,15 @@ export function useVonageSession({
       publisherRef.current = publisher;
       setIsMicMuted(false);
       setIsCameraOff(false);
+
+      // Register the local video element for PiP
+      setTimeout(() => {
+        const localVideoElement = localEl.querySelector('video') as HTMLVideoElement;
+        if (localVideoElement && session.connection?.connectionId) {
+          onParticipantVideoReady('local', localVideoElement);
+          console.log('🎬 Registered local video element for PiP');
+        }
+      }, 100);
 
       // Keep preview stream as backup until we confirm publisher is working
       // We'll stop it after successful publish
@@ -2508,7 +2753,18 @@ export function useVonageSession({
       sendTypingIndicator,
       stopTypingIndicator,
       clearChatHistory,
+      // PiP and speaker detection props
+      onParticipantVideoReady,
+      activeSpeakerId,
+      enablePiPFollowSpeaker,
+      disablePiPFollowSpeaker,
+      pipFollowsSpeaker,
+      getVideoElementById,
+      isPictureInPicture,
+      pendingPiPRequest,
+      setPendingPiPRequest,
+      togglePictureInPicture,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, networkQuality, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory, assessNetworkQuality],
+    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, networkQuality, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory, assessNetworkQuality, onParticipantVideoReady, activeSpeakerId, enablePiPFollowSpeaker, disablePiPFollowSpeaker, pipFollowsSpeaker, getVideoElementById, isPictureInPicture, pendingPiPRequest, setPendingPiPRequest, togglePictureInPicture],
   );
 }
