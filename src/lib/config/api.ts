@@ -143,5 +143,5 @@ export const getWaitingRoomPatientUrl = (appointmentId: string): string => {
 // Helper function for video events endpoints
 export const getVideoEventsPatientUrl = (appointmentId: string): string => {
   const safeAppointmentId = encodeURIComponent(appointmentId);
-  return `${API_CONFIG.ENDPOINTS.VIDEO_EVENTS_PATIENT}/${safeAppointmentId}/video/events/patient`;
+  return `${API_CONFIG.ENDPOINTS.VIDEO_EVENTS_PATIENT}/${safeAppointmentId}/clinic-events/patient`;
 };
