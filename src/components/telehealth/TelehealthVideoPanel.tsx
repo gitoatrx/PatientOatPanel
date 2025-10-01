@@ -28,7 +28,6 @@ interface TelehealthVideoPanelProps {
   registerPiPToggle?: (fn: () => void) => void;
 }
 
-
 type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
 
 type PiPEnabledVideo = HTMLVideoElement & {
@@ -71,20 +70,10 @@ const ensurePictureInPictureReady = (video: HTMLVideoElement) => {
   // Ensure video is playing for auto PiP eligibility
   if (pipVideo.paused) {
     pipVideo.play().catch(error => {
-      console.warn('🎬 Could not auto-play video for PiP:', error);
+
     });
   }
-  
-  console.log('🎬 Video element configured for PiP:', {
-    video: pipVideo,
-    hasRequestPictureInPicture: 'requestPictureInPicture' in pipVideo,
-    disablePictureInPicture: pipVideo.disablePictureInPicture,
-    autoPictureInPicture: pipVideo.autoPictureInPicture,
-    readyState: pipVideo.readyState,
-    muted: pipVideo.muted,
-    paused: pipVideo.paused,
-    hasAudio: (pipVideo.audioTracks?.length ?? 0) > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
-  });
+
 };
 
 const normalizeVideoElements = (
@@ -224,7 +213,7 @@ export function TelehealthVideoPanel({
         // Get the current PiP video element
         const pipVideo = document.pictureInPictureElement as HTMLVideoElement;
         if (pipVideo && pipVideo.srcObject !== speakerVideo.srcObject) {
-          console.log('🎬 Swapping PiP to active speaker:', activeSpeakerId);
+
           pipVideo.srcObject = speakerVideo.srcObject as MediaStream;
         }
       }
@@ -235,65 +224,51 @@ export function TelehealthVideoPanel({
   /*
   const handleCurrentViewPiP = useCallback(() => {
     const v = pipRef.current;
-    console.log('🎬 handleCurrentViewPiP called!');
+
     if (!v) {
-      console.error('🎬 pipRef.current is null!');
+
       return;
     }
 
     // Check browser support first
-    console.log('🎬 Browser PiP support check:', {
-      pictureInPictureEnabled: document.pictureInPictureEnabled,
-      hasRequestPiP: typeof v.requestPictureInPicture === 'function',
-      currentPiPElement: document.pictureInPictureElement
-    });
 
     // ensure stream: remote -> fallback local (SYNCHRONOUS only)
     if (!v.srcObject) {
-      console.log('🎬 No srcObject, looking for streams...');
+
       const el = getVideoElementById?.(activeSpeakerId ?? '') as HTMLVideoElement | null;
       if (el?.srcObject) {
         v.srcObject = el.srcObject as MediaStream;
-        console.log('🎬 Set PiP video srcObject from active speaker');
+
       }
       if (!v.srcObject) {
         const localEl = localRef.current?.querySelector('video') as HTMLVideoElement | null;
         if (localEl?.srcObject) {
           v.srcObject = localEl.srcObject as MediaStream;
-          console.log('🎬 Set PiP video srcObject from LOCAL preview');
+
         } else {
-          console.warn('🎬 No local or remote stream available for PiP yet');
+
           return;
         }
       }
     } else {
-      console.log('🎬 PiP video already has srcObject');
+
     }
 
     // make the element "ready" (SYNCHRONOUS only)
     v.muted = true;            // avoid autoplay block
     v.playsInline = true;
     v.autoplay = true;
-    
-    console.log('🎬 Video element configured:', {
-      muted: v.muted,
-      playsInline: v.playsInline,
-      autoplay: v.autoplay,
-      readyState: v.readyState,
-      hasSrcObject: !!v.srcObject
-    });
 
     // Check if video is ready for PiP
     if (v.readyState < 2) {
-      console.warn('🎬 Video not ready for PiP (readyState < 2), trying anyway...');
+
     }
 
     // Request PiP IMMEDIATELY - no awaits before this!
     try {
-      console.log('🎬 Requesting PiP...');
+
       const win = (v as any).requestPictureInPicture();
-      console.log('✅ Entered PiP', win);
-      
+
       // Use ref to track state without triggering re-render
       pipStateRef.current = true;
       
@@ -303,7 +278,7 @@ export function TelehealthVideoPanel({
       }, 0);
       
     } catch (err: any) {
-      console.error('❌ requestPictureInPicture failed:', err?.name, err?.message, err);
+
       pipStateRef.current = false;
     }
   }, [getVideoElementById, activeSpeakerId]);
@@ -311,13 +286,13 @@ export function TelehealthVideoPanel({
   // Set up autopictureinpicture for the hidden PiP video
   useEffect(() => {
     if (pipRef.current) {
-      console.log('🎬 Setting up hidden PiP video element:', pipRef.current);
+
       pipRef.current.setAttribute('autopictureinpicture', '');
       // If supported, also set runtime flag:
       (pipRef.current as any).autoPictureInPicture = true;
-      console.log('🎬 Hidden PiP video setup complete');
+
     } else {
-      console.warn('🎬 pipRef.current is null during setup');
+
     }
   }, []);
 
@@ -336,7 +311,7 @@ export function TelehealthVideoPanel({
         await handleCurrentViewPiP();
       }
     } catch (err) {
-      console.warn('🎬 PiP toggle failed:', err);
+
     }
   }, [enablePiPFollowSpeaker, handleCurrentViewPiP]);
 
@@ -353,8 +328,7 @@ export function TelehealthVideoPanel({
       // Swap the stream without leaving PiP
       if (pipRef.current.srcObject !== activeSpeakerVideo.srcObject) {
         pipRef.current.srcObject = activeSpeakerVideo.srcObject as MediaStream;
-        console.log('🎬 Swapped PiP stream to active speaker:', activeSpeakerId);
-        
+
         // Ensure it's playing
         pipRef.current.play().catch(() => {});
       }
@@ -401,7 +375,6 @@ export function TelehealthVideoPanel({
     return () => window.removeEventListener('resize', onResize);
   }, [viewportWidth]);
 
-
   useEffect(() => {
     onLocalContainerReady?.(localRef.current);
     return () => onLocalContainerReady?.(null);
@@ -443,7 +416,6 @@ export function TelehealthVideoPanel({
     };
   }, []);
 
-
   useEffect(() => {
     const localElement = localRef.current;
     if (!localElement) return;
@@ -481,10 +453,9 @@ export function TelehealthVideoPanel({
         await panel.requestFullscreen?.();
       }
     } catch (error) {
-      console.warn('Unable to toggle fullscreen', error);
+
     }
   }, []);
-
 
   const handleMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -662,6 +633,15 @@ export function TelehealthVideoPanel({
           </div>
         </div>
 
+        {/* Doctor name at bottom left - only show if name exists */}
+        {providerName && providerName.trim() && (
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+            <div className="rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white shadow-sm">
+              {providerName}
+            </div>
+          </div>
+        )}
+
         {!remoteHasVideo ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-slate-200">
             <div className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
@@ -744,7 +724,7 @@ export function TelehealthVideoPanel({
           <div className="absolute top-4 right-4 bg-blue-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <span className="text-xs font-medium">
-              {activeSpeakerId ? `Following ${activeSpeakerId.slice(-4)}` : 'Following Speaker'}
+              {/* {activeSpeakerId ? `Following ${activeSpeakerId.slice(-4)}` : 'Following Speaker'} */}
             </span>
           </div>
         )}
@@ -753,7 +733,7 @@ export function TelehealthVideoPanel({
         {activeSpeakerId && !localIsPictureInPicture && (
           <div className="absolute top-4 left-4 bg-green-500/80 text-white rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-            <span className="text-xs font-medium">Speaking: {activeSpeakerId.slice(-4)}</span>
+            {/* <span className="text-xs font-medium">Speaking: {activeSpeakerId.slice(-4)}</span> */}
           </div>
         )}
     </div>

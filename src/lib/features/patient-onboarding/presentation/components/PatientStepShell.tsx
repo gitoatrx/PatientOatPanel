@@ -89,7 +89,7 @@ export function PatientStepShell({
         await onBack();
         // If onBack succeeds, the page will navigate away
       } catch (error) {
-        console.error("Error in onBack callback:", error);
+
         // Error is handled by the component that calls onBack
         // Don't try to restore content here as it can cause blank UI
       }
@@ -103,7 +103,7 @@ export function PatientStepShell({
         await onNext();
         // If onNext succeeds, the page will navigate away
       } catch (error) {
-        console.error("Error in onNext callback:", error);
+
         // Error is handled by the component that calls onNext
         // Don't try to restore content here as it can cause blank UI
       }
@@ -123,8 +123,7 @@ export function PatientStepShell({
     if (typeof window !== "undefined") {
       window.location.href = "/onboarding/patient/phone";
     }
-    
-    console.log("Logout clicked - redirect to phone step");
+
   }, [onLogout]);
 
   return (

@@ -59,46 +59,43 @@ export function PatientAppointmentDateTimeStep() {
 
         setPhoneNumber(savedPhone);
 
-        console.log('Fetching progress to get provider ID for phone:', savedPhone);
         const progressResponse = await patientService.getOnboardingProgress(savedPhone);
 
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
-          console.log('Progress API response:', apiData);
 
           // Extract provider ID from the API response
           if (apiData.state?.provider?.id) {
             const extractedProviderId = apiData.state.provider.id;
-            console.log('Extracted provider ID from progress API:', extractedProviderId);
+
             setProviderId(extractedProviderId);
           } else {
-            console.log('No provider ID found in progress API response');
+
             setProgressError('No provider selected. Please go back and select a provider first.');
           }
 
           // Prefill appointment data if available
           if (apiData.state?.appointment) {
             const appointment = apiData.state.appointment;
-            console.log('Prefilling appointment form with:', appointment);
 
             // Use setTimeout to ensure form is ready
             setTimeout(() => {
               if (appointment.date) {
-                console.log('Setting appointment date:', appointment.date);
+
                 form.setValue('appointmentDate', appointment.date, { shouldValidate: true });
               }
               if (appointment.time) {
-                console.log('Setting appointment time:', appointment.time);
+
                 form.setValue('appointmentTime', appointment.time, { shouldValidate: true });
               }
             }, 100);
           }
         } else {
-          console.error('Progress API failed:', progressResponse.message);
+
           setProgressError(progressResponse.message || 'Failed to fetch progress information');
         }
       } catch (error) {
-        console.error('Error fetching progress:', error);
+
         setProgressError('Failed to fetch progress information');
       } finally {
         setIsLoadingProgress(false);
@@ -164,7 +161,7 @@ export function PatientAppointmentDateTimeStep() {
 
   const handleSubmit = async (data: AppointmentDateTimeFormData) => {
     if (!phoneNumber) {
-      console.error("No phone number found");
+
       setError("Phone number not found. Please start over.");
       return;
     }
@@ -181,7 +178,6 @@ export function PatientAppointmentDateTimeStep() {
 
     try {
       setError(null);
-      console.log("Appointment date/time submitted:", data);
 
       // Call appointment API to save the selected date and time
       const apiResponse = await patientService.saveAppointment(phoneNumber, {
@@ -190,15 +186,11 @@ export function PatientAppointmentDateTimeStep() {
       });
 
       if (apiResponse.success) {
-        console.log("Appointment saved successfully:", apiResponse);
 
         // Navigate to next step based on API response
         const nextStep = apiResponse.data?.current_step;
         const nextRoute = getRouteFromApiStep(nextStep || 'review');
-        console.log(`Appointment API response:`, apiResponse);
-        console.log(`Next step from API: ${nextStep}`);
-        console.log(`Mapped route: ${nextRoute}`);
-        console.log(`Navigating to: ${nextRoute}`);
+
         router.push(nextRoute);
       } else {
         // Handle API error response
@@ -215,7 +207,6 @@ export function PatientAppointmentDateTimeStep() {
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Unexpected error in handleSubmit:', err);
 
       // Handle different error types
       let errorMessage = '';

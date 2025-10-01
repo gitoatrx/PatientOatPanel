@@ -38,7 +38,7 @@ export function PatientOnboardingRouteGuard({
 
   // In UI-only mode, always authorize and disable all route restrictions
   useEffect(() => {
-    console.log("PatientOnboardingRouteGuard: UI-only mode - authorizing access (route guard disabled for testing)");
+
     setIsAuthorized(true);
   }, []);
 

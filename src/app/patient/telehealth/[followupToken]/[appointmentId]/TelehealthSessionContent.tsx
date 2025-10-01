@@ -90,16 +90,13 @@ export function TelehealthSessionContent({
   // Safe join handler that prevents multiple clicks
   const handleJoinCall = useCallback(async () => {
     if (isJoining || telehealth.isBusy || telehealth.isConnected) {
-      console.log('🚫 Join call blocked - already in progress or connected');
       return;
     }
 
     try {
       setIsJoining(true);
-      console.log('🚀 Starting join call process...');
       await telehealth.join();
     } catch (error) {
-      console.error('❌ Join call failed:', error);
     } finally {
       setIsJoining(false);
     }
@@ -111,7 +108,6 @@ export function TelehealthSessionContent({
     // Enable follow speaker and trigger PiP directly
     telehealth.enablePiPFollowSpeaker();
     // The video panel will handle the actual PiP request
-    console.log('🎬 PiP toggle requested - follow speaker enabled');
   }, [telehealth]);
 
 
@@ -119,32 +115,10 @@ export function TelehealthSessionContent({
   // Current View PiP handler (for explicit "Current View" button)
   const handleCurrentViewPiP = useCallback(async () => {
     // This will be handled by the TelehealthVideoPanel component
-    console.log('🎬 Current View PiP requested - handled by video panel');
   }, []);
 
   // Note: All PiP functions are now handled directly by the hook
   
-  // Debug: Check PiP support and video elements
-  useEffect(() => {
-    console.log('🔍 PiP Support Check:', {
-      pictureInPictureEnabled: document.pictureInPictureEnabled,
-      hasRequestPictureInPicture: 'requestPictureInPicture' in HTMLVideoElement.prototype,
-      hasExitPictureInPicture: 'exitPictureInPicture' in document,
-      userAgent: navigator.userAgent
-    });
-    
-    // Check for video elements after a delay
-    setTimeout(() => {
-      const videoElements = document.querySelectorAll('video');
-      console.log('🔍 Video Elements Found:', Array.from(videoElements).map(v => ({
-        hasSrcObject: !!v.srcObject,
-        isHidden: v.classList.contains('hidden'),
-        dimensions: `${v.videoWidth}x${v.videoHeight}`,
-        container: v.closest('#vonage-local-container') ? 'local' : 'other',
-        element: v
-      })));
-    }, 2000);
-  }, []);
 
   // Listen for PiP events (now handled by the hook)
 
@@ -207,11 +181,8 @@ export function TelehealthSessionContent({
       // Save user's message to API in background (don't block UI)
       setTimeout(async () => {
         try {
-          console.log('💾 Saving user message to API in background:', lastUserMessage.content);
           await chatApi.sendMessage(lastUserMessage.content);
-          console.log('✅ User message saved to API');
         } catch (error) {
-          console.warn('❌ Failed to save user message to API:', error);
         }
       }, 0);
     }
@@ -220,11 +191,9 @@ export function TelehealthSessionContent({
   // Load previous chat messages ONCE when session starts (for chat history)
   useEffect(() => {
     if (appointmentId && followupToken && telehealth.isConnected && !messagesLoaded) {
-      console.log('📱 Loading previous chat history from API...');
       
       chatApi.getMessages()
         .then(messages => {
-          console.log('📱 Loaded previous messages from API:', messages.length);
           // Convert API messages to UI format
           const convertedMessages = chatApi.convertToVonageFormat(messages).map(msg => ({
     id: msg.id,
@@ -237,7 +206,6 @@ export function TelehealthSessionContent({
           setMessagesLoaded(true); // Mark as loaded to prevent re-loading
         })
         .catch(error => {
-          console.warn('❌ Failed to load previous messages from API:', error);
           setMessagesLoaded(true); // Mark as loaded even if failed
         });
     }
@@ -258,7 +226,6 @@ export function TelehealthSessionContent({
       if (!telehealth.isConnected || document.pictureInPictureElement) return;
       
       // Show PiP nudge on tab switch
-      console.log('🎬 Tab switch detected - showing PiP nudge');
       telehealth.setPendingPiPRequest(true);
     };
 
@@ -306,7 +273,6 @@ export function TelehealthSessionContent({
       const storedPipPreference = localStorage.getItem('pip-preference-enabled');
       if (storedPipPreference === 'true') {
         setPipPreferenceEnabled(true);
-        console.log('🎬 Restored PiP preference from localStorage - will auto-trigger on tab switches');
       }
     };
     check();
@@ -360,7 +326,6 @@ export function TelehealthSessionContent({
 
   const onJoinWaitlist = async () => {
     if (isJoining || telehealth.isBusy || telehealth.isConnected) {
-      console.log('🚫 Join waitlist blocked - already in progress or connected');
       return;
     }
 
@@ -375,35 +340,27 @@ export function TelehealthSessionContent({
       // Note: PiP permission will be requested after session starts
       
       // 2. Mark patient as waiting in the waiting room via API
-      console.log('🚪 Joining waitlist - marking patient as waiting...');
       const waitingResponse = await waitingRoomService.markPatientAsWaiting(followupToken);
-      console.log('✅ Patient successfully marked as waiting');
       
       // 2.5. Trigger video event for patient waiting
       if (waitingResponse.success && waitingResponse.data) {
-        console.log('🎬 Triggering video event for patient waiting...');
         try {
           await videoEventsService.triggerPatientWaitingEvent(followupToken, {
             id: waitingResponse.data.id,
             is_waiting: waitingResponse.data.is_waiting,
             waiting_since: waitingResponse.data.waiting_since
           });
-          console.log('✅ Video event triggered successfully');
         } catch (videoEventError) {
-          console.error('❌ Failed to trigger video event:', videoEventError);
           // Don't fail the entire flow if video event fails
         }
       }
       
       // 3. Start listening for doctor connect events via Ably
-      console.log('🎧 Starting Ably listener for doctor connect events...');
       const newAblyService = new AblyVideoCallService({
         appointmentId,
         onDoctorConnect: async (event: AblyConnectEvent) => {
-          console.log('👨‍⚕️ Doctor connected event received:', event);
           
           // Automatically start the session when doctor connects
-          console.log('🚀 Doctor connected - starting session automatically...');
           
           // Disconnect from Ably since we're joining the session
           if (ablyService) {
@@ -417,7 +374,6 @@ export function TelehealthSessionContent({
           setDoctorConnected(false);
         },
         onError: (error: Error) => {
-          console.error('❌ Ably error:', error);
         }
       });
       
@@ -429,12 +385,10 @@ export function TelehealthSessionContent({
       setShowPreJoin(false);
       
     } catch (error) {
-      console.error('❌ Failed to join waitlist:', error);
       if (error instanceof Error && error.message.includes('Permission denied')) {
           setShowPermissionModal(true);
       } else {
         // Handle API errors or other issues
-        console.error('❌ Error joining waitlist:', error);
         // You might want to show an error message to the user here
       }
     } finally {
@@ -446,12 +400,10 @@ export function TelehealthSessionContent({
   // Development mode - Direct join call (bypasses waiting room)
   const onJoinCallDirect = async () => {
     if (isJoining || telehealth.isBusy || telehealth.isConnected) {
-      console.log('🚫 [DEV] Direct join blocked - already in progress or connected');
       return;
     }
 
     try {
-      console.log('🚀 [DEV] Joining call directly...');
       
       // Request camera and microphone permissions
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -467,10 +419,8 @@ export function TelehealthSessionContent({
       setIsInWaitingRoom(false);
       setDoctorConnected(false);
       
-      console.log('✅ [DEV] Direct join initiated');
       
     } catch (error) {
-      console.error('❌ [DEV] Failed to join call directly:', error);
       if (error instanceof Error && error.message.includes('Permission denied')) {
       setShowPermissionModal(true);
       }
@@ -636,7 +586,6 @@ export function TelehealthSessionContent({
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
                   onTogglePictureInPicture={() => {
-                    console.log('🎬 PiP button clicked!');
                     
                     // Enable follow speaker mode
                     telehealth.enablePiPFollowSpeaker();
@@ -649,7 +598,6 @@ export function TelehealthSessionContent({
                       const speakerVideo = document.querySelector(`[data-connection-id="${telehealth.activeSpeakerId}"] video`) as HTMLVideoElement;
                       if (speakerVideo) {
                         targetVideo = speakerVideo;
-                        console.log('🎬 Using active speaker video for PiP');
                       }
                     }
                     
@@ -657,7 +605,6 @@ export function TelehealthSessionContent({
                     if (!targetVideo) {
                       targetVideo = document.querySelector('#vonage-local-container video') as HTMLVideoElement;
                       if (targetVideo) {
-                        console.log('🎬 Using local video for PiP');
                       }
                     }
                     
@@ -665,20 +612,15 @@ export function TelehealthSessionContent({
                     if (!targetVideo) {
                       targetVideo = document.querySelector('video') as HTMLVideoElement;
                       if (targetVideo) {
-                        console.log('🎬 Using first available video for PiP');
                       }
                     }
                     
                     if (targetVideo) {
-                      console.log('🎬 Requesting PiP on video element...');
                       try {
                         targetVideo.requestPictureInPicture();
-                        console.log('✅ PiP requested successfully');
                       } catch (err: any) {
-                        console.error('❌ PiP request failed:', err?.name, err?.message, err);
                       }
                     } else {
-                      console.warn('🎬 No video element found');
                     }
                   }}
                   isPictureInPicture={telehealth.isPictureInPicture}
@@ -713,23 +655,18 @@ export function TelehealthSessionContent({
 
         {/* Right Side - Chat Panel (desktop only) */}
         <div className="hidden lg:flex lg:w-96 lg:h-full bg-gray-50 flex-col rounded-xl shadow-lg overflow-hidden">
-          <div className="bg-gray-800 border-b border-gray-700 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-shrink-0">
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">
-                    {providerName.split(' ').map(n => n[0]).join('')}
-                  </span>
+          <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+            <div className="flex flex-col gap-2 px-4 pt-2 pb-3">
+              <div className="mx-auto h-1 w-12 rounded-full bg-white/20" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-semibold text-base">Conversation</h3>
+                  <p className="text-emerald-400 text-xs">{telehealth.participantCount} participants in room</p>
                 </div>
-                <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800 ${telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-white text-sm truncate">{providerName}</h3>
-                <p className="text-gray-400 text-xs">{telehealth.isConnected ? 'Online' : 'Offline'} • Healthcare Provider</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                <span className="text-xs text-gray-400">{telehealth.isConnected ? 'Connected' : 'Disconnected'}</span>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                  <span className="text-xs text-gray-400">{telehealth.isConnected ? 'Connected' : 'Disconnected'}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -740,6 +677,7 @@ export function TelehealthSessionContent({
               participantStatus={telehealth.isConnected ? "online" : "offline"}
               messages={uiMessages}
               onSendMessage={telehealth.sendChatMessage}
+              headerTitle="Conversation"
               isConnected={telehealth.isConnected}
               typingUsers={telehealth.typingUsers}
               onTypingStart={telehealth.sendTypingIndicator}
@@ -760,9 +698,9 @@ export function TelehealthSessionContent({
             onToggle={() => setIsChatOpen(v => !v)}
             hideTrigger
             variant="drawer"
-            headerTitle="Meeting Chat"
+            headerTitle="Conversation"
             headerSubtitle={`${telehealth.participantCount} participants in room`}
-            participantNames={telehealth.participantCount > 0 ? [...new Set(["You", providerName, ...telehealth.participants.slice(0, Math.max(0, telehealth.participantCount - 2)).map(p => `Participant ${p.connectionId.slice(-4)}`)])] : []}
+            participantNames={telehealth.participantCount > 0 ? [...new Set(["You", providerName].filter(name => name && name.trim()))] : []}
           />
         </div>
       </div>

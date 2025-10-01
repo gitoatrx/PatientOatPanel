@@ -51,8 +51,7 @@ export function PatientReviewStep() {
       
       if (progressResponse.success && progressResponse.data?.state) {
         const state = progressResponse.data.state;
-        console.log('Prefilling review form with progress data:', state);
-        
+
         // Map API response data to review form structure
         const combinedData: WizardForm = {
           firstName: state.personal_info?.first_name || "",
@@ -81,13 +80,13 @@ export function PatientReviewStep() {
         };
 
         setReviewData(combinedData);
-        console.log("PatientReviewStep: Loaded data from progress API:", combinedData);
+
       } else {
-        console.log('Review step - no progress data available yet');
+
         setError("No progress data found. Please complete the onboarding process first.");
       }
     } catch (error) {
-      console.error('Error fetching progress for review:', error);
+
       setError("Failed to load your information. Please try again.");
     } finally {
       setIsLoadingProgress(false);
@@ -96,7 +95,7 @@ export function PatientReviewStep() {
 
   const handleSubmit = async () => {
     if (!phoneNumber) {
-      console.error("No phone number found");
+
       setError("Phone number not found. Please start over.");
       return;
     }
@@ -104,14 +103,12 @@ export function PatientReviewStep() {
     try {
       setIsSubmitting(true);
       setError(null);
-      console.log("Review submitted, confirming appointment...");
-      
+
       // Call confirm appointment API to complete the onboarding process
       const apiResponse = await patientService.confirmAppointment(phoneNumber);
       
       if (apiResponse.success) {
-        console.log("Appointment confirmed successfully:", apiResponse);
-        
+
         // Store confirmation details in localStorage for the confirmation page
         if (apiResponse.data) {
           localStorage.setItem('appointment-confirmation', JSON.stringify({
@@ -138,8 +135,7 @@ export function PatientReviewStep() {
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Unexpected error in handleSubmit:', err);
-      
+
       // Handle different error types
       let errorMessage = '';
       let errorTitle = 'Unexpected Error';
@@ -175,7 +171,7 @@ export function PatientReviewStep() {
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
+
     // Navigate back to appointment date/time step
     router.push("/onboarding/patient/appointment-datetime");
   };

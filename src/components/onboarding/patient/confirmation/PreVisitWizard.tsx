@@ -134,33 +134,25 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
   const handleSubmit = useCallback(async () => {
     try {
       setIsSubmitting(true);
-      console.log("Submitting health check-in answers:", assessmentData);
 
       // If we have followup questions and the necessary data, save answers to API
       if (followupQuestions.length > 0 && appointmentId && token) {
-        console.log("Saving answers to API...");
 
         // Debug: Log all data to understand the structure
-        console.log("=== DEBUG: Answer Collection ===");
-        console.log("followupQuestions:", followupQuestions);
-        console.log("assessmentData:", assessmentData);
-        console.log("stepData:", stepData);
 
         // Format answers for API - array format with id and value
         const answersArray: Array<{ id: string; value: string }> = [];
 
         followupQuestions.forEach(question => {
-          console.log(`Processing question ${question.id}:`, question);
 
           // The stepId is "question_${question.id}" and the data is stored with question.id as key
           const stepId = `question_${question.id}`;
           const stepAnswer = stepData[stepId];
-          console.log(`Answer from stepData[${stepId}]:`, stepAnswer);
 
           let answer = undefined;
           if (stepAnswer && typeof stepAnswer === 'object') {
             answer = (stepAnswer as Record<string, unknown>)[question.id];
-            console.log(`Answer from stepData[${stepId}][${question.id}]:`, answer);
+
           }
 
           if (answer !== undefined && answer !== null && answer !== '') {
@@ -168,18 +160,15 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
               id: question.id,
               value: String(answer)
             });
-            console.log(`Added answer: ${question.id} = ${answer}`);
+
           } else {
-            console.log(`No answer found for question ${question.id}`);
+
           }
         });
 
         const answersPayload = {
           answers: answersArray
         };
-
-        console.log("Final answers array:", answersArray);
-        console.log("Formatted answers payload:", answersPayload);
 
         // Save answers to API
         const saveResponse = await patientService.saveFollowupAnswers(
@@ -190,19 +179,19 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
         );
 
         if (saveResponse.data?.saved) {
-          console.log("Answers saved successfully:", saveResponse.data.answers);
+
         } else {
-          console.error("Failed to save answers:", saveResponse.message || "Unknown error");
+
         }
       } else {
-        console.log("No API data available, skipping API save");
+
       }
 
       // Show thank you page instead of closing immediately
       setShowThankYou(true);
       setIsSubmitting(false);
     } catch (error) {
-      console.error("Failed to submit health check-in:", error);
+
       setIsSubmitting(false);
       // Still show thank you page even if API save fails
       setShowThankYou(true);
@@ -219,7 +208,6 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
     };
     return iconMap[iconName] || <Sparkles className="h-5 w-5" />;
   };
-
 
   const renderStepContent = () => {
     // Show thank you page if submission is complete
@@ -345,7 +333,6 @@ export function PreVisitWizard({ isOpen, onClose, doctorName, followupQuestions 
           </motion.div>
         </AnimatePresence>
       </div>
-
 
       {/* Fixed Footer - matches PatientStepShell pattern - Hidden on thank you page */}
       {!showThankYou && (
@@ -512,7 +499,6 @@ function IntroStep({ onNext, doctorName, followupQuestions = [] }: { onNext: () 
     </div>
   );
 }
-
 
 function SubmissionStep({ onComplete }: { onComplete: () => void }) {
   return (

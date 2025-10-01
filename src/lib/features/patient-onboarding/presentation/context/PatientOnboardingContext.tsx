@@ -45,19 +45,16 @@ export function PatientOnboardingProvider({
 
   const refreshState = useCallback(async () => {
     try {
-      console.log("PatientOnboardingContext: Starting refreshState...");
+
       // Don't set loading to true for refreshState to prevent flicker
       setError(null);
       const newState = await manager.getOnboardingState();
-      console.log("PatientOnboardingContext: Got new state:", newState);
+
       setState(newState);
-      console.log(
-        "PatientOnboardingContext: refreshState completed successfully",
-      );
+
     } catch (err) {
       // In UI-only mode, provide default state instead of showing errors
-      console.log("PatientOnboardingContext: Error during refreshState, providing default state for UI-only mode:", err);
-      
+
       const defaultState = {
         currentStep: 1,
         isComplete: false,
@@ -82,7 +79,7 @@ export function PatientOnboardingProvider({
     async (step: number, data: unknown) => {
       if (!state) {
         // In UI-only mode, provide default state instead of throwing error
-        console.log("PatientOnboardingContext: No state available, providing default state for UI-only mode");
+
         const defaultState = {
           currentStep: 1,
           isComplete: false,
@@ -111,8 +108,7 @@ export function PatientOnboardingProvider({
         return result;
       } catch (err) {
         // In UI-only mode, provide default result instead of throwing error
-        console.log("PatientOnboardingContext: Error during saveStep, providing default result for UI-only mode:", err);
-        
+
         const defaultResult = {
           nextHref: `/onboarding/patient/step-${step + 1}`,
           currentStep: `step-${step + 1}`,
@@ -128,7 +124,7 @@ export function PatientOnboardingProvider({
   const completeOnboarding = useCallback(async () => {
     if (!state) {
       // In UI-only mode, provide default state instead of throwing error
-      console.log("PatientOnboardingContext: No state available for completeOnboarding, providing default state for UI-only mode");
+
       const defaultState = {
         currentStep: 1,
         isComplete: false,
@@ -153,7 +149,7 @@ export function PatientOnboardingProvider({
       // The manager already updates the local state
     } catch (err) {
       // In UI-only mode, just log the error and don't throw
-      console.log("PatientOnboardingContext: Error during completeOnboarding, continuing in UI-only mode:", err);
+
       setError(null); // Don't show errors in UI-only mode
     }
   }, [manager, state]);
@@ -172,7 +168,7 @@ export function PatientOnboardingProvider({
         return success;
       } catch (err) {
         // In UI-only mode, return true instead of throwing error
-        console.log("PatientOnboardingContext: Error during registerPatient, returning success for UI-only mode:", err);
+
         setError(null); // Don't show errors in UI-only mode
         return true; // Simulate successful registration in UI-only mode
       }
@@ -186,17 +182,16 @@ export function PatientOnboardingProvider({
 
   const loadProgressFromAPI = useCallback(async (phone: string) => {
     try {
-      console.log("PatientOnboardingContext: Loading progress from API for phone:", phone);
+
       setError(null);
       await manager.loadProgressFromAPI(phone);
       
       // Refresh state after loading progress
       const newState = await manager.getOnboardingState();
       setState(newState);
-      
-      console.log("PatientOnboardingContext: Successfully loaded progress from API");
+
     } catch (err) {
-      console.error("PatientOnboardingContext: Failed to load progress from API:", err);
+
       setError(err instanceof Error ? err.message : "Failed to load progress");
     }
   }, [manager]);
@@ -205,22 +200,16 @@ export function PatientOnboardingProvider({
   useEffect(() => {
     const initializeState = async () => {
       try {
-        console.log("PatientOnboardingContext: Starting initialization...");
+
         setError(null);
         const initialState = await manager.getOnboardingState();
-        console.log(
-          "PatientOnboardingContext: Got initial state:",
-          initialState,
-        );
+
         setState(initialState);
         setIsLoading(false); // Set loading to false after successful API call
-        console.log(
-          "PatientOnboardingContext: Initialization completed successfully",
-        );
+
       } catch (err) {
         // In UI-only mode, always provide a default state to prevent blank UI
-        console.log("PatientOnboardingContext: Error during initialization, providing default state for UI-only mode:", err);
-        
+
         const defaultState = {
           currentStep: 1,
           isComplete: false,

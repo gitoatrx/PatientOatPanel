@@ -12,7 +12,6 @@ export const patientService = {
   // OTP Management - Real API Integration
   async sendOtp(phone: string): Promise<ApiResponse<{ message: string; otpCode?: string }>> {
     try {
-      console.log('Sending OTP to phone:', phone);
 
       const response = await apiClient.post(API_CONFIG.ENDPOINTS.SEND_OTP, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -23,10 +22,8 @@ export const patientService = {
         showSuccessToast: false, // Don't show success toast for OTP sending
       });
 
-      console.log('OTP send response:', response);
       return response.data as ApiResponse<{ message: string; otpCode?: string }>;
     } catch (error) {
-      console.error('Failed to send OTP:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -44,7 +41,6 @@ export const patientService = {
   // OTP Verification - Real API Integration
   async verifyOtp(phone: string, code: string): Promise<OtpVerificationResponse> {
     try {
-      console.log('Verifying OTP for phone:', phone, 'with code:', code);
 
       const response = await apiClient.post<OtpVerificationResponse>(API_CONFIG.ENDPOINTS.VERIFY_OTP, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -56,13 +52,10 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('OTP verification response:', response);
-
       // The API client returns the raw Axios response
       // response.data contains the actual API response
       return response.data;
     } catch (error) {
-      console.error('Failed to verify OTP:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -88,7 +81,6 @@ export const patientService = {
   // Onboarding Progress - Real API Integration
   async getOnboardingProgress(phone: string): Promise<OnboardingProgressResponse> {
     try {
-      console.log('Getting onboarding progress for phone:', phone);
 
       const response = await apiClient.get<OnboardingProgressResponse>(
         `${API_CONFIG.ENDPOINTS.ONBOARDING_PROGRESS}?clinic_id=${API_CONFIG.CLINIC_ID}&phone=${encodeURIComponent(phone)}`,
@@ -99,12 +91,10 @@ export const patientService = {
         }
       );
 
-      console.log('Onboarding progress response:', response);
       // The API client returns the raw Axios response
       // response.data contains the actual API response
       return response.data;
     } catch (error) {
-      console.error('Failed to get onboarding progress:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -130,7 +120,6 @@ export const patientService = {
   // Health Card API
   async saveHealthCard(phone: string, healthCardNumber?: string): Promise<HealthCardResponse> {
     try {
-      console.log('Saving health card for phone:', phone, 'with number:', healthCardNumber);
 
       // Build payload conditionally - only include health_card_number if user has one
       const payload: Record<string, unknown> = {
@@ -143,11 +132,8 @@ export const patientService = {
         payload.health_card_number = healthCardNumber;
       }
 
-      console.log('Health card API payload:', payload);
-      console.log('health_card_number included:', 'health_card_number' in payload);
       if ('health_card_number' in payload) {
-        console.log('health_card_number type:', typeof payload.health_card_number);
-        console.log('health_card_number value:', payload.health_card_number);
+
       }
 
       const response = await apiClient.post<HealthCardResponse>(API_CONFIG.ENDPOINTS.HEALTH_CARD, payload, {
@@ -156,10 +142,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Health card save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save health card:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -192,7 +176,6 @@ export const patientService = {
     country: string;
   }): Promise<AddressResponse> {
     try {
-      console.log('Saving address for phone:', phone, 'with data:', addressData);
 
       const response = await apiClient.post<AddressResponse>(API_CONFIG.ENDPOINTS.ADDRESS, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -204,10 +187,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Address save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save address:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -236,7 +217,6 @@ export const patientService = {
     last_name: string;
   }): Promise<PersonalInfoStep1Response> {
     try {
-      console.log('Saving personal info step 1 for phone:', phone, 'with data:', personalData);
 
       const response = await apiClient.post<PersonalInfoStep1Response>(API_CONFIG.ENDPOINTS.PERSONAL_INFO_STEP1, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -248,10 +228,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Personal info step 1 save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save personal info step 1:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -279,7 +257,6 @@ export const patientService = {
     gender: string;
   }): Promise<PersonalInfoStep2Response> {
     try {
-      console.log('Saving personal info step 2 for phone:', phone, 'with data:', genderData);
 
       const response = await apiClient.post<PersonalInfoStep2Response>(API_CONFIG.ENDPOINTS.PERSONAL_INFO_STEP2, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -291,10 +268,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Personal info step 2 save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save personal info step 2:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -322,7 +297,6 @@ export const patientService = {
     date_of_birth: string;
   }): Promise<PersonalInfoStep3Response> {
     try {
-      console.log('Saving personal info step 3 for phone:', phone, 'with data:', dateOfBirthData);
 
       const response = await apiClient.post<PersonalInfoStep3Response>(API_CONFIG.ENDPOINTS.PERSONAL_INFO_STEP3, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -334,10 +308,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Personal info step 3 save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save personal info step 3:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -365,7 +337,6 @@ export const patientService = {
     email: string;
   }): Promise<PersonalInfoStep4Response> {
     try {
-      console.log('Saving personal info step 4 for phone:', phone, 'with data:', emailData);
 
       const response = await apiClient.post<PersonalInfoStep4Response>(API_CONFIG.ENDPOINTS.PERSONAL_INFO_STEP4, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -377,10 +348,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Personal info step 4 save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save personal info step 4:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -408,7 +377,6 @@ export const patientService = {
     visit_type_id: number;
   }): Promise<VisitTypeResponse> {
     try {
-      console.log('Saving visit type for phone:', phone, 'with data:', visitTypeData);
 
       const response = await apiClient.post<VisitTypeResponse>(API_CONFIG.ENDPOINTS.VISIT_TYPE, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -420,10 +388,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Visit type save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save visit type:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -453,7 +419,6 @@ export const patientService = {
     emergency_phone: string;
   }): Promise<EmergencyContactResponse> {
     try {
-      console.log('Saving emergency contact for phone:', phone, 'with data:', emergencyContactData);
 
       const response = await apiClient.post<EmergencyContactResponse>(API_CONFIG.ENDPOINTS.EMERGENCY_CONTACT, {
         clinic_id: API_CONFIG.CLINIC_ID,
@@ -465,10 +430,8 @@ export const patientService = {
         showSuccessToast: false, // Success is handled by navigation
       });
 
-      console.log('Emergency contact save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save emergency contact:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -494,7 +457,6 @@ export const patientService = {
   // Health Concerns List API
   async getHealthConcernsList(): Promise<HealthConcernsListResponse> {
     try {
-      console.log('Fetching health concerns list for clinic:', API_CONFIG.CLINIC_ID);
 
       const response = await apiClient.get<HealthConcernsListResponse>(
         `${API_CONFIG.ENDPOINTS.HEALTH_CONCERNS_LIST}?clinic_id=${API_CONFIG.CLINIC_ID}`,
@@ -505,10 +467,8 @@ export const patientService = {
         }
       );
 
-      console.log('Health concerns list response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch health concerns list:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -521,7 +481,6 @@ export const patientService = {
 
   async getVisitTypesList(): Promise<VisitTypesListResponse> {
     try {
-      console.log('Fetching visit types list for clinic:', API_CONFIG.CLINIC_ID);
 
       const response = await apiClient.get<VisitTypesListResponse>(
         `${API_CONFIG.ENDPOINTS.VISIT_TYPES_LIST}?clinic_id=${API_CONFIG.CLINIC_ID}`,
@@ -532,10 +491,8 @@ export const patientService = {
         }
       );
 
-      console.log('Visit types list response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch visit types list:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -548,7 +505,6 @@ export const patientService = {
 
   async getProvidersList(search?: string, visitName?: string): Promise<ProvidersListResponse> {
     try {
-      console.log('Fetching providers list for clinic:', API_CONFIG.CLINIC_ID, 'with search:', search, 'and visit_name:', visitName);
 
       const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
       const visitNameParam = visitName ? `&visit_name=${encodeURIComponent(visitName)}` : '';
@@ -561,10 +517,8 @@ export const patientService = {
         }
       );
 
-      console.log('Providers list response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch providers list:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -577,7 +531,6 @@ export const patientService = {
 
   async saveProviderSelection(phone: string, providerId: number, preferredProviderNotes?: string): Promise<ProviderSelectionResponse> {
     try {
-      console.log('Saving provider selection for phone:', phone, 'provider ID:', providerId);
 
       const payload: ProviderSelectionRequest = {
         phone: phone,
@@ -595,10 +548,8 @@ export const patientService = {
         showSuccessToast: false,
       });
 
-      console.log('Provider selection save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save provider selection:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -624,7 +575,6 @@ export const patientService = {
   // Available Slots API
   async getAvailableSlots(providerId: number): Promise<AvailableSlotsResponse> {
     try {
-      console.log('Fetching available slots for provider:', providerId);
 
       const response = await apiClient.get<AvailableSlotsResponse>(
         `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS_PROVIDER}?clinic_id=${API_CONFIG.CLINIC_ID}&provider_id=${providerId}`,
@@ -635,10 +585,8 @@ export const patientService = {
         }
       );
 
-      console.log('Available slots response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch available slots:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -652,7 +600,6 @@ export const patientService = {
   // Available Time Slots API
   async getAvailableTimeSlots(providerId: number, date: string): Promise<AvailableTimeSlotsResponse> {
     try {
-      console.log('Fetching available time slots for provider:', providerId, 'on date:', date);
 
       const response = await apiClient.get<AvailableTimeSlotsResponse>(
         `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS}?clinic_id=${API_CONFIG.CLINIC_ID}&provider_id=${providerId}&date=${date}`,
@@ -663,10 +610,8 @@ export const patientService = {
         }
       );
 
-      console.log('Available time slots response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch available time slots:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -683,7 +628,6 @@ export const patientService = {
     other_concerns: string[];
   }): Promise<ApiResponse<{ current_step: string }>> {
     try {
-      console.log('Saving health concern for phone:', phone, 'with data:', healthConcernData);
 
       const response = await apiClient.post<ApiResponse<{ current_step: string }>>(
         API_CONFIG.ENDPOINTS.HEALTH_CONCERN,
@@ -699,10 +643,8 @@ export const patientService = {
         }
       );
 
-      console.log('Health concern save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save health concern:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -719,7 +661,6 @@ export const patientService = {
     time: string;
   }): Promise<ApiResponse<{ current_step: string }>> {
     try {
-      console.log('Saving appointment for phone:', phone, 'with data:', appointmentData);
 
       const response = await apiClient.post<ApiResponse<{ current_step: string }>>(
         API_CONFIG.ENDPOINTS.APPOINTMENT,
@@ -735,10 +676,8 @@ export const patientService = {
         }
       );
 
-      console.log('Appointment save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save appointment:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -752,7 +691,6 @@ export const patientService = {
   // Confirm Appointment API
   async confirmAppointment(phone: string): Promise<ApiResponse<{ appointment_id: number; confirmation_number: string }>> {
     try {
-      console.log('Confirming appointment for phone:', phone);
 
       const response = await apiClient.post<ApiResponse<{ appointment_id: number; confirmation_number: string }>>(
         API_CONFIG.ENDPOINTS.CONFIRM_APPOINTMENT,
@@ -767,10 +705,8 @@ export const patientService = {
         }
       );
 
-      console.log('Appointment confirmation response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to confirm appointment:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -784,7 +720,6 @@ export const patientService = {
   // Get Follow-ups Token API
   async getFollowupsToken(clinicId: number, appointmentId: number): Promise<ApiResponse<{ token: string }>> {
     try {
-      console.log('Getting follow-ups token for clinic:', clinicId, 'appointment:', appointmentId);
 
       const response = await apiClient.post<ApiResponse<{ token: string }>>(
         API_CONFIG.ENDPOINTS.GET_FOLLOWUPS_TOKEN,
@@ -799,10 +734,8 @@ export const patientService = {
         }
       );
 
-      console.log('Follow-ups token response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to get follow-ups token:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -816,7 +749,6 @@ export const patientService = {
   // Get Follow-up Questions API
   async getFollowupQuestions(clinicId: number, appointmentId: number, token: string): Promise<ApiResponse<{ questions: FollowupQuestion[] }>> {
     try {
-      console.log('Getting follow-up questions for clinic:', clinicId, 'appointment:', appointmentId, 'token:', token);
 
       const response = await apiClient.get<ApiResponse<{ questions: FollowupQuestion[] }>>(
         getFollowupQuestionsUrl(clinicId, appointmentId, token),
@@ -827,10 +759,8 @@ export const patientService = {
         }
       );
 
-      console.log('Follow-up questions response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to get follow-up questions:', error);
 
       // Return a structured error response instead of throwing
       return {
@@ -844,7 +774,6 @@ export const patientService = {
   // Save Follow-up Answers API
   async saveFollowupAnswers(clinicId: number, appointmentId: number, token: string, payload: { answers: Array<{ id: string; value: string }> }): Promise<ApiResponse<{ saved: boolean; answers: Record<string, { value: string; updated_at: string }> }>> {
     try {
-      console.log('Saving follow-up answers for clinic:', clinicId, 'appointment:', appointmentId, 'token:', token, 'payload:', payload);
 
       const response = await apiClient.post<ApiResponse<{ saved: boolean; answers: Record<string, { value: string; updated_at: string }> }>>(
         getFollowupAnswersUrl(clinicId, appointmentId, token),
@@ -856,10 +785,8 @@ export const patientService = {
         }
       );
 
-      console.log('Follow-up answers save response:', response);
       return response.data;
     } catch (error) {
-      console.error('Failed to save follow-up answers:', error);
 
       // Return a structured error response instead of throwing
       return {

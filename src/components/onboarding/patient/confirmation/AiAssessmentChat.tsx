@@ -178,7 +178,7 @@ export function AiAssessmentChat({
           return;
         }
       } catch (error) {
-        console.error("TTS endpoint failed:", error);
+
       }
 
       // Fallback to browser TTS
@@ -356,7 +356,6 @@ export function AiAssessmentChat({
     };
   }, [stopSpeaking]);
 
-
   // Auto-start chat by hitting the stream endpoint
   const startInitialChat = useCallback(async () => {
     const timestamp = Date.now();
@@ -447,7 +446,7 @@ export function AiAssessmentChat({
             : msg
         )
       );
-      console.error("Start chat error:", error);
+
     }
   }, []);
 
@@ -583,7 +582,7 @@ export function AiAssessmentChat({
             }
 
             if (evt.warning) {
-              console.warn("Warning:", evt.warning);
+
             }
 
             if (evt.done) {
@@ -637,7 +636,7 @@ export function AiAssessmentChat({
             : msg
         )
       );
-      console.error("Send message error:", error);
+
     }
 
     setInputText("");
@@ -677,7 +676,6 @@ export function AiAssessmentChat({
         const audioUrl = URL.createObjectURL(audioBlob);
 
         // In real implementation, send audio to backend for ASR
-        console.log("Audio recorded:", audioUrl);
 
         // TODO: Send audio to backend for speech-to-text conversion
         // For now, just log the audio blob
@@ -686,7 +684,7 @@ export function AiAssessmentChat({
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error("Error starting recording:", error);
+
     }
   };
 
@@ -754,7 +752,6 @@ export function AiAssessmentChat({
                   </>
                 )}
               </button>
-
 
               {onClose && (
                 <button

@@ -100,7 +100,6 @@ interface TelehealthChatPanelProps {
   participantNames?: string[];
 }
 
-
 const brandBubbleClass = "bg-blue-500 text-white rounded-2xl rounded-br-md";
 const neutralBubbleClass = "bg-gray-200 text-gray-900 rounded-2xl rounded-bl-md";
 
@@ -147,20 +146,20 @@ export function TelehealthChatPanel({
 
   // Debug typing users
   useEffect(() => {
-    console.log('👥 Typing users changed:', typingUsers);
+
   }, [typingUsers]);
 
   // Handle typing indicators with enhanced feedback
   const handleTyping = () => {
     if (!onTypingStart) {
-      console.log('❌ No onTypingStart function provided');
+
       return;
     }
     
     // Set local typing state
     if (!isUserTyping) {
       setIsUserTyping(true);
-      console.log('⌨️ Typing started');
+
       onTypingStart();
     }
     
@@ -171,7 +170,7 @@ export function TelehealthChatPanel({
     
     // Set new timeout to stop typing indicator after 2 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
-      console.log('⌨️ Typing stopped');
+
       setIsUserTyping(false);
       onTypingStop?.();
     }, 2000); // Increased to 2 seconds for better UX
@@ -180,12 +179,7 @@ export function TelehealthChatPanel({
   // Handle file attachments
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    console.log('📁 Files selected:', files.map(f => ({
-      name: f.name,
-      type: f.type,
-      size: f.size
-    })));
-    
+
     if (files.length > 0) {
       // Check file size limit (estimate final size after base64 encoding)
       // Base64 increases size by ~33%, and we need to account for JSON overhead
@@ -193,7 +187,7 @@ export function TelehealthChatPanel({
       const maxOriginalSize = 5 * 1024; // 5KB original file size
       const validFiles = files.filter(file => {
         if (file.size > maxOriginalSize) {
-          console.warn(`⚠️ File ${file.name} is too large (${formatFileSize(file.size)}). Maximum size is 5KB for chat compatibility.`);
+
           // Show user-friendly error
           alert(`File "${file.name}" is too large (${formatFileSize(file.size)}). Maximum size is 5KB for chat compatibility.`);
           return false;
@@ -243,14 +237,7 @@ export function TelehealthChatPanel({
           // Draw and compress with lower quality for smaller file size
           ctx?.drawImage(img, 0, 0, width, height);
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5); // 50% quality for smaller size
-          
-          console.log('✅ Image compressed:', {
-            name: file.name,
-            originalSize: file.size,
-            compressedSize: new Blob([compressedDataUrl]).size,
-            dimensions: `${width}x${height}`
-          });
-          
+
           resolve(compressedDataUrl);
         };
         
@@ -262,15 +249,11 @@ export function TelehealthChatPanel({
         reader.readAsDataURL(file);
         reader.onload = () => {
           const result = reader.result as string;
-          console.log('✅ File converted to base64:', {
-            name: file.name,
-            size: file.size,
-            base64Length: result.length
-          });
+
           resolve(result);
         };
         reader.onerror = error => {
-          console.error('❌ Failed to convert file to base64:', error);
+
           reject(error);
         };
       }
@@ -292,26 +275,19 @@ export function TelehealthChatPanel({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = draftMessage.trim();
-    
-    console.log('🔴 Chat form submitted:', {
-      message: trimmed,
-      attachments: attachments.length,
-      hasOnSendMessage: !!onSendMessage,
-      messageLength: trimmed.length
-    });
-    
+
     if (!trimmed && attachments.length === 0) {
-      console.log('❌ No message content or attachments to send');
+
       return;
     }
     
     if (!onSendMessage) {
-      console.log('❌ No onSendMessage function provided');
+
       return;
     }
 
     if (!isConnected) {
-      console.log('❌ Cannot send message: not connected');
+
       return;
     }
 
@@ -487,9 +463,9 @@ export function TelehealthChatPanel({
                                     document.body.appendChild(link);
                                     link.click();
                                     document.body.removeChild(link);
-                                    console.log('📥 File download initiated:', message.attachment.name);
+
                                   } catch (error) {
-                                    console.error('Download failed:', error);
+
                                     // Fallback: open in new tab
                                     window.open(message.attachment.url, '_blank');
                                   }
@@ -517,7 +493,7 @@ export function TelehealthChatPanel({
           
           {/* Typing indicators */}
           {typingUsers.length > 0 && (() => {
-            console.log('👀 Showing typing indicator for:', typingUsers.map(u => u.name));
+
             return (
               <div className={cn(
                 "flex gap-3 px-4 py-3 border-l-2 transition-all duration-300 ease-in-out",

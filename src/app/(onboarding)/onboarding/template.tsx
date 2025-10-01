@@ -9,7 +9,6 @@ export default function OnboardingTemplate({
 }) {
   useEffect(() => {
     // Track onboarding page views for analytics
-    console.log("Onboarding template rendered");
 
     // You could add analytics tracking here
     // analytics.track('onboarding_page_view', {

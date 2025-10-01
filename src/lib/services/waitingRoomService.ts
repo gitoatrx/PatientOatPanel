@@ -38,20 +38,16 @@ export class WaitingRoomService {
         followuptoken: followupToken,
       };
 
-      console.log('🚪 Marking patient as waiting:', { appointmentId: this.appointmentId, followupToken });
       const response = await apiClient.post<WaitingRoomResponse>(endpoint, requestBody);
       
       const result = response.data;
-      console.log('🚪 Waiting room response:', result);
       
       if (!result.success) {
         throw new Error(result.message || 'Failed to mark patient as waiting');
       }
 
-      console.log('✅ Patient marked as waiting successfully');
       return result;
     } catch (error) {
-      console.error('❌ Failed to mark patient as waiting:', error);
       throw error;
     }
   }

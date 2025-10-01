@@ -90,12 +90,12 @@ export default function VisitReasonPage() {
   const visitReasonInfo = getVisitReasonInfo(selectedVisitReason);
 
   const handleSubmit = (values: FormValues) => {
-    console.log("Form submitted with values:", values);
+
     // TODO: Implement form submission logic
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
+
     // TODO: Implement back navigation logic
   };
 

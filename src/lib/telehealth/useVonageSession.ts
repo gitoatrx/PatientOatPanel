@@ -80,26 +80,15 @@ const enablePiPSupportOnVideo = (video: HTMLVideoElement) => {
   // Ensure video has audio for Chrome 134+ auto PiP requirements
   if (pipVideo.muted) {
     pipVideo.muted = false; // Unmute for auto PiP eligibility
-    console.log('🎬 Vonage: Unmuted video for auto PiP eligibility');
   }
 
   // Ensure video is playing for auto PiP eligibility
   if (pipVideo.paused) {
     pipVideo.play().catch(error => {
-      console.warn('🎬 Vonage: Could not auto-play video for PiP:', error);
+
     });
   }
-  
-  console.log('🎬 Vonage video element configured for PiP:', {
-    video: pipVideo,
-    hasRequestPictureInPicture: 'requestPictureInPicture' in pipVideo,
-    disablePictureInPicture: pipVideo.disablePictureInPicture,
-    autoPictureInPicture: pipVideo.autoPictureInPicture,
-    readyState: pipVideo.readyState,
-    muted: pipVideo.muted,
-    paused: pipVideo.paused,
-    hasAudio: (pipVideo.audioTracks?.length ?? 0) > 0 || pipVideo.mozHasAudio || (pipVideo.webkitAudioDecodedByteCount ?? 0) > 0
-  });
+
 };
 
 // Call status constants (matching doctor-side implementation)
@@ -232,9 +221,9 @@ const logInfo = (message: string, details?: TelehealthLogDetails) => {
 
 const logWarn = (message: string, details?: TelehealthLogDetails) => {
   if (details) {
-    console.warn(TELEHEALTH_LOG_PREFIX, message, details);
+
   } else {
-    console.warn(TELEHEALTH_LOG_PREFIX, message);
+
   }
 };
 
@@ -440,7 +429,7 @@ export function useVonageSession({
   // PiP and speaker detection state
   const participantVideoMap = useRef(new Map<string, HTMLVideoElement>());
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
-  const [pipFollowsSpeaker, setPipFollowsSpeaker] = useState(true); // Auto-follow speaker by default
+  const [pipFollowsSpeaker, setPipFollowsSpeaker] = useState(false);
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const [pendingPiPRequest, setPendingPiPRequest] = useState(false);
 
@@ -448,22 +437,22 @@ export function useVonageSession({
   const onParticipantVideoReady = useCallback((id: string, el: HTMLVideoElement | null) => {
     if (!el) { 
       participantVideoMap.current.delete(id); 
-      console.log('🎬 Unregistered participant video:', id);
+
       return; 
     }
     participantVideoMap.current.set(id, el);
-    console.log('🎬 Registered participant video:', id);
+
   }, []);
 
   // PiP control functions
   const enablePiPFollowSpeaker = useCallback(() => {
     setPipFollowsSpeaker(true);
-    console.log('🎬 PiP Follow Speaker enabled');
+
   }, []);
 
   const disablePiPFollowSpeaker = useCallback(() => {
     setPipFollowsSpeaker(false);
-    console.log('🎬 PiP Follow Speaker disabled');
+
   }, []);
 
   // PiP toggle function
@@ -476,33 +465,10 @@ export function useVonageSession({
         return;
       }
       
-      // When entering PiP, automatically enable follow speaker
-      setPipFollowsSpeaker(true);
-      
-      // Find a video element to request PiP on
-      const videoElements = document.querySelectorAll('video');
-      let targetVideo = null;
-      
-      // Try to find a video with a stream
-      for (const video of videoElements) {
-        if (video.srcObject && !video.classList.contains('hidden')) {
-          targetVideo = video;
-          break;
-        }
-      }
-      
-      if (targetVideo) {
-        console.log('🎬 Requesting PiP on video element:', targetVideo);
-        await targetVideo.requestPictureInPicture();
-        setIsPictureInPicture(true);
-        console.log('🎬 PiP entered successfully');
-      } else {
-        console.warn('🎬 No suitable video element found for PiP');
-        setPendingPiPRequest(true);
-      }
+      // This will be handled by the video panel component
+
     } catch (err) {
-      console.warn('🎬 PiP toggle failed:', err);
-      setPendingPiPRequest(true);
+
     }
   }, []);
 
@@ -555,7 +521,7 @@ export function useVonageSession({
       if (loudestSpeaker && now - lastSpeakerChangeTime > SPEAKER_CHANGE_THROTTLE) {
         setActiveSpeakerId(prev => {
           if (prev !== loudestSpeaker) {
-            console.log('🎤 Active speaker changed:', { from: prev, to: loudestSpeaker, level: maxLevel });
+
             lastSpeakerChangeTime = now;
             return loudestSpeaker;
           }
@@ -600,8 +566,6 @@ export function useVonageSession({
         }
       });
 
-      console.log('📊 WebRTC Stats:', { rtt, packetLoss, jitter, bitrate });
-
       // Assess quality based on metrics
       let quality: 'excellent' | 'good' | 'fair' | 'poor' = 'good';
 
@@ -628,26 +592,19 @@ export function useVonageSession({
         quality = quality === 'excellent' ? 'good' : quality === 'good' ? 'fair' : 'poor';
       }
 
-      console.log('📊 Assessed network quality:', quality);
       setNetworkQuality(quality);
       setSignalStrength(quality);
 
     } catch (error) {
-      console.warn('Failed to get WebRTC stats:', error);
+
     }
   }, []);
-
-
-
-
-
-
 
   // Clear chat messages when session ends
   const clearChatHistory = useCallback(() => {
     try {
       setChatMessages([]);
-      console.log('🗑️ Cleared chat history');
+
     } catch (error) {
       console.error('Error clearing chat history:', error);
     }
@@ -655,12 +612,7 @@ export function useVonageSession({
 
   // Monitor video state changes
   useEffect(() => {
-    console.log('🔴 Video state changed:', {
-      isCameraOff,
-      isVideoEnabled,
-      isConnected,
-      timestamp: new Date().toISOString()
-    });
+
   }, [isCameraOff, isVideoEnabled, isConnected]);
 
   useEffect(() => {
@@ -674,19 +626,14 @@ export function useVonageSession({
   // Start camera preview when local container is ready
   useEffect(() => {
     const startCameraPreview = async () => {
-      console.log('🔍 Attempting to start camera preview:', {
-        localContainer: localContainerRef.current,
-        containerExists: !!localContainerRef.current,
-        containerId: localContainerRef.current?.id
-      });
 
       if (!localContainerRef.current) {
-        console.log('❌ Local container not ready yet, will retry...');
+
         return;
       }
 
       try {
-        console.log('🎥 Requesting camera permission...');
+
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setPreviewStream(stream);
 
@@ -708,14 +655,9 @@ export function useVonageSession({
           localEl.innerHTML = '';
           localEl.appendChild(videoElement);
 
-          console.log('✅ Camera preview started successfully!', {
-            container: localEl,
-            videoElement: videoElement,
-            stream: stream
-          });
         }
       } catch (error) {
-        console.log('❌ Camera preview failed:', error);
+
         // This is expected if permissions haven't been granted yet
       }
     };
@@ -746,7 +688,7 @@ export function useVonageSession({
       try {
         publisherRef.current?.destroy();
       } catch (publishError) {
-        console.warn("Error destroying publisher", publishError);
+
       }
       publisherRef.current = null;
 
@@ -766,7 +708,7 @@ export function useVonageSession({
           }
           sessionRef.current.disconnect();
         } catch (sessionError) {
-          console.warn("Error disconnecting session", sessionError);
+
         }
       }
       sessionRef.current = null;
@@ -788,16 +730,7 @@ export function useVonageSession({
 
     const remoteEl = remoteContainerRef.current;
     const localEl = localContainerRef.current;
-    
-    console.log('🔴 Container check:', {
-      remoteEl,
-      localEl,
-      remoteElExists: !!remoteEl,
-      localElExists: !!localEl,
-      remoteElId: remoteEl?.id,
-      localElId: localEl?.id
-    });
-    
+
     if (!remoteEl || !localEl) {
       setError("The video interface is not ready yet. Please wait a moment and try again.");
       return;
@@ -829,9 +762,9 @@ export function useVonageSession({
         try {
           currentPreviewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
           setPreviewStream(currentPreviewStream);
-          console.log('✅ Camera preview created during join process');
+
         } catch (mediaError) {
-          console.warn("Permission preflight failed", mediaError);
+
           const reason = (mediaError as { name?: string } | undefined)?.name;
           let errorMessage = 'Unable to access your camera and microphone. Please check your device settings and try again.';
           
@@ -888,15 +821,7 @@ export function useVonageSession({
         applicationId = sessionResponse.data.application_id;
         
         // Debug logging for token validation
-        console.log('🔍 Session Details from API:', {
-          sessionId: sessionIdentifier,
-          applicationId: applicationId,
-          tokenLength: sessionToken?.length,
-          tokenStarts: sessionToken?.substring(0, 20),
-          tokenEnds: sessionToken?.substring(sessionToken.length - 20),
-          apiEndpoint: 'Patient API Response'
-        });
-        
+
         // Clean the token - remove any extra whitespace or newlines
         if (sessionToken) {
           sessionToken = sessionToken.trim().replace(/\s+/g, '');
@@ -942,13 +867,6 @@ export function useVonageSession({
       }
 
       // Debug: Log the Vonage SDK version and API endpoints
-      console.log('🔍 Vonage SDK Debug Info:', {
-        sdkVersion: OT.version,
-        scriptUrl: VONAGE_SCRIPT_URL,
-        sessionId: sessionIdentifier,
-        applicationId: applicationId,
-        tokenLength: sessionToken?.length
-      });
 
       // Only reset remote container, keep local preview until publisher is ready
       removeAllChildren(remoteContainerRef.current);
@@ -962,37 +880,18 @@ export function useVonageSession({
         const streamId: string | undefined = stream?.streamId;
         const connectionId: string | undefined = stream?.connection?.connectionId;
 
-        console.log('🔴 HANDLE STREAM CREATED CALLED:', {
-          stream: stream,
-          streamId: streamId,
-          connectionId: connectionId,
-          currentConnectionId: session.connection?.connectionId,
-          hasVideo: stream?.hasVideo,
-          hasAudio: stream?.hasAudio,
-          videoType: stream?.videoType,
-          timestamp: new Date().toISOString()
-        });
-
         if (!stream || !streamId || !connectionId) {
-          console.log('❌ STREAM CREATED - Missing identifiers:', { streamId, connectionId });
+
           logWarn('stream created event missing identifiers', { streamId, connectionId });
           return;
         }
 
         const currentConnectionId = session.connection?.connectionId;
         if (currentConnectionId && connectionId === currentConnectionId) {
-          console.log('🚫 STREAM CREATED - Ignoring own stream:', { streamId, connectionId, currentConnectionId });
+
           logInfo('ignoring local stream echo', { streamId, connectionId });
           return;
         }
-
-        console.log('✅ STREAM CREATED - Processing remote stream:', {
-          streamId: streamId,
-          connectionId: connectionId,
-          hasVideo: stream.hasVideo,
-          hasAudio: stream.hasAudio,
-          videoType: stream.videoType
-        });
 
         logInfo('remote stream detected', {
           streamId,
@@ -1029,7 +928,7 @@ export function useVonageSession({
         
         // Add click handler for focus functionality
         wrapper.addEventListener('click', () => {
-          console.log('🎯 Participant clicked:', connectionId);
+
           // This will be handled by the video panel component
           const event = new CustomEvent('participantClick', {
             detail: { connectionId, streamId, participantName: wrapper.dataset.participantName }
@@ -1038,13 +937,7 @@ export function useVonageSession({
         });
 
         remoteEl.appendChild(wrapper);
-        console.log('🔴 STREAM CONTAINER APPENDED:', {
-          streamId: streamId,
-          connectionId: connectionId,
-          childCount: remoteEl.children.length,
-          wrapper: wrapper,
-          remoteEl: remoteEl
-        });
+
         logInfo('remote stream container appended', { streamId, connectionId, childCount: remoteEl.children.length });
 
             // Add participant info overlay to the new remote stream
@@ -1052,14 +945,6 @@ export function useVonageSession({
 
             // Register the video element for PiP when it's ready
             // We'll register it after the video element is created by the subscription
-
-        console.log('🔴 ABOUT TO SUBSCRIBE TO STREAM:', {
-          stream: stream,
-          wrapper: wrapper,
-          options: { insertMode: "append", width: "100%", height: "100%" },
-          streamId: streamId,
-          connectionId: connectionId
-        });
 
         session.subscribe(
           stream,
@@ -1080,14 +965,6 @@ export function useVonageSession({
             }
           },
           (subscribeError?: Error) => {
-            console.log('🔴 SUBSCRIBE CALLBACK CALLED:', {
-              streamId: streamId,
-              connectionId: connectionId,
-              error: subscribeError,
-              wrapper: wrapper,
-              wrapperChildren: wrapper.children.length,
-              timestamp: new Date().toISOString()
-            });
 
             if (subscribeError) {
               console.error('❌ SUBSCRIBE ERROR:', subscribeError);
@@ -1102,25 +979,16 @@ export function useVonageSession({
               return;
             }
 
-            console.log('✅ SUBSCRIBE SUCCESS:', {
-              streamId: streamId,
-              connectionId: connectionId,
-              wrapper: wrapper,
-              wrapperChildren: wrapper.children.length
-            });
             logInfo('remote stream subscribed', { streamId, connectionId });
 
             // ✅ Log successful doctor stream subscription
-            console.log('🎉 Successfully subscribed to doctor stream!');
-            console.log('📺 Remote stream ID:', streamId);
-            console.log('🔗 Doctor connection ID:', connectionId);
 
             // Register the video element for PiP after subscription
             setTimeout(() => {
               const videoElement = wrapper.querySelector('video') as HTMLVideoElement;
               if (videoElement) {
                 onParticipantVideoReady(connectionId, videoElement);
-                console.log('🎬 Registered remote video element for PiP:', connectionId);
+
               }
             }, 100);
 
@@ -1129,8 +997,7 @@ export function useVonageSession({
             setTimeout(() => {
               const videoElement = wrapper.querySelector('video') as HTMLVideoElement;
               if (videoElement && videoElement.srcObject) {
-                console.log('🎤 Setting up audio level monitoring for remote participant:', connectionId);
-                
+
                 try {
                   // Monitor audio levels for this remote participant using Web Audio API
                   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1176,13 +1043,12 @@ export function useVonageSession({
                   // Store interval reference for cleanup
                   (wrapper as any).audioLevelInterval = audioLevelInterval;
                   (wrapper as any).audioContext = audioContext;
-                  
-                  console.log('🎤 Audio level monitoring started for participant:', connectionId);
+
                 } catch (error) {
-                  console.warn('🎤 Failed to set up audio level monitoring for participant:', connectionId, error);
+
                 }
               } else {
-                console.warn('🎤 Video element not ready for audio level monitoring:', connectionId);
+
               }
             }, 500); // Wait 500ms for video element to be ready
 
@@ -1226,12 +1092,12 @@ export function useVonageSession({
             
             if (audioLevelInterval) {
               clearInterval(audioLevelInterval);
-              console.log('🎤 Audio level monitoring stopped for participant:', connectionId);
+
             }
             
             if (audioContext && audioContext.state !== 'closed') {
               audioContext.close().catch(console.warn);
-              console.log('🎤 Audio context closed for participant:', connectionId);
+
             }
             
             maybeNode.remove();
@@ -1269,18 +1135,7 @@ export function useVonageSession({
       };
 
       session.on("streamCreated", (event: any) => {
-        console.log('🔴 STREAM CREATED EVENT RECEIVED:', {
-          streamId: event.stream?.streamId,
-          connectionId: event.stream?.connection?.connectionId,
-          hasVideo: event.stream?.hasVideo,
-          hasAudio: event.stream?.hasAudio,
-          videoType: event.stream?.videoType,
-          currentConnectionId: session.connection?.connectionId,
-          isOwnStream: event.stream?.connection?.connectionId === session.connection?.connectionId,
-          timestamp: new Date().toISOString(),
-          event: event
-        });
-        
+
         logInfo('session event: streamCreated', {
           streamId: event.stream?.streamId,
           connectionId: event.stream?.connection?.connectionId,
@@ -1304,69 +1159,34 @@ export function useVonageSession({
 
       // ✅ Add connection event listener to track when doctor joins
       session.on("connectionCreated", (event: any) => {
-        console.log("🔴 NEW CONNECTION CREATED (Doctor joined):", {
-          connectionId: event.connection?.connectionId,
-          data: event.connection?.data,
-          creationTime: event.connection?.creationTime,
-          sessionId: sessionIdentifier,
-          timestamp: new Date().toISOString(),
-          isOwnConnection: event.connection?.connectionId === session.connection?.connectionId
-        });
 
         // Check if this is a doctor connection (not our own)
         if (event.connection?.connectionId !== session.connection?.connectionId) {
-          console.log("👨‍⚕️ DOCTOR CONNECTION DETECTED - Checking for streams...");
-          
+
           // Check existing streams for this connection
           const existingStreams = Array.isArray(session.streams) ? session.streams : [];
           const doctorStreams = existingStreams.filter((stream: any) => 
             stream.connection?.connectionId === event.connection?.connectionId
           );
-          
-          console.log("🔍 Doctor stream analysis:", {
-            doctorConnectionId: event.connection?.connectionId,
-            totalStreamsInSession: existingStreams.length,
-            doctorStreamsFound: doctorStreams.length,
-            doctorStreams: doctorStreams.map((stream: any) => ({
-              streamId: stream.streamId,
-              hasVideo: stream.hasVideo,
-              hasAudio: stream.hasAudio,
-              videoType: stream.videoType
-            }))
-          });
 
           if (doctorStreams.length === 0) {
-            console.log("🚨 ISSUE: Doctor joined but has NO streams published!");
-            console.log("🚨 This means the doctor connected but didn't start their camera/microphone.");
-            console.log("🚨 The doctor needs to click 'Start Camera' or 'Join with Video' on their end.");
+
           } else {
-            console.log("✅ Doctor has published streams - subscription should work");
+
           }
         }
       });
 
       session.on("connectionDestroyed", (event: any) => {
-        console.log("🔴 CONNECTION DESTROYED (Doctor left):", {
-          connectionId: event.connection?.connectionId,
-          reason: event.reason,
-          sessionId: sessionIdentifier,
-          timestamp: new Date().toISOString()
-        });
+
       });
 
       // Add chat signaling event listener
       session.on("signal:msg", (event: any) => {
-        console.log('🔴 CHAT MESSAGE RECEIVED:', {
-          data: event.data,
-          from: event.from?.connectionId,
-          currentConnectionId: session.connection?.connectionId,
-          type: event.type,
-          timestamp: new Date().toISOString()
-        });
 
         // Prevent echo - don't process messages from our own connection
         if (event.from?.connectionId === session.connection?.connectionId) {
-          console.log('🚫 Ignoring own message echo');
+
           return;
         }
 
@@ -1441,7 +1261,7 @@ export function useVonageSession({
 
       // Add network quality monitoring
       session.on("networkQuality", (event: any) => {
-        console.log('📊 Network quality update:', event);
+
         const quality = event.quality || 'good';
         setNetworkQuality(quality);
         setSignalStrength(quality); // Update signal strength based on network quality
@@ -1507,7 +1327,7 @@ export function useVonageSession({
       if (currentPreviewStream) {
         publisherOptions.videoSource = currentPreviewStream.getVideoTracks()[0];
         publisherOptions.audioSource = currentPreviewStream.getAudioTracks()[0];
-        console.log('✅ Using existing preview stream for publisher');
+
       } else if (currentVideoDeviceRef.current) {
         publisherOptions.videoSource = currentVideoDeviceRef.current;
       }
@@ -1530,32 +1350,18 @@ export function useVonageSession({
         return;
       };
 
-      console.log('🔴 Creating Vonage publisher with options:', {
-        publisherOptions,
-        localEl,
-        hasPreviewStream: !!currentPreviewStream,
-        containerExists: !!localEl
-      });
-
       // Clear the container before creating the publisher to avoid duplicate videos
       if (localEl) {
         localEl.innerHTML = '';
-        console.log('🧹 Cleared local container before creating publisher');
+
       }
 
       publisher = OT.initPublisher(localEl, publisherOptions, handlePublisherError);
       if (!publisher || publisherErrorOccurred) {
-        console.log('❌ Publisher creation failed or error occurred');
+
         isJoiningRef.current = false;
         return;
       }
-
-      console.log('✅ Vonage publisher created successfully:', {
-        publisher,
-        streamId: publisher.streamId,
-        hasVideo: publisher.hasVideo,
-        hasAudio: publisher.hasAudio
-      });
 
       // Don't add participant info overlay to local container
       // The controls should only show on remote participants' video feeds
@@ -1583,7 +1389,7 @@ export function useVonageSession({
         });
 
         publisher.on('videoDimensionsChanged', (event: any) => {
-          console.log('📹 Video dimensions changed:', event);
+
         });
       }
 
@@ -1596,28 +1402,14 @@ export function useVonageSession({
         const localVideoElement = localEl.querySelector('video') as HTMLVideoElement;
         if (localVideoElement && session.connection?.connectionId) {
           onParticipantVideoReady('local', localVideoElement);
-          console.log('🎬 Registered local video element for PiP');
+
         }
       }, 100);
 
       // Keep preview stream as backup until we confirm publisher is working
       // We'll stop it after successful publish
-      console.log('🔄 Keeping preview stream as backup until publisher is confirmed working');
-
-      console.log('🔴 About to connect to session:', {
-        sessionId: sessionIdentifier,
-        tokenLength: sessionToken.length,
-        tokenPreview: sessionToken.substring(0, 20) + '...',
-        applicationId: applicationId
-      });
 
       session.connect(sessionToken, (connectError?: Error) => {
-        console.log('🔴 Session connect callback called:', {
-          error: connectError,
-          sessionId: sessionIdentifier,
-          connectionId: session.connection?.connectionId,
-          timestamp: new Date().toISOString()
-        });
 
         if (connectError) {
           console.error("❌ SESSION CONNECTION FAILED:", connectError);
@@ -1645,32 +1437,19 @@ export function useVonageSession({
           return;
         }
 
-        console.log('Successfully connected to session:', {
-          sessionId: sessionIdentifier,
-          connectionId: session.connection?.connectionId
-        });
-
         setStatusMessage("Connected to session");
         setCallStatus(CALL_STATUSES.CONNECTED);
         setParticipantCount(1); // We are connected
 
         // Check for existing participants in the session
-        console.log('🔍 Checking for existing participants...');
+
         const existingStreams = Array.isArray(session.streams) ? session.streams : [];
-        console.log('Existing streams in session:', existingStreams.length);
-        
+
         existingStreams.forEach((existingStream: any, index: number) => {
-          console.log(`Existing stream ${index + 1}:`, {
-            streamId: existingStream.streamId,
-            connectionId: existingStream.connection?.connectionId,
-            hasVideo: existingStream.hasVideo,
-            hasAudio: existingStream.hasAudio,
-            isOwn: existingStream.connection?.connectionId === session.connection?.connectionId
-          });
-          
+
           // If this is not our own stream, trigger subscription
           if (existingStream.connection?.connectionId !== session.connection?.connectionId) {
-            console.log('🔄 Triggering subscription to existing stream:', existingStream.streamId);
+
             // Simulate a streamCreated event for existing streams
             setTimeout(() => {
               handleStreamCreated({ stream: existingStream });
@@ -1678,24 +1457,7 @@ export function useVonageSession({
           }
         });
 
-        console.log('🔴 About to publish local stream:', {
-          publisher: publisher,
-          hasVideo: !isCameraOff,
-          hasAudio: !isMicMuted,
-          sessionConnected: !!session.connection,
-          connectionId: session.connection?.connectionId,
-          publisherStreamId: publisher.streamId
-        });
-
         session.publish(publisher, (publishError?: Error) => {
-          console.log('🔴 Publish callback called:', {
-            error: publishError,
-            publisher: publisher,
-            streamId: publisher.streamId,
-            hasVideo: publisher.hasVideo,
-            hasAudio: publisher.hasAudio,
-            connectionId: session.connection?.connectionId
-          });
 
           if (publishError) {
             console.error("❌ PUBLISH ERROR:", publishError);
@@ -1725,13 +1487,6 @@ export function useVonageSession({
             return;
           }
 
-          console.log("✅ Successfully published local stream:", {
-            streamId: publisher.streamId,
-            hasVideo: publisher.hasVideo,
-            hasAudio: publisher.hasAudio,
-            connectionId: session.connection?.connectionId
-          });
-
           // Add local participant to tracking
           const localConnectionId = session.connection?.connectionId;
           if (localConnectionId) {
@@ -1742,9 +1497,7 @@ export function useVonageSession({
               hasAudio: !isMicMuted,
               isLocal: true
             };
-            
-            console.log('🔴 Adding local participant to tracking:', localParticipant);
-            
+
             setParticipants(prev => {
               const existing = prev.find(p => p.connectionId === localConnectionId);
               if (existing) {
@@ -1763,14 +1516,14 @@ export function useVonageSession({
           if (previewStream) {
             previewStream.getTracks().forEach(track => track.stop());
             setPreviewStream(null);
-            console.log('✅ Preview stream stopped after successful publish');
+
           }
 
           // Add a fallback check - if video doesn't appear in 3 seconds, restore preview
           setTimeout(() => {
             const localEl = localContainerRef.current;
             if (localEl && localEl.children.length === 0) {
-              console.log('⚠️ No video detected in local container, restoring preview stream');
+
               // Restart camera preview as fallback
               navigator.mediaDevices.getUserMedia({ video: true, audio: true })
                 .then(stream => {
@@ -1789,10 +1542,10 @@ export function useVonageSession({
                   enablePiPSupportOnVideo(videoElement);
                   
                   localEl.appendChild(videoElement);
-                  console.log('✅ Fallback preview stream restored');
+
                 })
                 .catch(error => {
-                  console.log('❌ Failed to restore fallback preview:', error);
+
                 });
             }
           }, 3000);
@@ -1821,15 +1574,8 @@ export function useVonageSession({
               stream.connection?.connectionId !== currentConnectionId
             );
 
-            console.log("🔍 Periodic doctor stream check:", {
-              doctorConnections: doctorConnections.length,
-              doctorStreams: doctorStreams.length,
-              totalConnections: connections.length,
-              totalStreams: existingStreams.length
-            });
-
             if (doctorConnections.length > 0 && doctorStreams.length === 0) {
-              console.log("🚨 DOCTOR CONNECTED BUT NO STREAMS - This is the issue!");
+
               setStatusMessage("Doctor joined but hasn't started their camera. Please ask them to turn on their camera.");
             } else if (doctorConnections.length === 0) {
               setStatusMessage("Connected - waiting for the clinician to join");
@@ -1864,7 +1610,7 @@ export function useVonageSession({
     try {
       sessionRef.current.disconnect();
     } catch (disconnectError) {
-      console.warn("Error disconnecting session", disconnectError);
+
     }
     cleanup({ message: "Call ended", fromDisconnect: true });
     // Clear chat history when leaving the session
@@ -1892,28 +1638,16 @@ export function useVonageSession({
   const toggleCamera = useCallback(async () => {
     const publisher = publisherRef.current;
     if (!publisher) {
-      console.log('❌ Cannot toggle camera: No publisher available');
+
       return;
     }
     
     const nextOff = !isCameraOff;
-    console.log('🔴 Toggling camera:', {
-      currentState: isCameraOff ? 'OFF' : 'ON',
-      newState: nextOff ? 'OFF' : 'ON',
-      publisher: publisher,
-      hasVideo: publisher.hasVideo,
-      streamId: publisher.streamId
-    });
-    
+
     publisher.publishVideo(!nextOff);
     setIsCameraOff(nextOff);
     setIsVideoEnabled(!nextOff);
-    
-    console.log('🔴 Camera toggle completed:', {
-      newState: nextOff ? 'OFF' : 'ON',
-      publisherHasVideo: publisher.hasVideo,
-      isVideoEnabled: !nextOff
-    });
+
   }, [isCameraOff]);
 
   const switchCamera = useCallback(async () => {
@@ -1945,7 +1679,7 @@ export function useVonageSession({
         return;
       }
     } catch (error) {
-      console.warn("setVideoSource failed, republishing", error);
+
     }
 
     try {
@@ -1990,7 +1724,6 @@ export function useVonageSession({
     }
   }, [isCameraOff, isMicMuted]);
 
-
   const switchMicrophone = useCallback(async () => {
     const publisher = publisherRef.current;
     if (!publisher) return;
@@ -2017,14 +1750,13 @@ export function useVonageSession({
         if (typeof publisher.setAudioSource === "function") {
           await publisher.setAudioSource(nextDeviceId);
           currentAudioDeviceRef.current = nextDeviceId;
-          console.log('🎤 Switched to microphone:', available[nextIndex]?.label || nextDeviceId);
-          
+
           // Dispatch event to update participant info controls
           document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
           return;
         }
     } catch (error) {
-      console.warn('Failed to switch microphone using setAudioSource:', error);
+
     }
 
     // Fallback: recreate publisher with new audio source
@@ -2061,9 +1793,7 @@ export function useVonageSession({
           session.publish(newPublisher, (publishError?: Error) =>
             publishError && console.error("Re-publish error", publishError),
           );
-          
-          console.log('��� Switched to microphone:', available[nextIndex]?.label || nextDeviceId);
-          
+
           // Dispatch event to update participant info controls
           document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
     } catch (switchError) {
@@ -2082,7 +1812,7 @@ export function useVonageSession({
         document.dispatchEvent(new CustomEvent('audioDeviceUpdate'));
       }
     } catch (err) {
-      console.warn('Failed to set microphone device:', err);
+
     }
   }, []);
 
@@ -2234,7 +1964,7 @@ export function useVonageSession({
     };
     
     // Assemble the participant info (inline layout)
-    participantInfo.appendChild(participantNameElement);
+    // participantInfo.appendChild(participantNameElement);
     participantInfo.appendChild(controlsContainer);
     
     // Add to container
@@ -2299,15 +2029,7 @@ export function useVonageSession({
   }, []);
 
   const sendChatMessage = useCallback((content: string, type: 'text' | 'image' | 'file' = 'text', attachment?: any) => {
-    console.log('�� sendChatMessage called:', {
-      content,
-      type,
-      attachment,
-      hasSession: !!sessionRef.current,
-      participantName,
-      isConnected
-    });
-    
+
     if (!sessionRef.current || !participantName) {
       console.error('❌ Cannot send message: session or participant name missing', {
         hasSession: !!sessionRef.current,
@@ -2344,25 +2066,13 @@ export function useVonageSession({
     
     // Check message size (Vonage has a limit of ~8KB for signaling)
     const messageSize = new Blob([messageData]).size;
-    console.log('🔴 Message size check:', {
-      size: messageSize,
-      sizeKB: Math.round(messageSize / 1024),
-      hasAttachment: !!attachment,
-      attachmentSize: attachment?.url ? new Blob([attachment.url]).size : 0
-    });
-    
+
     if (messageSize > 8000) { // 8KB limit
-      console.warn('⚠️ Message too large for Vonage signaling. Consider reducing file size.');
+
       setError('File too large to send. Please use a smaller file (under 5KB).');
       return;
     }
-    
-    console.log('🔴 Sending signal:', {
-      type: 'msg',
-      data: messageData,
-      sessionId: sessionRef.current.sessionId
-    });
-    
+
     (sessionRef.current as any).signal({
       type: 'msg',
       data: messageData
@@ -2370,7 +2080,7 @@ export function useVonageSession({
       if (error) {
         console.error('❌ Failed to send chat message:', error);
       } else {
-        console.log('✅ Chat message sent successfully');
+
         // Add message to local state immediately for better UX
         const newMessage: ChatMessage = {
           id: `sent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -2408,54 +2118,26 @@ export function useVonageSession({
   }, []);
 
   const printParticipants = useCallback(() => {
-    console.log('=== CURRENT PARTICIPANTS ===');
-    console.log(`Total participants: ${participants.length}`);
+
     participants.forEach((participant, index) => {
-      console.log(`Participant ${index + 1}:`, {
-        connectionId: participant.connectionId,
-        streamId: participant.streamId,
-        hasVideo: participant.hasVideo,
-        hasAudio: participant.hasAudio,
-        isLocal: participant.isLocal,
-        type: participant.isLocal ? 'You' : 'Remote'
-      });
+
     });
-    console.log('============================');
-    
+
     // Also display in a user-friendly format
     const localParticipant = participants.find(p => p.isLocal);
     const remoteParticipants = participants.filter(p => !p.isLocal);
-    
-    console.log('📱 You:', localParticipant ? 
-      `Video: ${localParticipant.hasVideo ? '✅' : '❌'}, Audio: ${localParticipant.hasAudio ? '✅' : '❌'}` : 
-      'Not connected');
-    
+
     remoteParticipants.forEach((participant, index) => {
-      console.log(`👨‍⚕️ Doctor ${index + 1}:`, 
-        `Video: ${participant.hasVideo ? '✅' : '❌'}, Audio: ${participant.hasAudio ? '✅' : '❌'}`);
+
     });
     
     // Debug remote container state
     const remoteEl = remoteContainerRef.current;
-    console.log('🔍 REMOTE CONTAINER DEBUG:', {
-      remoteEl,
-      exists: !!remoteEl,
-      id: remoteEl?.id,
-      className: remoteEl?.className,
-      children: remoteEl?.children.length,
-      innerHTML: remoteEl?.innerHTML.substring(0, 200) + '...'
-    });
-    
+
     if (remoteEl) {
-      console.log('🔍 Remote container children:');
+
       Array.from(remoteEl.children).forEach((child, index) => {
-        console.log(`  Child ${index}:`, {
-          tagName: child.tagName,
-          id: child.id,
-          className: child.className,
-          dataset: (child as HTMLElement).dataset,
-          children: child.children.length
-        });
+
       });
     }
   }, [participants]);
@@ -2463,29 +2145,13 @@ export function useVonageSession({
   const debugPublisherState = useCallback(() => {
     const publisher = publisherRef.current;
     const session = sessionRef.current;
-    
-    console.log('🔍 PUBLISHER DEBUG STATE:', {
-      publisher: publisher,
-      publisherExists: !!publisher,
-      publisherStreamId: publisher?.streamId,
-      publisherHasVideo: publisher?.hasVideo,
-      publisherHasAudio: publisher?.hasAudio,
-      session: session,
-      sessionExists: !!session,
-      sessionConnectionId: session?.connection?.connectionId,
-      isConnected,
-      isCameraOff,
-      isVideoEnabled,
-      isMicMuted,
-      isAudioEnabled,
-      timestamp: new Date().toISOString()
-    });
+
   }, [isConnected, isCameraOff, isVideoEnabled, isMicMuted, isAudioEnabled]);
 
   const debugSessionConnections = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
-      console.log('❌ No active session to debug connections');
+
       return;
     }
 
@@ -2493,36 +2159,14 @@ export function useVonageSession({
     const connectionsArray = Array.isArray(session.connections) ? session.connections : [];
     const streamsArray = Array.isArray(session.streams) ? session.streams : [];
 
-    console.log('🔍 SESSION CONNECTIONS DEBUG:', {
-      sessionId: session.sessionId,
-      connectionId: session.connection?.connectionId,
-      connections: connectionsArray,
-      streams: streamsArray,
-      connectionsCount: connectionsArray.length,
-      streamsCount: streamsArray.length,
-      timestamp: new Date().toISOString()
-    });
-
     // Log each connection
     connectionsArray.forEach((connection: any, index: number) => {
-      console.log(`🔍 Connection ${index + 1}:`, {
-        connectionId: connection.connectionId,
-        data: connection.data,
-        creationTime: connection.creationTime,
-        isOwn: connection.connectionId === session.connection?.connectionId
-      });
+
     });
 
     // Log each stream
     streamsArray.forEach((stream: any, index: number) => {
-      console.log(`🔍 Stream ${index + 1}:`, {
-        streamId: stream.streamId,
-        connectionId: stream.connection?.connectionId,
-        hasVideo: stream.hasVideo,
-        hasAudio: stream.hasAudio,
-        videoType: stream.videoType,
-        isOwn: stream.connection?.connectionId === session.connection?.connectionId
-      });
+
     });
 
     // Check if doctor has published a stream
@@ -2534,37 +2178,19 @@ export function useVonageSession({
       stream.connection?.connectionId !== session.connection?.connectionId
     );
 
-    console.log('🔍 DOCTOR STREAM ANALYSIS:', {
-      doctorConnectionsCount: doctorConnections.length,
-      doctorStreamsCount: doctorStreams.length,
-      doctorConnections: doctorConnections.map((conn: any) => ({
-        connectionId: conn.connectionId,
-        creationTime: conn.creationTime
-      })),
-      doctorStreams: doctorStreams.map((stream: any) => ({
-        streamId: stream.streamId,
-        connectionId: stream.connection?.connectionId,
-        hasVideo: stream.hasVideo,
-        hasAudio: stream.hasAudio,
-        videoType: stream.videoType
-      }))
-    });
-
     if (doctorConnections.length > 0 && doctorStreams.length === 0) {
-      console.log('🚨 ISSUE FOUND: Doctor is connected but has NOT published any streams!');
-      console.log('🚨 This means the doctor joined but did not start their camera/microphone.');
+
     } else if (doctorConnections.length === 0) {
-      console.log('🚨 ISSUE FOUND: No doctor connections found!');
+
     } else if (doctorStreams.length > 0) {
-      console.log('✅ Doctor has published streams - check subscription logic');
+
     }
   }, []);
 
   const startCameraPreview = useCallback(async () => {
-    console.log('🎥 Manually starting camera preview...');
 
     if (!localContainerRef.current) {
-      console.log('❌ No local container available');
+
       return;
     }
 
@@ -2590,7 +2216,6 @@ export function useVonageSession({
         localEl.innerHTML = '';
         localEl.appendChild(videoElement);
 
-        console.log('✅ Manual camera preview started successfully!');
       }
     } catch (error) {
       console.error('❌ Manual camera preview failed:', error);
@@ -2600,30 +2225,19 @@ export function useVonageSession({
   const checkExistingStreams = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
-      console.log('❌ No active session to check streams');
+
       return;
     }
 
-    console.log('🔍 MANUALLY CHECKING EXISTING STREAMS...');
     const existingStreams = Array.isArray(session.streams) ? session.streams : [];
-    console.log('Total existing streams:', existingStreams.length);
-    
+
     const currentConnectionId = session.connection?.connectionId;
-    console.log('Current connection ID:', currentConnectionId);
-    
+
     existingStreams.forEach((stream: any, index: number) => {
       const isOwn = stream.connection?.connectionId === currentConnectionId;
-      console.log(`Stream ${index + 1}:`, {
-        streamId: stream.streamId,
-        connectionId: stream.connection?.connectionId,
-        hasVideo: stream.hasVideo,
-        hasAudio: stream.hasAudio,
-        isOwn: isOwn,
-        shouldSubscribe: !isOwn
-      });
-      
+
       if (!isOwn) {
-        console.log('🔄 Manually subscribing to existing stream:', stream.streamId);
+
         // Manually trigger subscription to existing stream
         const remoteEl = remoteContainerRef.current;
         if (remoteEl) {
@@ -2662,7 +2276,7 @@ export function useVonageSession({
           
           // Add click handler for focus functionality
           wrapper.addEventListener('click', () => {
-            console.log('🎯 Participant clicked:', connectionId);
+
             // This will be handled by the video panel component
             const event = new CustomEvent('participantClick', {
               detail: { connectionId, streamId, participantName: wrapper.dataset.participantName }
@@ -2691,7 +2305,7 @@ export function useVonageSession({
             if (error) {
               console.error('❌ Manual subscription failed:', error);
             } else {
-              console.log('✅ Manual subscription successful:', streamId);
+
             }
           });
         }
