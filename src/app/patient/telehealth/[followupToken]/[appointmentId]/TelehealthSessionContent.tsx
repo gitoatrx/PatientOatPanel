@@ -81,7 +81,7 @@ export function TelehealthSessionContent({
   const telehealth = useVonageSession({
     appointmentId,
     followupToken,
-    participantName: "Patient",
+    participantName: " ",
     remoteContainer,
     localContainer,
   });
@@ -145,11 +145,13 @@ export function TelehealthSessionContent({
     
     // Add Vonage messages (real-time) - avoid duplicates
     telehealth.chatMessages.forEach(vonageMsg => {
-      // Check if this Vonage message already exists in allMessages (including other Vonage messages)
+      // Check if this Vonage message already exists in allMessages
+      // Use more strict deduplication: same content + same author + within 10 seconds
       const exists = allMessages.some(existingMsg => 
         existingMsg.content === vonageMsg.content && 
         existingMsg.author === vonageMsg.author &&
-        Math.abs(new Date(existingMsg.authoredAt).getTime() - new Date(vonageMsg.timestamp).getTime()) < 5000
+        existingMsg.isOwn === vonageMsg.isOwn &&
+        Math.abs(new Date(existingMsg.authoredAt).getTime() - new Date(vonageMsg.timestamp).getTime()) < 10000
       );
       
       if (!exists) {
@@ -618,7 +620,7 @@ export function TelehealthSessionContent({
                     if (targetVideo) {
                       try {
                         targetVideo.requestPictureInPicture();
-                      } catch (err: any) {
+                      } catch (err: unknown) {
                       }
                     } else {
                     }
@@ -660,7 +662,7 @@ export function TelehealthSessionContent({
               <div className="mx-auto h-1 w-12 rounded-full bg-white/20" />
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-white font-semibold text-base">Conversation</h3>
+                  <h3 className="text-white font-semibold text-base">Conversations</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${telehealth.isConnected ? 'bg-green-500' : 'bg-gray-500'}`}></div>
@@ -676,7 +678,7 @@ export function TelehealthSessionContent({
               participantStatus={telehealth.isConnected ? "online" : "offline"}
               messages={uiMessages}
               onSendMessage={telehealth.sendChatMessage}
-              headerTitle="Conversation"
+              headerTitle="Conversations"
               isConnected={telehealth.isConnected}
               typingUsers={telehealth.typingUsers}
               onTypingStart={telehealth.sendTypingIndicator}
@@ -693,11 +695,12 @@ export function TelehealthSessionContent({
             participantStatus={telehealth.isConnected ? "online" : "offline"}
             messages={uiMessages}
             onSendMessage={(content) => telehealth.sendChatMessage(content)}
+            isConnected={telehealth.isConnected}
             isOpen={isChatOpen}
             onToggle={() => setIsChatOpen(v => !v)}
             hideTrigger
             variant="drawer"
-            headerTitle="Conversation"
+            headerTitle="Conversations"
             headerSubtitle={`${telehealth.participantCount} participants in room`}
             participantNames={telehealth.participantCount > 0 ? [...new Set(["You", providerName].filter(name => name && name.trim()))] : []}
           />

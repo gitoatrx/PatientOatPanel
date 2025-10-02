@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Send, Paperclip, Image, File, X, Download } from "lucide-react";
+import { Send, Image, File, X, Download } from "lucide-react";
 
 // Discord-style Avatar component
 function ChatAvatar({
@@ -100,8 +100,36 @@ interface TelehealthChatPanelProps {
   participantNames?: string[];
 }
 
-const brandBubbleClass = "bg-blue-500 text-white rounded-2xl rounded-br-md";
-const neutralBubbleClass = "bg-gray-200 text-gray-900 rounded-2xl rounded-bl-md";
+
+// Helper function to calculate time difference in minutes between two time strings
+function getTimeDifferenceInMinutes(time1: string, time2: string): number {
+  try {
+    // Parse time strings - handles both "10:59" and "10:59 AM" formats
+    const parseTime = (timeStr: string) => {
+      // Remove AM/PM and trim whitespace
+      const cleanTime = timeStr.replace(/\s*(AM|PM)/i, '').trim();
+      const [hours, minutes] = cleanTime.split(':').map(Number);
+      
+      // Handle 12-hour format conversion
+      let totalMinutes = hours * 60 + minutes;
+      if (timeStr.toLowerCase().includes('pm') && hours !== 12) {
+        totalMinutes += 12 * 60; // Add 12 hours for PM
+      } else if (timeStr.toLowerCase().includes('am') && hours === 12) {
+        totalMinutes -= 12 * 60; // Subtract 12 hours for 12 AM
+      }
+      
+      return totalMinutes;
+    };
+    
+    const minutes1 = parseTime(time1);
+    const minutes2 = parseTime(time2);
+    
+    return Math.abs(minutes2 - minutes1);
+  } catch (error) {
+    // If parsing fails, assume it's a new message group
+    return 10; // Return a value > 2 to trigger new group
+  }
+}
 
 export function TelehealthChatPanel({
   messages,
@@ -342,68 +370,60 @@ export function TelehealthChatPanel({
         <div ref={scrollContainerRef} className="h-full overflow-y-auto overscroll-contain scrollbar-hide p-3 sm:p-4">
           {messages.map((message, index) => {
             const isFirstMessage = index === 0;
-            const isNewAuthor = index === 0 || messages[index - 1].author !== message.author;
+            const prevMessage = index > 0 ? messages[index - 1] : null;
+            const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
+            
+            // Check if this is a new author OR if there's a significant time gap (more than 2 minutes)
+            const isNewAuthor = index === 0 || 
+              prevMessage?.author !== message.author ||
+              (prevMessage && message.authoredAt && prevMessage.authoredAt && 
+               getTimeDifferenceInMinutes(prevMessage.authoredAt, message.authoredAt) > 2); // 2 minutes gap
+            
             const isLastMessage = index === messages.length - 1;
             const isNextMessageSameAuthor = index < messages.length - 1 && messages[index + 1].author === message.author;
             
-            return (
-              <div
-                key={message.id}
-                className={cn(
-                  "group relative flex gap-3 px-3 sm:px-4 py-1.5 transition-colors",
-                  isDrawer ? "hover:bg-white/5" : "hover:bg-gray-50/50",
-                  isNewAuthor && "mt-3",
-                  !isNewAuthor && "mt-0.5",
-                  message.isOwn ? "flex-row-reverse text-right items-end" : "items-end"
-                )}
-              >
-                {/* Avatar - only show for first message from each author */}
-                <div className="flex-shrink-0">
-                  {isNewAuthor ? (
-                    <ChatAvatar
-                      name={message.isOwn ? "You" : (message.author || "Participant")}
-                      isOwn={message.isOwn}
-                      size="md"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 flex items-center justify-center">
-                      <div className={cn("w-0.5 h-6 rounded-full", isDrawer ? "bg-slate-600" : "bg-gray-300")}></div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Message content */}
-                <div className="flex-1 min-w-0">
-                  {/* Author name and timestamp - only show for first message from each author */}
-                  {isNewAuthor && (
-                    <div className={cn("flex items-baseline gap-2 mb-1", message.isOwn && "justify-end")}>
-                      <span className={cn(
-                        "font-semibold text-sm",
-                        isDrawer ? "text-white" : message.isOwn ? "text-blue-600" : "text-gray-900"
-                      )}>
-                        {message.isOwn ? "You" : (message.author || "Participant")}
-                      </span>
-                      <span className={cn("text-xs font-medium", isDrawer ? "text-slate-400" : "text-gray-500")}>
-                        {message.authoredAt}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Message content */}
-                  <div className="relative">
-                    <div
-                      className={cn(
-                        "inline-block max-w-[80%] px-3 py-2 rounded-2xl text-sm break-words leading-relaxed",
-                        "text-justify",
-                        isDrawer
-                          ? message.isOwn
-                            ? "bg-emerald-600 text-white"
-                            : "bg-slate-700 text-white"
-                          : message.isOwn
-                            ? "bg-blue-500 text-white"
-                            : "bg-gray-200 text-gray-900"
-                      )}
-                    >
+            // Check if this is the last message in a same-time group from the same author
+            const isLastOfSameTimeGroup = isLastMessage || 
+              !isNextMessageSameAuthor || 
+              (nextMessage && getTimeDifferenceInMinutes(message.authoredAt, nextMessage.authoredAt) > 0);
+            
+             return (
+               <div
+                 key={message.id}
+                 className={cn(
+                   "group relative",
+                   isNewAuthor && "mt-3",
+                   !isNewAuthor && "mt-1"
+                 )}
+               >
+                 {/* Message content */}
+                 <div className={cn(
+                   "flex",
+                   message.isOwn ? "justify-end" : "justify-start"
+                 )}>
+                   <div
+                     className={cn(
+                       "inline-block max-w-[75%] px-3 py-2 text-xs break-words leading-snug relative",
+                       isDrawer
+                         ? message.isOwn
+                           ? "bg-emerald-600 text-white rounded-2xl rounded-br-md"
+                           : "bg-slate-700 text-white rounded-2xl rounded-bl-md"
+                         : message.isOwn
+                           ? "bg-emerald-600 text-white rounded-2xl rounded-br-md"
+                           : "bg-gray-200 text-gray-900 rounded-2xl rounded-bl-md"
+                     )}
+                   >
+                     {/* Author name - only show for first message from each author */}
+                     {isNewAuthor && (
+                       <div className={cn("flex items-center gap-1 mb-0.5", message.isOwn && "justify-end")}>
+                         <span className={cn(
+                           "font-medium text-[10px]",
+                           isDrawer ? "text-white/80" : message.isOwn ? "text-white/80" : "text-gray-600"
+                         )}>
+                           {message.isOwn ? "You" : (message.author || "Participant")}
+                         </span>
+                       </div>
+                     )}
                   {/* Attachment display */}
                   {message.attachment && (
                     <div className={message.type === 'image' && !message.content ? "p-1" : "mb-2 p-2 bg-white/10 rounded-lg"}>
@@ -480,14 +500,22 @@ export function TelehealthChatPanel({
                     </div>
                   )}
                   
-                      {/* Message text */}
-                      {message.content && (
-                        <p className="break-words overflow-wrap-anywhere">{message.content}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                     {/* Message text */}
+                     {message.content && (
+                       <p className="break-words overflow-wrap-anywhere">{message.content}</p>
+                     )}
+
+                     {/* Timestamp inside bubble at bottom - only show for last message in same-time group */}
+                     {isLastOfSameTimeGroup && (
+                       <div className={cn("flex mt-0.5", message.isOwn && "justify-end")}>
+                         <span className={cn("text-[9px]", isDrawer ? "text-white/60" : message.isOwn ? "text-white/60" : "text-gray-500")}>
+                           {message.authoredAt}
+                         </span>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </div>
             );
           })}
           
@@ -566,25 +594,14 @@ export function TelehealthChatPanel({
                 }}
               />
               
-              {/* Send Button */}
-              <Button
-                type="submit"
-                disabled={!draftMessage.trim()}
-                className={cn("my-1 mr-1 h-9 w-9 p-0 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors", isDrawer ? "rounded-full bg-emerald-500 text-white hover:bg-emerald-600" : "rounded-full bg-blue-500 text-white hover:bg-blue-600")}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-              
-              {/* Typing indicator for current user */}
-              {isUserTyping && (
-                <div className="flex items-center gap-1 mr-2">
-                  <div className="flex space-x-1">
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDuration: '1s' }}></div>
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1s' }}></div>
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1s' }}></div>
-                  </div>
-                </div>
-              )}
+               {/* Send Button */}
+               <Button
+                 type="submit"
+                 disabled={!draftMessage.trim()}
+                 className={cn("my-1 mr-1 h-9 w-9 p-0 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors", isDrawer ? "rounded-full bg-emerald-500 text-white hover:bg-emerald-600" : "rounded-full bg-blue-500 text-white hover:bg-blue-600")}
+               >
+                 <Send className="h-4 w-4" />
+               </Button>
             </div>
           </div>
         </form>

@@ -12,6 +12,7 @@ interface TelehealthChatLauncherProps {
   participantRole?: string;
   participantStatus?: "online" | "offline" | "busy";
   onSendMessage?: (content: string) => void;
+  isConnected?: boolean;
   // Controlled mode
   isOpen?: boolean;
   onToggle?: () => void;
@@ -29,6 +30,7 @@ export function TelehealthChatLauncher({
   participantRole = "Doctor",
   participantStatus = "online",
   onSendMessage,
+  isConnected = true,
   isOpen: isOpenProp,
   onToggle,
   hideTrigger = false,
@@ -108,6 +110,7 @@ export function TelehealthChatLauncher({
             messages={messages}
             onSendMessage={onSendMessage}
             onClose={toggleChat}
+            isConnected={isConnected}
             variant={variant}
             headerTitle={headerTitle}
             headerSubtitle={headerSubtitle}
