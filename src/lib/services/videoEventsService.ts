@@ -45,26 +45,17 @@ export class VideoEventsService {
         token: followupToken,
       };
 
-      console.log('🎬 Triggering video event:', { 
-        appointmentId: this.appointmentId, 
-        eventType, 
-        metadata,
-        followupToken 
-      });
       
       const response = await apiClient.post<VideoEventResponse>(endpoint, requestBody);
       
       const result = response.data;
-      console.log('🎬 Video event response:', result);
       
       if (!result.success) {
         throw new Error(result.message || 'Failed to trigger video event');
       }
 
-      console.log('✅ Video event triggered successfully');
       return result;
     } catch (error) {
-      console.error('❌ Failed to trigger video event:', error);
       throw error;
     }
   }

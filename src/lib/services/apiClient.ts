@@ -78,11 +78,11 @@ const createApiError = (error: AxiosError): ApiError => {
 // Request interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
-    console.log(`Making API request to: ${config.url}`);
+
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+
     return Promise.reject(error);
   }
 );
@@ -90,15 +90,13 @@ axiosInstance.interceptors.request.use(
 // Response interceptor
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
-    console.log('API success response:', response.data);
-    
+
     // Always return the response as-is to preserve the original API structure
     // Let individual service methods handle their specific response formats
     return response;
   },
   async (error: AxiosError) => {
-    console.error('API error:', error);
-    
+
     // Handle retry logic
     const config = error.config as AxiosRequestConfig & { _retryCount?: number };
     
@@ -111,8 +109,7 @@ axiosInstance.interceptors.response.use(
       
       // Wait before retrying with exponential backoff
       const retryDelay = DEFAULT_CONFIG.retryDelay * Math.pow(2, config._retryCount - 1);
-      console.log(`Retrying request in ${retryDelay}ms (attempt ${config._retryCount}/${DEFAULT_CONFIG.retries})`);
-      
+
       await delay(retryDelay);
       
       return axiosInstance(config);

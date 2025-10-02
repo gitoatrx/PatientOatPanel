@@ -42,8 +42,7 @@ export const logout = (): void => {
   localStorage.removeItem(AUTH_KEYS.PHONE_NUMBER);
   localStorage.removeItem(AUTH_KEYS.OTP_VERIFIED);
   localStorage.removeItem(AUTH_KEYS.OTP_VERIFIED_AT);
-  
-  console.log('User logged out - all authentication data cleared');
+
 };
 
 /**
@@ -52,8 +51,4 @@ export const logout = (): void => {
 export const hasActiveSession = (): boolean => {
   return isOtpVerified() && getPhoneNumber() !== null;
 };
-
-
-
-
 

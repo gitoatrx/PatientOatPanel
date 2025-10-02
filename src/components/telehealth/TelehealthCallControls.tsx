@@ -296,8 +296,6 @@ export function TelehealthCallControls({
           </Button>
         )}
 
-      
-      
         {/* Join/Leave */}
         <Button
           type="button"
@@ -332,14 +330,12 @@ export function TelehealthCallControls({
                 : "opacity-50 cursor-not-allowed bg-gray-700 text-gray-200"
             )}
             onClick={(e) => {
-              console.log('🎬 PiP Button clicked!', e.target, e.currentTarget);
-              console.log('🎬 PiP Button click event:', e);
-              console.log('🎬 PiP Button click coordinates:', e.clientX, e.clientY);
-              console.log('🎬 PiP Button element bounds:', e.currentTarget.getBoundingClientRect());
+
               if (document.pictureInPictureEnabled) {
+
                 onTogglePictureInPicture?.();
               } else {
-                console.warn('❌ PiP not supported in this browser');
+
               }
             }}
             aria-label={isPictureInPicture ? 'Exit Picture-in-Picture' : pendingPiPRequest ? 'Click to activate Picture-in-Picture' : 'Enter Picture-in-Picture'}

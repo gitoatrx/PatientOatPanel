@@ -40,8 +40,7 @@ export function PatientAppointmentStep() {
 
   const handleSubmit = async (values: FormValues) => {
     try {
-      console.log("Appointment submitted:", values);
-      
+
       // Save to centralized state
       const result = await saveStep(stepData.stepId, {
         doctorId: values.doctorId,
@@ -52,12 +51,12 @@ export function PatientAppointmentStep() {
       // Navigate to review step
       router.push("/onboarding/patient/review");
     } catch (error) {
-      console.error("Error saving appointment:", error);
+
     }
   };
 
   const handleBack = () => {
-    console.log("Back button clicked");
+
     // Navigate back to doctor selection step
     router.push("/onboarding/patient/doctor-selection");
   };
