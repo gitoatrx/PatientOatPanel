@@ -85,7 +85,7 @@ export function PatientAddressStep() {
         city: values.city as string,
         state_province: values.province as string,
         postal_code: values.postalCode as string,
-        country: "India", // Default to India as shown in the API example
+        country: "Canada", // Default to India as shown in the API example
       };
       
       let apiResponse;
