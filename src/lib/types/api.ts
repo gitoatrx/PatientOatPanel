@@ -130,12 +130,42 @@ export interface HealthCardResponse {
     current_step: string;
     status: string;
     otp_verified_at: string;
+    phone_update_required?: boolean;
+    phone_update_context?: {
+      existing_phone: string;
+      submitted_phone: string;
+    };
     state: {
       contact: {
         phone: string;
       };
       health_card?: {
         health_card_number: string;
+        phone_update_required?: boolean;
+        phone_update_context?: {
+          existing_phone: string;
+          submitted_phone: string;
+        };
+      };
+      otp_verified_at: string;
+    };
+    guest_patient_id: string | null;
+    appointment_id: string | null;
+  };
+}
+
+export interface PhoneUpdateResponse {
+  success: boolean;
+  message: string;
+  data: {
+    clinic_id: number;
+    phone: string;
+    current_step: string;
+    status: string;
+    otp_verified_at: string;
+    state: {
+      contact: {
+        phone: string;
       };
       otp_verified_at: string;
     };
@@ -573,6 +603,66 @@ export interface FollowupQuestion {
   asked_at: string;
   priority: number;
   red_flag: boolean;
+}
+
+// Appointment State Snapshot Types
+export interface AppointmentStateData {
+  id: number;
+  is_no_show: boolean;
+  no_show_since: string | null;
+  no_show_action: string | null;
+  is_waiting: boolean;
+  waiting_since: string | null;
+  is_with_doctor: boolean;
+  with_doctor_since: string | null;
+  is_completed: boolean;
+  completed_since: string | null;
+  scheduled_for: string;
+  status: string;
+  appointment: {
+    id: number;
+    clinic_id: number;
+    patient_id: number;
+    doctor_id: number;
+    visit_type_name: string;
+    visit_type_duration: number;
+    visit_type_is_video_call: boolean;
+    payer_type: string;
+    visit_reason: string;
+    message_to_moa: string | null;
+    concerns: Array<{
+      question: string;
+      answer: string;
+    }>;
+    join_call: boolean;
+    join_call_at: string | null;
+    scheduled_for: string;
+    created_at: string;
+    updated_at: string;
+  };
+  doctor: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+    email: string;
+    phone: string;
+  };
+  patient: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+    phone: string;
+    phn: string;
+    patient_type: string;
+  };
+}
+
+export interface AppointmentStateResponse {
+  success: boolean;
+  message: string;
+  data: AppointmentStateData;
 }
 
 // Error Types for Different Scenarios

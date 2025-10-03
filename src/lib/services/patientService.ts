@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient';
-import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion } from '@/lib/types/api';
-import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl } from '@/lib/config/api';
+import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse } from '@/lib/types/api';
+import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
 
@@ -118,7 +118,7 @@ export const patientService = {
   },
 
   // Health Card API
-  async saveHealthCard(phone: string, healthCardNumber?: string): Promise<HealthCardResponse> {
+  async saveHealthCard(phone: string, healthCardNumber?: string, updatePrimaryPhone?: boolean): Promise<HealthCardResponse> {
     try {
 
       // Build payload conditionally - only include health_card_number if user has one
@@ -132,8 +132,9 @@ export const patientService = {
         payload.health_card_number = healthCardNumber;
       }
 
-      if ('health_card_number' in payload) {
-
+      // Include update_primary_phone flag if provided (for phone update flow)
+      if (updatePrimaryPhone !== undefined) {
+        payload.update_primary_phone = updatePrimaryPhone;
       }
 
       const response = await apiClient.post<HealthCardResponse>(API_CONFIG.ENDPOINTS.HEALTH_CARD, payload, {
@@ -157,6 +158,44 @@ export const patientService = {
           otp_verified_at: '',
           state: {
             contact: { phone: phone },
+            otp_verified_at: '',
+          },
+          guest_patient_id: null,
+          appointment_id: null,
+        },
+      };
+    }
+  },
+
+  // Phone Update API
+  async updatePhone(oldPhone: string, newPhone: string): Promise<PhoneUpdateResponse> {
+    try {
+      const payload = {
+        clinic_id: API_CONFIG.CLINIC_ID,
+        old_phone: oldPhone,
+        new_phone: newPhone,
+      };
+
+      const response = await apiClient.post<PhoneUpdateResponse>(API_CONFIG.ENDPOINTS.UPDATE_PHONE, payload, {
+        showLoading: true,
+        showErrorToast: true,
+        showSuccessToast: false, // Success is handled by navigation
+      });
+
+      return response.data;
+    } catch (error) {
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to update phone number',
+        data: {
+          clinic_id: API_CONFIG.CLINIC_ID,
+          phone: newPhone,
+          current_step: 'health_card',
+          status: 'error',
+          otp_verified_at: '',
+          state: {
+            contact: { phone: newPhone },
             otp_verified_at: '',
           },
           guest_patient_id: null,
@@ -793,6 +832,79 @@ export const patientService = {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to save follow-up answers',
         data: { saved: false, answers: {} },
+      };
+    }
+  },
+
+  // Get Appointment State Snapshot API
+  async getAppointmentState(appointmentId: string, token: string): Promise<AppointmentStateResponse> {
+    try {
+
+      const response = await apiClient.get<AppointmentStateResponse>(
+        getAppointmentStatePatientUrl(appointmentId, token),
+        {
+          showLoading: false, // Don't show loading for this background fetch
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get appointment state',
+        data: {
+          id: 0,
+          is_no_show: false,
+          no_show_since: null,
+          no_show_action: null,
+          is_waiting: false,
+          waiting_since: null,
+          is_with_doctor: false,
+          with_doctor_since: null,
+          is_completed: false,
+          completed_since: null,
+          scheduled_for: '',
+          status: 'unknown',
+          appointment: {
+            id: 0,
+            clinic_id: 0,
+            patient_id: 0,
+            doctor_id: 0,
+            visit_type_name: '',
+            visit_type_duration: 0,
+            visit_type_is_video_call: false,
+            payer_type: '',
+            visit_reason: '',
+            message_to_moa: null,
+            concerns: [],
+            join_call: false,
+            join_call_at: null,
+            scheduled_for: '',
+            created_at: '',
+            updated_at: '',
+          },
+          doctor: {
+            id: 0,
+            first_name: '',
+            last_name: '',
+            full_name: '',
+            email: '',
+            phone: '',
+          },
+          patient: {
+            id: 0,
+            first_name: '',
+            last_name: '',
+            full_name: '',
+            phone: '',
+            phn: '',
+            patient_type: '',
+          },
+        },
       };
     }
   },

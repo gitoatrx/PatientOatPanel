@@ -35,6 +35,7 @@ export function PatientOtpVerificationStep() {
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   // Get step configuration with error handling
   let stepData;
@@ -80,6 +81,14 @@ export function PatientOtpVerificationStep() {
           }
         } catch (error) {
           console.error("Error loading phone number from localStorage:", error);
+        }
+      }
+
+      // Check for stored OTP in development mode
+      if (process.env.NODE_ENV === 'development') {
+        const storedOtp = localStorage.getItem('dev-otp');
+        if (storedOtp) {
+          setDevOtp(storedOtp);
         }
       }
 
@@ -276,6 +285,17 @@ export function PatientOtpVerificationStep() {
       const response = await patientService.sendOtp(phoneNumber);
 
       if (response.success) {
+        // Extract OTP from response data for development mode
+        if (response.data && typeof response.data === 'string') {
+          // Extract OTP from the message string (format: "Your verification code for 123 Walkin Clinic is 458527. It expires in 5 minutes.")
+          const otpMatch = (response.data as string).match(/\b(\d{6})\b/);
+          if (otpMatch) {
+            setDevOtp(otpMatch[1]);
+            // Store in localStorage for persistence across page refreshes
+            localStorage.setItem('dev-otp', otpMatch[1]);
+          }
+        }
+
         // Show success toast
         toast({
           variant: "success",
@@ -444,6 +464,30 @@ export function PatientOtpVerificationStep() {
                 {countdown > 0 ? `Resend code in ${countdown}s` : "Resend code"}
               </button>
             </div>
+
+            {/* Development OTP Display */}
+            {devOtp && process.env.NODE_ENV === 'development' && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-center">
+                  <p className="text-sm font-medium text-blue-800 mb-2">🔧 Development Mode</p>
+                  <p className="text-sm text-blue-700 mb-2">OTP Code:</p>
+                  <div className="text-2xl font-bold text-blue-900 tracking-widest bg-blue-100 px-4 py-2 rounded-lg inline-block mb-3">
+                    {devOtp}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      form.setValue('otp', devOtp);
+                      form.trigger('otp'); // Trigger validation after setting value
+                    }}
+                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+                  >
+                    Auto-fill OTP
+                  </button>
+                  <p className="text-xs text-blue-600 mt-2">This is only visible in development mode</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Info message */}

@@ -13,6 +13,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
 import { RadioOptionSkeleton } from "@/components/ui/skeleton-loaders";
+import { PhoneUpdateModal } from "@/components/ui/phone-update-modal";
 
 const healthCardSchema = z
   .object({
@@ -80,6 +81,9 @@ export function PatientHealthCardStep() {
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isLoadingProgress, setIsLoadingProgress] = useState<boolean>(true);
+  const [showPhoneUpdateModal, setShowPhoneUpdateModal] = useState<boolean>(false);
+  const [pendingNavigation, setPendingNavigation] = useState<{ nextStep: string; nextRoute: string } | null>(null);
+  const [phoneUpdateContext, setPhoneUpdateContext] = useState<{ existing_phone: string; submitted_phone: string } | null>(null);
   
   // Get step configuration (unused but kept for consistency)
   // const stepData = getStepComponentData("healthCard");
@@ -179,25 +183,39 @@ export function PatientHealthCardStep() {
       }
       
       if (apiResponse.success) {
-        
-        try {
-          // Navigate to next step based on API response (no success toast)
+        // Check if phone update is required
+        if (apiResponse.data.phone_update_required) {
+          // Store the navigation info and phone update context, then show modal
           const nextStep = apiResponse.data.current_step;
           const nextRoute = getRouteFromApiStep(nextStep);
-          router.push(nextRoute);
-        } catch (saveError) {
-          console.error('Error saving step:', saveError);
-          const errorMessage = 'Failed to save your information. Please try again.';
+          setPendingNavigation({ nextStep, nextRoute });
           
-          // Show error toast IMMEDIATELY
-          toast({
-            variant: "error",
-            title: "Save Error",
-            description: errorMessage,
-          });
+          // Set phone update context if available
+          if (apiResponse.data.phone_update_context) {
+            setPhoneUpdateContext(apiResponse.data.phone_update_context);
+          }
           
-          // Set error state after toast
-          setError(errorMessage);
+          setShowPhoneUpdateModal(true);
+        } else {
+          // Navigate to next step normally
+          try {
+            const nextStep = apiResponse.data.current_step;
+            const nextRoute = getRouteFromApiStep(nextStep);
+            router.push(nextRoute);
+          } catch (saveError) {
+            console.error('Error saving step:', saveError);
+            const errorMessage = 'Failed to save your information. Please try again.';
+            
+            // Show error toast IMMEDIATELY
+            toast({
+              variant: "error",
+              title: "Save Error",
+              description: errorMessage,
+            });
+            
+            // Set error state after toast
+            setError(errorMessage);
+          }
         }
       } else {
         // Handle API error response
@@ -251,6 +269,45 @@ export function PatientHealthCardStep() {
   const handleBack = () => {
     // Navigate back to OTP verification step
     router.push("/onboarding/patient/verify-otp");
+  };
+
+  const handlePhoneUpdated = async (selectedPhone: string) => {
+    // Determine if user wants to update primary phone (use new number) or keep existing
+    const updatePrimaryPhone = selectedPhone === (phoneUpdateContext?.submitted_phone || phoneNumber);
+    
+    try {
+      setError(null);
+      
+      // Get the current form values
+      const formValues = form.getValues();
+      const healthCardNumber = formValues.hasHealthCard === "yes" ? formValues.healthCardNumber : "";
+      
+      // Resend health card API with update_primary_phone flag
+      const apiResponse = await patientService.saveHealthCard(phoneNumber, healthCardNumber, updatePrimaryPhone);
+      
+      if (apiResponse.success) {
+        // Navigate to next step
+        const nextStep = apiResponse.data.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep);
+        router.push(nextRoute);
+      } else {
+        setError(apiResponse.message || "Failed to update phone number");
+      }
+    } catch (error) {
+      console.error('Error updating phone:', error);
+      setError("Network error. Please check your connection and try again.");
+    }
+  };
+
+  const handleSkipPhoneUpdate = async () => {
+    // User chose to keep existing phone (update_primary_phone: false)
+    await handlePhoneUpdated(phoneUpdateContext?.existing_phone || phoneNumber);
+  };
+
+  const handleClosePhoneUpdateModal = () => {
+    setShowPhoneUpdateModal(false);
+    setPendingNavigation(null);
+    setPhoneUpdateContext(null);
   };
 
   // Get real-time form state updates
@@ -399,6 +456,16 @@ export function PatientHealthCardStep() {
           </div>
         </div>
       </FormProvider>
+
+      {/* Phone Update Modal */}
+      <PhoneUpdateModal
+        isOpen={showPhoneUpdateModal}
+        onClose={handleClosePhoneUpdateModal}
+        onPhoneUpdated={handlePhoneUpdated}
+        onSkip={handleSkipPhoneUpdate}
+        currentPhone={phoneNumber}
+        phoneUpdateContext={phoneUpdateContext || undefined}
+      />
     </PatientStepShell>
   );
 }

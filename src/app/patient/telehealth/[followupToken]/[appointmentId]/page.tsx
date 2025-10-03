@@ -27,14 +27,10 @@ export default async function PatientTelehealthSessionPage({ params }: PatientTe
   // For now, we'll use the appointmentId as the sessionId
   const sessionId = appointmentId;
 
-  // TODO: Fetch appointment data from API to get dynamic provider name
-  // const appointmentData = await fetchAppointmentData(appointmentId, followupToken);
-  // const providerName = appointmentData.providerName || "Healthcare Provider";
-  // const sessionTitle = appointmentData.sessionTitle || SESSION_TITLE;
-  
-  // For now, using empty provider name - will be replaced with real data from API
+  // Use default values - appointment data will be fetched client-side
   const providerName = "";
   const sessionTitle = SESSION_TITLE;
+  const appointmentState = null;
 
   return (
     <TelehealthSessionContent
@@ -46,6 +42,7 @@ export default async function PatientTelehealthSessionPage({ params }: PatientTe
       messages={[]}
       followupToken={followupToken}
       appointmentId={appointmentId}
+      appointmentState={appointmentState}
     />
   );
 }

@@ -12,6 +12,7 @@ export const API_CONFIG = {
     VERIFY_OTP: '/clinic/onboarding/verify-otp',
     ONBOARDING_PROGRESS: '/clinic/onboarding/progress',
     HEALTH_CARD: '/clinic/onboarding/health-card',
+    UPDATE_PHONE: '/clinic/onboarding/update-phone',
     ADDRESS: '/clinic/onboarding/address',
     PERSONAL_INFO_STEP1: '/clinic/onboarding/personal-info/step1',
     PERSONAL_INFO_STEP2: '/clinic/onboarding/personal-info/step2',
@@ -39,6 +40,8 @@ export const API_CONFIG = {
     WAITING_ROOM_PATIENT: '/clinic/appointments',
     // Video events endpoints
     VIDEO_EVENTS_PATIENT: '/clinic/appointments',
+    // Appointment state snapshot endpoint
+    APPOINTMENT_STATE_PATIENT: '/clinic/appointments',
   },
 
   // Request Configuration
@@ -144,4 +147,11 @@ export const getWaitingRoomPatientUrl = (appointmentId: string): string => {
 export const getVideoEventsPatientUrl = (appointmentId: string): string => {
   const safeAppointmentId = encodeURIComponent(appointmentId);
   return `${API_CONFIG.ENDPOINTS.VIDEO_EVENTS_PATIENT}/${safeAppointmentId}/clinic-events/patient`;
+};
+
+// Helper function for appointment state snapshot endpoint
+export const getAppointmentStatePatientUrl = (appointmentId: string, token: string): string => {
+  const safeAppointmentId = encodeURIComponent(appointmentId);
+  const safeToken = encodeURIComponent(token);
+  return `${API_CONFIG.ENDPOINTS.APPOINTMENT_STATE_PATIENT}/${safeAppointmentId}/states/patient?token=${safeToken}`;
 };
