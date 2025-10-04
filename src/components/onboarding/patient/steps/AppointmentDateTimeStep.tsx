@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, memo, useEffect } from "react";
+import React, { useState, memo, useEffect, useMemo } from "react";
 import { Clock, Calendar, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -65,16 +65,14 @@ const containerVariants = {
   },
 };
 
-// Simplified item variants without scale animation
+// Simplified item variants without scale animation - more stable
 const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
+  hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    y: 0,
     transition: {
-      type: "spring" as const,
-      stiffness: 300,
-      damping: 25,
+      duration: 0.2,
+      ease: "easeOut" as const,
     },
   },
 };
@@ -287,31 +285,19 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
   const enterKeyHandler = useEnterKey(handleNext);
 
-  // Get displayed dates and slots with smart pagination
-  const getDisplayedDates = () => {
-    if (!selectedDate) {
-      // If no date is selected, show the first batch
-      return availableDates.slice(0, displayedDatesCount);
-    }
+  // Memoize displayed dates and slots to prevent unnecessary re-renders
+  const displayedDates = useMemo(() => {
+    // Always show a consistent slice based on displayedDatesCount
+    // This prevents re-rendering issues when selecting dates from different rows
+    return availableDates.slice(0, displayedDatesCount);
+  }, [availableDates, displayedDatesCount]);
 
-    // Find the index of the selected date
-    const selectedIndex = availableDates.findIndex(date => date.value === selectedDate);
-
-    if (selectedIndex === -1) {
-      // Selected date not found, show first batch
-      return availableDates.slice(0, displayedDatesCount);
-    }
-
-    // Ensure selected date is visible by adjusting the slice
-    const startIndex = Math.max(0, selectedIndex - Math.floor(displayedDatesCount / 2));
-    const endIndex = Math.min(availableDates.length, startIndex + displayedDatesCount);
-
-    return availableDates.slice(startIndex, endIndex);
-  };
-
-  const displayedDates = getDisplayedDates();
   const hasMoreDates = displayedDatesCount < availableDates.length;
-  const displayedTimeSlots = availableTimeSlots.slice(0, displayedSlotsCount);
+  
+  const displayedTimeSlots = useMemo(() => {
+    return availableTimeSlots.slice(0, displayedSlotsCount);
+  }, [availableTimeSlots, displayedSlotsCount]);
+  
   const hasMoreSlots = displayedSlotsCount < availableTimeSlots.length;
 
   // Step navigation functions
@@ -328,6 +314,11 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
   // Handle date selection with validation
   const handleDateSelect = async (dateToSelect: ComponentDate) => {
+    // Prevent unnecessary updates if the same date is already selected
+    if (selectedDate === dateToSelect.value) {
+      return;
+    }
+
     // Use the date string directly from the API - no timezone conversion needed
     setValue("appointmentDate", dateToSelect.value);
     setSelectedDate(dateToSelect.value); // Update local state
@@ -347,6 +338,11 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
   // Handle time selection with validation
   const handleTimeSelect = async (slot: { value: string; label: string }) => {
+    // Prevent unnecessary updates if the same time is already selected
+    if (formValues.appointmentTime === slot.value) {
+      return;
+    }
+
     // Set the value first
     setValue("appointmentTime", slot.value);
 
@@ -417,29 +413,17 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                       const selectedDateObj = availableDates.find(
                         date => date.value === formValues.appointmentDate
                       );
-                      return selectedDateObj ? selectedDateObj.label : formValues.appointmentDate;
+                      if (selectedDateObj) {
+                        // Format as "<day>, <date>" (e.g., "Mon, Oct 09")
+                        return `${selectedDateObj.day_short}, ${selectedDateObj.label.split(',')[0]}`;
+                      }
+                      return formValues.appointmentDate;
                     })()
                     : ""}
                 </span>
                 <button
                   type="button"
                   onClick={() => goToStep(1, -1)}
-                  className="ml-auto px-2 py-1 text-xs font-medium text-blue-600 hover:underline rounded transition-colors flex-shrink-0"
-                >
-                  Change
-                </button>
-              </div>
-            )}
-            {/* Time Card */}
-            {formValues.appointmentTime && (
-              <div className="flex-1 bg-background border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-2  min-w-0">
-                <Clock className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                <span className="font-medium text-foreground">
-                  {availableTimeSlots.find(slot => slot.value === formValues.appointmentTime)?.label || formValues.appointmentTime}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => goToStep(2, -1)}
                   className="ml-auto px-2 py-1 text-xs font-medium text-blue-600 hover:underline rounded transition-colors flex-shrink-0"
                 >
                   Change
@@ -592,7 +576,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                           background: "#2563eb", // blue-600 - same as selected date
                         }}
                       >
-                        Load More Dates
+                        Show More Options
                         <ChevronDown className="w-4 h-4" />
                       </button>
                     </div>
@@ -622,7 +606,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
               >
                 <h3 className="font-bold text-foreground mb-4 sm:mb-6 flex items-center gap-2 text-lg sm:text-xl">
                   <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
-                  Available Times
+                  Available Slots
                 </h3>
 
                 {!formValues.appointmentDate ? (
@@ -687,7 +671,7 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
                             background: "#16a34a", // green-600 - same as selected time slot
                           }}
                         >
-                          Load More
+                          More Options
                           <ChevronDown className="w-4 h-4" />
                         </button>
                       </div>

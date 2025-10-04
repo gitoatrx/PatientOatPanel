@@ -2,29 +2,59 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
+  Check,
   CheckCircle,
   Clock,
   ShieldCheck,
   ChevronRight,
+  Calendar,
+  Computer,
+  Link,
+  MapPin,
+  Phone,
+  Navigation,
+  Store,
+  Hospital,
+  FileText,
+  Timer,
+  Lock,
 } from "lucide-react";
 import { AiAssessmentChat } from "./AiAssessmentChat";
 import { AddToCalendar } from "./AddToCalendar";
 import { ShareAppointment } from "./ShareAppointment";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { patientService } from "@/lib/services/patientService";
 import { PatientStepShell } from "@/lib/features/patient-onboarding/presentation/components/PatientStepShell";
 import { getStepComponentData } from "@/lib/features/patient-onboarding/config/patient-onboarding-config";
+import { useClinic } from "@/contexts/ClinicContext";
 
 
 export function AppointmentConfirmationContent() {
   const [showAssessment, setShowAssessment] = useState(false);
+  const { clinicInfo } = useClinic();
   const [confirmationData, setConfirmationData] = useState<{
     appointment_id: number;
     guest_patient_id: number;
     doctor: { name: string };
     date: string;
     time: string;
+    visitType: { name: string; id: number };
+    address?: {
+      address_line1: string;
+      address_line2?: string | null;
+      city: string;
+      state_province: string;
+      postal_code: string;
+      country: string;
+    };
+    clinic?: {
+      name: string;
+      address: string;
+      phone: string;
+    };
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
@@ -71,6 +101,13 @@ export function AppointmentConfirmationContent() {
               doctor: {
                 name: `Dr. ${apiData.state.provider.first_name} ${apiData.state.provider.last_name}`,
                 specialty: 'Family Medicine' // Default specialty since not in API
+              },
+              visitType: apiData.state.visit_type || { name: 'Virtual Visit', id: 1 },
+              address: apiData.state.address,
+              clinic: {
+                name: clinicInfo?.name || 'Health Clinic',
+                address: clinicInfo ? `${clinicInfo.address}, ${clinicInfo.city}, ${clinicInfo.province} ${clinicInfo.postal_code}` : '123 Main Street, Prince Rupert, BC V8J 1A1',
+                phone: clinicInfo?.phone || '(250) 555-0123'
               }
             };
 
@@ -140,6 +177,33 @@ export function AppointmentConfirmationContent() {
     }
   };
 
+  // Format address for display
+  const formatAddress = (address: {
+    address_line1: string;
+    address_line2?: string | null;
+    city: string;
+    state_province: string;
+    postal_code: string;
+  }) => {
+    if (!address) return '';
+    const parts = [
+      address.address_line1,
+      address.address_line2,
+      address.city,
+      address.state_province,
+      address.postal_code
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  // Check if visit is virtual
+  const isVirtualVisit = (visitType: { name: string; id: number }) => {
+    if (!visitType) return true; // Default to virtual
+    return visitType.name?.toLowerCase().includes('virtual') || 
+           visitType.name?.toLowerCase().includes('telehealth') ||
+           visitType.name?.toLowerCase().includes('online');
+  };
+
   const handleStartAssessment = async () => {
     if (!confirmationData) {
       console.error('No confirmation data available');
@@ -169,11 +233,8 @@ export function AppointmentConfirmationContent() {
         totalSteps={stepData.totalSteps}
         useCard={false}
       >
-        <div className="flex items-center justify-center py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-            <p className="text-sm text-muted-foreground">Loading confirmation...</p>
-          </div>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <LoadingSpinner size="lg" text="Loading confirmation..." />
         </div>
       </PatientStepShell>
     );
@@ -237,56 +298,151 @@ export function AppointmentConfirmationContent() {
   return (
     <>
       <PatientStepShell
-        title="Appointment Confirmed!"
+        title=""
         progressPercent={stepData.progressPercent}
         currentStep={stepData.currentStep}
         totalSteps={stepData.totalSteps}
         useCard={false}
+        contentMaxWidthClass="max-w-xl"
       >
-        <div className="max-w-lg mx-auto pb-8">
-          {/* Success Icon */}
-          <div className="text-center mb-8 pt-10">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4 relative overflow-hidden">
-              <CheckCircle className="w-8 h-8 text-green-600 relative z-10" />
+        <div className="max-w-xl mx-auto pb-16 px-6">
+          {/* Confirmation Section - Compact + Actionable */}
+          <div className="mb-6 pt-8">
+            <div className="w-full">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                  <Check className="w-4 h-4 text-white" />
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900">Your appointment is confirmed!</h1>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-6">
-            {/* Simple Confirmation Message */}
-            <div className="text-center">
-              <p className="text-xl text-gray-700 leading-relaxed">
-                Your appointment with <span className="text-green-600 font-semibold">{appt.doctor.name}</span> has been scheduled for
-                <br />
-                <span className="text-green-600 font-semibold underline">{formatDate(appt.date)}, {formatTime(appt.time)}</span>
-              </p>
+          {/* Main Content */}
+          <div className="space-y-12">
+            {/* Appointment Details */}
+            <div className="w-full space-y-4">
+              {/* Doctor Name */}
+              <h2 className="text-xl font-semibold text-gray-900">{appt.doctor.name}</h2>
+              
+              {/* Date & Time */}
+              <div className="flex items-center gap-3 w-fit">
+                <Calendar className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                <span className="text-gray-900">{formatDate(appt.date)} · {formatTime(appt.time)}</span>
+              </div>
+              
+              {/* Visit Type */}
+              <div className="flex items-center gap-3 w-fit">
+                <Computer className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                <span className="text-gray-900">
+                  {isVirtualVisit(appt.visitType) ? 'Virtual Visit' : 'In-Clinic Visit'}
+                </span>
+              </div>
+              
+              {/* Video Link Info - Virtual Only */}
+              {isVirtualVisit(appt.visitType) && (
+                <div className="flex items-center gap-3 text-sm text-blue-600 w-fit">
+                  <Link className="w-4 h-4 flex-shrink-0" />
+                  <span>Your secure video link will be shared with you 2 hours before your appointment.</span>
+                </div>
+              )}
+              
+              {/* Add to Calendar Button */}
+              <div className="pt-4">
+                <AddToCalendar appointment={appt} buttonWidth="w-auto" />
+              </div>
             </div>
 
-            {/* Assessment CTA Card */}
-            {shouldShowHealthCheckin ? (
-              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                <div className="text-center space-y-4">
+            {/* Clinic Info for in-person visits */}
+            {!isVirtualVisit(appt.visitType) && appt.clinic && (
+              <div className="mt-8 pt-8 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinic Information</h3>
+                <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Pre-Visit Health Check-in</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
-                      Help {appt.doctor.name} prepare for your visit by sharing a quick update about how you&apos;ve been feeling.
-                    </p>
+                    <p className="font-medium text-gray-900 mb-1">{appt.clinic.name}</p>
+                    <p className="text-gray-600">{appt.clinic.address}</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button variant="outline" size="sm" className="flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Call
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex items-center gap-2">
+                      <Navigation className="w-4 h-4" />
+                      Directions
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Services */}
+            <div className="grid grid-cols-1 gap-6">
+              {/* Prescription Services Card */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Store className="w-5 h-5 text-gray-600" />
+                  <h3 className="text-lg font-semibold text-gray-900">Rx Fulfillment</h3>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
+                    <div>
+                      <p className="font-medium text-gray-900">Delivery — to your home address</p>
+                      {appt.address && (
+                        <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-4 h-4" />
-                      <span>2-3 minutes</span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div>
+                      <p className="font-medium text-gray-900">Pickup — Shoppers Drug Mart</p>
+                      <p className="text-sm text-gray-600 mt-1">123 Main Street, Prince Rupert</p>
+                      <p className="text-xs text-gray-500 mt-1">(250) 555-0123</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Secure & Private</span>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Store className="w-4 h-4 text-gray-600 mt-1" />
+                    <div>
+                      <p className="font-medium text-gray-900">Your Pharmacy</p>
+                      <p className="text-sm text-gray-600 mt-1">Shoppers Drug Mart, 123 Main Street, Prince Rupert</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pre-Visit Questions Card */}
+              {shouldShowHealthCheckin && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <FileText className="w-5 h-5 text-gray-600" />
+                    <h3 className="text-lg font-semibold text-gray-900">Pre-Visit Questions</h3>
+                  </div>
+                  
+                  <p className="text-gray-600 mb-4">
+                    Answer a few quick questions about your symptoms so {appt.doctor.name} can prepare for your visit.
+                  </p>
+
+                  <div className="flex items-center gap-6 text-sm text-gray-500 mb-6">
+                    <div className="flex items-center gap-2">
+                      <Timer className="w-4 h-4" />
+                      <span>2–3 minutes</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4" />
+                      <span>Secure & private</span>
                     </div>
                   </div>
 
                   <Button
                     onClick={handleStartAssessment}
                     disabled={isGeneratingQuestions}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    size="lg"
+                    className="w-auto"
                   >
                     {isGeneratingQuestions ? (
                       <>
@@ -294,20 +450,11 @@ export function AppointmentConfirmationContent() {
                         Generating Questions...
                       </>
                     ) : (
-                      <>
-                        Start Health Check-in
-                        <ChevronRight className="w-4 h-4 ml-2" />
-                      </>
+                      'Start Followup'
                     )}
                   </Button>
                 </div>
-              </div>
-
-            ) : null}
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-4">
-              <AddToCalendar appointment={appt} className="flex-1" />
-              <ShareAppointment appointment={appt} className="flex-1" />
+              )}
             </div>
           </div>
         </div>
