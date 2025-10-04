@@ -442,7 +442,7 @@ export function AppointmentConfirmationContent() {
                     onClick={handleStartAssessment}
                     disabled={isGeneratingQuestions}
                     size="lg"
-                    className="w-auto"
+                    className="w-full"
                   >
                     {isGeneratingQuestions ? (
                       <>
