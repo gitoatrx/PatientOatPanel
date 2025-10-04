@@ -15,7 +15,9 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import Image from "next/image";
 import { VisitType } from "@/lib/types/api";
+import { Video, Building2 } from "lucide-react";
 
 const visitTypeSchema = z.object({
   visitType: z.string().min(1, "Please select a visit type"),
@@ -222,6 +224,16 @@ export function PatientVisitTypeStep() {
 
   const enterKeyHandler = useEnterKey(() => form.handleSubmit(handleSubmit)());
 
+  // Get icon for visit type
+  const getVisitTypeIcon = (visitTypeName: string) => {
+    const name = visitTypeName.toLowerCase();
+    if (name.includes('walkin') || name.includes('walk-in')) {
+      return <Building2 className="h-8 w-8 text-primary" />;
+    }
+    // Default to video icon for other types
+    return <Video className="h-8 w-8 text-primary" />;
+  };
+
   // Show loading state while fetching progress data
   if (isLoadingProgress) {
     return (
@@ -235,7 +247,13 @@ export function PatientVisitTypeStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading your information...</p>
           </div>
         </div>
@@ -245,8 +263,8 @@ export function PatientVisitTypeStep() {
 
   return (
     <PatientStepShell
-      title="What type of visit would you prefer?"
-      description="Choose the type of appointment that works best for you."
+      title="Choose your visit type"
+      description="Select the appointment style that suits you best."
       onBack={handleBack}
       onNext={async () => {
         try {
@@ -277,7 +295,13 @@ export function PatientVisitTypeStep() {
           {isLoadingVisitTypes && (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <Image
+                  src="/loading.svg"
+                  alt="Loading"
+                  width={32}
+                  height={32}
+                  className="animate-spin mx-auto mb-2"
+                />
                 <p className="text-sm text-muted-foreground">Loading visit types...</p>
               </div>
             </div>
@@ -312,14 +336,15 @@ export function PatientVisitTypeStep() {
                     )}
                   >
                     <CardContent className="flex flex-col justify-center h-full">
-                      <div className="space-y-2 text-center">
-                        <span className="text-lg font-medium text-foreground block capitalize">
+                      <div className="flex items-center justify-center gap-3">
+                        {getVisitTypeIcon(visitType.name)}
+                        <span className="text-lg font-medium text-foreground">
                           {visitType.name}
                         </span>
-                        {/* <span className="text-sm text-muted-foreground block">
-                          Duration: {visitType.duration} minutes
-                        </span> */}
                       </div>
+                      {/* <span className="text-sm text-muted-foreground block text-center mt-2">
+                        Duration: {visitType.duration} minutes
+                      </span> */}
                     </CardContent>
                   </Card>
                 </label>

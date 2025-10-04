@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse } from '@/lib/types/api';
+import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse } from '@/lib/types/api';
 import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
@@ -7,7 +7,38 @@ export type PatientRole = "patient";
 // All interfaces removed - only using OTP functionality now
 
 export const patientService = {
-  // Only OTP methods remain - all other API methods removed
+  // Clinic Information API
+  async getClinicInfo(clinicId: number = API_CONFIG.CLINIC_ID): Promise<ClinicInfoResponse> {
+    try {
+      const response = await apiClient.get<ClinicInfoResponse>(
+        `${API_CONFIG.ENDPOINTS.CLINIC_INFO}/${clinicId}`,
+        {
+          showLoading: false, // Don't show loading for this background fetch
+          showErrorToast: false, // Handle errors in component
+          showSuccessToast: false,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        clinic: {
+          id: clinicId,
+          name: 'Clinic',
+          email: '',
+          phone: '',
+          address: '',
+          city: '',
+          province: '',
+          postal_code: '',
+          country: '',
+          logo: '',
+        },
+      };
+    }
+  },
 
   // OTP Management - Real API Integration
   async sendOtp(phone: string): Promise<ApiResponse<{ message: string; otpCode?: string }>> {
@@ -48,7 +79,7 @@ export const patientService = {
         code: code,
       }, {
         showLoading: true,
-        showErrorToast: true,
+        showErrorToast: false,
         showSuccessToast: false, // Success is handled by navigation
       });
 
@@ -110,6 +141,7 @@ export const patientService = {
             contact: { phone: phone },
             otp_verified_at: '',
           },
+          patient_id: null,
           guest_patient_id: null,
           appointment_id: null,
         },
@@ -118,7 +150,7 @@ export const patientService = {
   },
 
   // Health Card API
-  async saveHealthCard(phone: string, healthCardNumber?: string, updatePrimaryPhone?: boolean): Promise<HealthCardResponse> {
+  async saveHealthCard(phone: string, healthCardNumber?: string, updatePrimaryPhone?: boolean, emailAddress?: string): Promise<HealthCardResponse> {
     try {
 
       // Build payload conditionally - only include health_card_number if user has one
@@ -130,6 +162,11 @@ export const patientService = {
       // Only include health_card_number if it's not empty
       if (healthCardNumber && healthCardNumber.trim() !== "") {
         payload.health_card_number = healthCardNumber;
+      }
+
+      // Only include email_address if it's not empty
+      if (emailAddress && emailAddress.trim() !== "") {
+        payload.email_address = emailAddress;
       }
 
       // Include update_primary_phone flag if provided (for phone update flow)
@@ -160,7 +197,7 @@ export const patientService = {
             contact: { phone: phone },
             otp_verified_at: '',
           },
-          guest_patient_id: null,
+          patient_id: null,
           appointment_id: null,
         },
       };

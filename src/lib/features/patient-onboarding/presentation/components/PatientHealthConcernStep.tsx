@@ -16,13 +16,16 @@ import { patientService } from "@/lib/services/patientService";
 import { HealthConcern } from "@/lib/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import Image from "next/image";
 
 const healthConcernSchema = z.object({
   selectedReason: z.string().min(1, "Please select a health concern"),
   symptoms: z
     .string()
-    .min(1, "Please describe your symptoms")
-    .min(10, "Please provide more details about your symptoms"),
+    .optional()
+    .refine((val) => !val || val.length >= 10, {
+      message: "Please provide more details about your symptoms",
+    }),
 });
 
 type FormValues = z.infer<typeof healthConcernSchema>;
@@ -105,24 +108,44 @@ export function PatientHealthConcernStep() {
         
         if (response.success) {
           setHealthConcerns(response.data);
+          // Auto-select if only one option
+          if (response.data.length === 1) {
+            form.setValue("selectedReason", response.data[0].name, {
+              shouldValidate: true,
+            });
+          }
         } else {
           console.error('Failed to load health concerns:', response.message);
           setConcernsError(response.message);
           // Fallback to static data
-          setHealthConcerns(getHealthConditions().map(item => ({ id: 0, name: item.label })));
+          const fallbackData = getHealthConditions().map(item => ({ id: 0, name: item.label }));
+          setHealthConcerns(fallbackData);
+          // Auto-select if only one option in fallback
+          if (fallbackData.length === 1) {
+            form.setValue("selectedReason", fallbackData[0].name, {
+              shouldValidate: true,
+            });
+          }
         }
       } catch (error) {
         console.error('Error fetching health concerns:', error);
         setConcernsError('Failed to load health concerns');
         // Fallback to static data
-        setHealthConcerns(getHealthConditions().map(item => ({ id: 0, name: item.label })));
+        const fallbackData = getHealthConditions().map(item => ({ id: 0, name: item.label }));
+        setHealthConcerns(fallbackData);
+        // Auto-select if only one option in fallback
+        if (fallbackData.length === 1) {
+          form.setValue("selectedReason", fallbackData[0].name, {
+            shouldValidate: true,
+          });
+        }
       } finally {
         setIsLoadingConcerns(false);
       }
     };
 
     fetchHealthConcerns();
-  }, []);
+  }, [form]);
 
   // Form prefilling is now handled by fetchProgressAndPrefillForm
 
@@ -217,7 +240,7 @@ export function PatientHealthConcernStep() {
 
   // Get personalized label
   const getPersonalizedLabel = () => {
-    return "What brings you in today?";
+    return "Tell us your concern";
   };
 
   const formValues = form.watch();
@@ -235,7 +258,13 @@ export function PatientHealthConcernStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading your information...</p>
           </div>
         </div>
@@ -246,7 +275,7 @@ export function PatientHealthConcernStep() {
   return (
     <PatientStepShell
       title={getPersonalizedLabel()}
-      description="Please tell us about your health concern and any symptoms you're experiencing."
+      description="Tell us about your health concern or symptoms."
       onBack={handleBack}
       onNext={() => form.handleSubmit(handleSubmit)()}
       nextLabel="Continue"
@@ -269,44 +298,60 @@ export function PatientHealthConcernStep() {
           )}
           
           <div className="space-y-4">
-            <div>
-              {isLoadingConcerns ? (
-                <div className="p-4 border border-border rounded-lg">
-                  <p className="text-sm text-muted-foreground">Loading health concerns...</p>
-                </div>
-              ) : (
-                <Combobox
-                  options={healthConcerns.map(concern => ({
-                    value: concern.id.toString(),
-                    label: concern.name,
-                  }))}
-                  value={formValues.selectedReason}
-                  onValueChange={(value) => {
-                    const selectedConcern = healthConcerns.find(concern => concern.id.toString() === value);
-                    form.setValue("selectedReason", selectedConcern ? selectedConcern.name : "", {
-                      shouldValidate: true,
-                    });
-                  }}
-                  placeholder="Select your health concern..."
-                  emptyMessage="No health conditions found."
-                  displayValue={(value) => {
-                    const option = healthConcerns.find(
-                      (concern) => concern.name === value,
-                    );
-                    return option ? option.name : value;
-                  }}
-                />
-              )}
-              {form.formState.errors.selectedReason && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.selectedReason?.message as string}
+            {/* Only show dropdown if there are multiple options */}
+            {healthConcerns.length > 1 && (
+              <div>
+                {isLoadingConcerns ? (
+                  <div className="p-4 border border-border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Loading health concerns...</p>
+                  </div>
+                ) : (
+                  <Combobox
+                    options={healthConcerns.map(concern => ({
+                      value: concern.id.toString(),
+                      label: concern.name,
+                    }))}
+                    value={formValues.selectedReason}
+                    onValueChange={(value) => {
+                      const selectedConcern = healthConcerns.find(concern => concern.id.toString() === value);
+                      form.setValue("selectedReason", selectedConcern ? selectedConcern.name : "", {
+                        shouldValidate: true,
+                      });
+                    }}
+                    placeholder="Select your concern"
+                    emptyMessage="No health conditions found."
+                    displayValue={(value) => {
+                      const option = healthConcerns.find(
+                        (concern) => concern.name === value,
+                      );
+                      return option ? option.name : value;
+                    }}
+                  />
+                )}
+                {form.formState.errors.selectedReason && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.selectedReason?.message as string}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            {/* Auto-select if only one option */}
+            {healthConcerns.length === 1 && !isLoadingConcerns && (
+              <div className="p-4 border border-border rounded-lg bg-white">
+                <p className="text-sm font-medium text-foreground">
+                  {healthConcerns[0].name}
                 </p>
-              )}
-            </div>
+                <input
+                  type="hidden"
+                  {...form.register("selectedReason")}
+                  value={healthConcerns[0].name}
+                />
+              </div>
+            )}
             <FormTextarea
               name="symptoms"
-              label="Please describe your symptoms in detail"
-              placeholder="Please describe your symptoms, how long you've had them, and any other relevant details..."
+              placeholder="Please share your symptoms, how long you've had them, and any other details that may help (optional)"
               rows={6}
               onKeyDown={(e: React.KeyboardEvent) => {
                 if (e.key === "Enter" && e.ctrlKey) {

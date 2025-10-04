@@ -183,7 +183,7 @@ export function PatientReviewStep() {
 
   // Get personalized label function
   const getPersonalizedLabel = () => {
-    return "Please review your information";
+    return "Review & Confirm";
   };
 
   // Use reviewData from state
@@ -261,7 +261,7 @@ export function PatientReviewStep() {
   return (
     <PatientStepShell
       title={getPersonalizedLabel()}
-      description="Please review your information before booking your appointment"
+      description="Check your details before booking."
       onBack={handleBack}
       onNext={handleSubmit}
       nextLabel="Book Appointment"

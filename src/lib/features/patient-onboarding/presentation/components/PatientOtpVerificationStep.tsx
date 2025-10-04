@@ -12,6 +12,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import Image from "next/image";
 import { getFormattedPhoneFromStorage } from "@/lib/constants/country-codes";
 // Removed unused imports for progress API
 
@@ -42,7 +43,10 @@ export function PatientOtpVerificationStep() {
   try {
     stepData = getStepComponentData("verifyOtp");
   } catch (error) {
-    console.error("PatientOtpVerificationStep: Error loading step data:", error);
+    console.error(
+      "PatientOtpVerificationStep: Error loading step data:",
+      error
+    );
     stepData = {
       stepId: 2,
       stepName: "verifyOtp",
@@ -56,7 +60,6 @@ export function PatientOtpVerificationStep() {
     };
   }
 
-
   const form = useForm<FormValues>({
     resolver: zodResolver(otpSchema),
     mode: "onChange",
@@ -66,12 +69,10 @@ export function PatientOtpVerificationStep() {
 
   useEffect(() => {
     try {
-
       // Get phone number from context state first
       if (state?.draft?.phone) {
         setPhoneNumber(state.draft.phone as string);
       } else {
-
         // First try to get phone number from direct localStorage key with proper formatting
         try {
           const directPhoneNumber = getFormattedPhoneFromStorage();
@@ -85,8 +86,8 @@ export function PatientOtpVerificationStep() {
       }
 
       // Check for stored OTP in development mode
-      if (process.env.NODE_ENV === 'development') {
-        const storedOtp = localStorage.getItem('dev-otp');
+      if (process.env.NODE_ENV === "development") {
+        const storedOtp = localStorage.getItem("dev-otp");
         if (storedOtp) {
           setDevOtp(storedOtp);
         }
@@ -95,8 +96,13 @@ export function PatientOtpVerificationStep() {
       // Mark as initialized
       setIsInitialized(true);
     } catch (error) {
-      console.error("PatientOtpVerificationStep: Error during initialization:", error);
-      setError("Failed to initialize OTP verification. Please refresh the page.");
+      console.error(
+        "PatientOtpVerificationStep: Error during initialization:",
+        error
+      );
+      setError(
+        "Failed to initialize OTP verification. Please refresh the page."
+      );
       setIsInitialized(true); // Still mark as initialized to show error
     }
   }, [state]);
@@ -104,13 +110,14 @@ export function PatientOtpVerificationStep() {
   const handleSubmit = async (values: FormValues) => {
     if (!phoneNumber) {
       console.error("No phone number found");
-      const errorMessage = "Phone number not found. Please go back and enter your phone number again.";
+      const errorMessage =
+        "Phone number not found. Please go back and enter your phone number again.";
       setError(errorMessage);
-      toast({
-        variant: "error",
-        title: "Phone Number Missing",
-        description: errorMessage,
-      });
+      // toast({
+      //   variant: "error",
+      //   title: "Phone Number Missing",
+      //   description: errorMessage,
+      // });
       return;
     }
 
@@ -128,17 +135,21 @@ export function PatientOtpVerificationStep() {
       let verifyResponse;
       try {
         // Verify OTP with API
-        verifyResponse = await patientService.verifyOtp(phoneNumber, values.otp);
+        verifyResponse = await patientService.verifyOtp(
+          phoneNumber,
+          values.otp
+        );
       } catch (apiError) {
-        console.error('API call failed:', apiError);
-        const errorMessage = 'Network error. Please check your connection and try again.';
+        console.error("API call failed:", apiError);
+        const errorMessage =
+          "Network error. Please check your connection and try again.";
 
         // Show error toast IMMEDIATELY
-        toast({
-          variant: "error",
-          title: "Network Error",
-          description: errorMessage,
-        });
+        // toast({
+        //   variant: "error",
+        //   title: "Network Error",
+        //   description: errorMessage,
+        // });
 
         // Set error state after toast
         setError(errorMessage);
@@ -146,31 +157,39 @@ export function PatientOtpVerificationStep() {
       }
 
       if (verifyResponse.success) {
-
         // Save OTP verification status to localStorage
-        localStorage.setItem('patient-otp-verified', 'true');
-        localStorage.setItem('patient-otp-verified-at', new Date().toISOString());
+        localStorage.setItem("patient-otp-verified", "true");
+        localStorage.setItem(
+          "patient-otp-verified-at",
+          new Date().toISOString()
+        );
 
         // Show success toast
-        toast({
-          variant: "success",
-          title: "Verification Complete!",
-          description: "Your phone number has been verified",
-        });
+        // toast({
+        //   variant: "success",
+        //   title: "Verification Complete!",
+        //   description: "Your phone number has been verified",
+        // });
 
         // Call progress API to get the current step where user left off
         try {
-          const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
+          const progressResponse = await patientService.getOnboardingProgress(
+            phoneNumber
+          );
 
           if (progressResponse.success && progressResponse.data) {
             const currentStep = progressResponse.data.current_step;
 
             // Navigate to the step where user left off using centralized mapping
-            if (currentStep && currentStep !== 'phone' && currentStep !== 'verify-otp') {
+            if (
+              currentStep &&
+              currentStep !== "phone" &&
+              currentStep !== "verify-otp"
+            ) {
               const targetRoute = getRouteFromApiStep(currentStep);
 
               // Special handling for completed step
-              if (currentStep === 'completed') {
+              if (currentStep === "completed") {
                 router.push("/onboarding/patient/confirmation");
               } else {
                 router.push(targetRoute);
@@ -180,71 +199,86 @@ export function PatientOtpVerificationStep() {
               router.push("/onboarding/patient/health-card");
             }
           } else {
-            console.error("Progress API failed, defaulting to health card step");
+            console.error(
+              "Progress API failed, defaulting to health card step"
+            );
             router.push("/onboarding/patient/health-card");
           }
         } catch (progressError) {
-          console.error("Error fetching progress, defaulting to health card step:", progressError);
+          console.error(
+            "Error fetching progress, defaulting to health card step:",
+            progressError
+          );
           router.push("/onboarding/patient/health-card");
         }
       } else {
         // Handle specific error types based on response message
-        let errorMessage = '';
-        let errorTitle = 'Verification Failed';
+        let errorMessage = "";
+        let errorTitle = "Verification Failed";
 
-        if (verifyResponse.message?.includes('Invalid') || verifyResponse.message?.includes('incorrect')) {
-          errorMessage = 'Invalid verification code. Please check and try again.';
-          errorTitle = 'Invalid Code';
-        } else if (verifyResponse.message?.includes('expired')) {
-          errorMessage = 'Verification code has expired. Please request a new one.';
-          errorTitle = 'Code Expired';
-        } else if (verifyResponse.message?.includes('rate limit') || verifyResponse.message?.includes('too many')) {
-          errorMessage = 'Too many attempts. Please wait a moment before trying again.';
-          errorTitle = 'Too Many Attempts';
+        if (
+          verifyResponse.message?.includes("Invalid") ||
+          verifyResponse.message?.includes("incorrect")
+        ) {
+          errorMessage =
+            "Invalid verification code. Please check and try again.";
+          errorTitle = "Invalid Code";
+        } else if (verifyResponse.message?.includes("expired")) {
+          errorMessage =
+            "Verification code has expired. Please request a new one.";
+          errorTitle = "Code Expired";
+        } else if (
+          verifyResponse.message?.includes("rate limit") ||
+          verifyResponse.message?.includes("too many")
+        ) {
+          errorMessage =
+            "Too many attempts. Please wait a moment before trying again.";
+          errorTitle = "Too Many Attempts";
         } else {
           errorMessage = verifyResponse.message || "OTP verification failed";
-          errorTitle = 'Verification Failed';
+          errorTitle = "Verification Failed";
         }
 
         // Show error toast IMMEDIATELY
-        toast({
-          variant: "error",
-          title: errorTitle,
-          description: errorMessage,
-        });
+        // toast({
+        //   variant: "error",
+        //   title: errorTitle,
+        //   description: errorMessage,
+        // });
 
         // Set error state after toast
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Unexpected error in handleSubmit:', err);
+      console.error("Unexpected error in handleSubmit:", err);
 
       // Handle different error types
-      let errorMessage = '';
-      let errorTitle = 'Unexpected Error';
+      let errorMessage = "";
+      let errorTitle = "Unexpected Error";
 
       if (err instanceof Error) {
-        if (err.message.includes('Network error')) {
-          errorMessage = 'Network error. Please check your connection and try again.';
-          errorTitle = 'Network Error';
-        } else if (err.message.includes('timeout')) {
-          errorMessage = 'Request timed out. Please try again.';
-          errorTitle = 'Request Timeout';
+        if (err.message.includes("Network error")) {
+          errorMessage =
+            "Network error. Please check your connection and try again.";
+          errorTitle = "Network Error";
+        } else if (err.message.includes("timeout")) {
+          errorMessage = "Request timed out. Please try again.";
+          errorTitle = "Request Timeout";
         } else {
           errorMessage = `Error: ${err.message}`;
-          errorTitle = 'Error';
+          errorTitle = "Error";
         }
       } else {
-        errorMessage = 'An unexpected error occurred. Please try again.';
-        errorTitle = 'Unexpected Error';
+        errorMessage = "An unexpected error occurred. Please try again.";
+        errorTitle = "Unexpected Error";
       }
 
       // Show error toast IMMEDIATELY
-      toast({
-        variant: "error",
-        title: errorTitle,
-        description: errorMessage,
-      });
+      // toast({
+      //   variant: "error",
+      //   title: errorTitle,
+      //   description: errorMessage,
+      // });
 
       // Set error state after toast
       setError(errorMessage);
@@ -262,13 +296,14 @@ export function PatientOtpVerificationStep() {
   const handleResendOtp = async () => {
     if (!phoneNumber) {
       console.error("No phone number found for resending OTP");
-      const errorMessage = "Phone number not found. Please go back and enter your phone number again.";
+      const errorMessage =
+        "Phone number not found. Please go back and enter your phone number again.";
       setError(errorMessage);
-      toast({
-        variant: "error",
-        title: "Phone Number Missing",
-        description: errorMessage,
-      });
+      // toast({
+      //   variant: "error",
+      //   title: "Phone Number Missing",
+      //   description: errorMessage,
+      // });
       return;
     }
 
@@ -286,22 +321,22 @@ export function PatientOtpVerificationStep() {
 
       if (response.success) {
         // Extract OTP from response data for development mode
-        if (response.data && typeof response.data === 'string') {
+        if (response.data && typeof response.data === "string") {
           // Extract OTP from the message string (format: "Your verification code for 123 Walkin Clinic is 458527. It expires in 5 minutes.")
           const otpMatch = (response.data as string).match(/\b(\d{6})\b/);
           if (otpMatch) {
             setDevOtp(otpMatch[1]);
             // Store in localStorage for persistence across page refreshes
-            localStorage.setItem('dev-otp', otpMatch[1]);
+            localStorage.setItem("dev-otp", otpMatch[1]);
           }
         }
 
         // Show success toast
-        toast({
-          variant: "success",
-          title: "Code Sent!",
-          description: "A new verification code has been sent to your phone.",
-        });
+        // toast({
+        //   variant: "success",
+        //   title: "Code Sent!",
+        //   description: "A new verification code has been sent to your phone.",
+        // });
 
         // Start countdown timer
         setCountdown(60);
@@ -315,28 +350,28 @@ export function PatientOtpVerificationStep() {
           });
         }, 1000);
       } else {
-        const errorMessage = response.message || 'Failed to resend code';
+        const errorMessage = response.message || "Failed to resend code";
 
         // Show error toast IMMEDIATELY
-        toast({
-          variant: "error",
-          title: "Resend Failed",
-          description: errorMessage,
-        });
+        // toast({
+        //   variant: "error",
+        //   title: "Resend Failed",
+        //   description: errorMessage,
+        // });
 
         // Set error state after toast
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Error resending OTP:', err);
-      const errorMessage = 'Failed to resend code. Please try again.';
+      console.error("Error resending OTP:", err);
+      const errorMessage = "Failed to resend code. Please try again.";
 
       // Show error toast IMMEDIATELY
-      toast({
-        variant: "error",
-        title: "Resend Failed",
-        description: errorMessage,
-      });
+      // toast({
+      //   variant: "error",
+      //   title: "Resend Failed",
+      //   description: errorMessage,
+      // });
 
       // Set error state after toast
       setError(errorMessage);
@@ -356,8 +391,12 @@ export function PatientOtpVerificationStep() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-foreground mb-2">Configuration Error</h1>
-          <p className="text-muted-foreground mb-4">Failed to load step configuration</p>
+          <h1 className="text-xl font-semibold text-foreground mb-2">
+            Configuration Error
+          </h1>
+          <p className="text-muted-foreground mb-4">
+            Failed to load step configuration
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
@@ -382,7 +421,13 @@ export function PatientOtpVerificationStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading...</p>
           </div>
         </div>
@@ -417,7 +462,9 @@ export function PatientOtpVerificationStep() {
   return (
     <PatientStepShell
       title="Verify your phone number"
-      description={`We sent a 6-digit code to ${phoneNumber || 'your phone'}. Please enter it below.`}
+      description={` 6-digit code has been sent to ${
+        phoneNumber || "your phone"
+      }. Enter it below to continue.`}
       onBack={handleBack}
       onNext={async () => {
         try {
@@ -438,23 +485,23 @@ export function PatientOtpVerificationStep() {
       <FormProvider {...form}>
         <div className="max-w-xl mx-auto space-y-6">
           {/* Error Display */}
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-700">{error}</p>
-            </div>
-          )}
 
           <div className="space-y-4">
             <FormInput
               name="otp"
               type="text"
-              label="Enter 6-digit code"
-              placeholder="000000"
+              label=""
+              placeholder="Enter 6-digit code"
               maxLength={6}
-              className="text-center text-2xl tracking-widest"
+              className="text-left text-2xl tracking-normal"
             />
-
-            <div className="text-center">
+            {error && (
+              <div className="p-0 ">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+            <div className="text-sm text-muted-foreground text-left">
+              Code expires in 5 minutes.{" "}
               <button
                 type="button"
                 onClick={handleResendOtp}
@@ -466,34 +513,9 @@ export function PatientOtpVerificationStep() {
             </div>
 
             {/* Development OTP Display */}
-            {devOtp && process.env.NODE_ENV === 'development' && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="text-center">
-                  <p className="text-sm font-medium text-blue-800 mb-2">🔧 Development Mode</p>
-                  <p className="text-sm text-blue-700 mb-2">OTP Code:</p>
-                  <div className="text-2xl font-bold text-blue-900 tracking-widest bg-blue-100 px-4 py-2 rounded-lg inline-block mb-3">
-                    {devOtp}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      form.setValue('otp', devOtp);
-                      form.trigger('otp'); // Trigger validation after setting value
-                    }}
-                    className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Auto-fill OTP
-                  </button>
-                  <p className="text-xs text-blue-600 mt-2">This is only visible in development mode</p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Info message */}
-          <div className="text-sm text-muted-foreground text-center">
-            Didn&apos;t receive the code? Check your SMS messages or try resending.
-          </div>
         </div>
       </FormProvider>
     </PatientStepShell>

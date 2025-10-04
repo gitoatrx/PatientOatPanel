@@ -5,11 +5,13 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import Image from "next/image";
 import { ChevronLeft, LogOut } from "lucide-react";
 import { BimbleLogoIcon } from "../../../../../../public/icons/icons";
 // import { gsap } from "gsap"; // COMMENTED OUT FOR TESTING
 import { BaseErrorBoundary } from "@/components/error-boundaries/BaseErrorBoundary";
 import { hasActiveSession, logout } from "@/lib/utils/auth-utils";
+import { useClinic } from "@/contexts/ClinicContext";
 // Removed tokenStorage import - not needed in UI-only mode
 
 interface PatientStepShellProps {
@@ -59,6 +61,7 @@ export function PatientStepShell({
   // totalSteps,
 }: PatientStepShellProps) {
   const [hasUserToken, setHasUserToken] = useState(false);
+  const { clinicInfo } = useClinic();
 
   // Check for active session on mount
   useEffect(() => {
@@ -170,23 +173,23 @@ export function PatientStepShell({
                 <div className="flex-1 flex justify-center">
                   <Link
                     href="/"
-                    aria-label="123Walkin home"
+                    aria-label={`${clinicInfo?.name || 'Clinic'} home`}
                     className="cursor-pointer"
                   >
                     <BimbleLogoIcon className="w-7 h-7" />
                   </Link>
                 </div>
-                <div className="w-24 flex justify-end">
+                <div className="flex justify-end">
                   {showLogout && hasUserToken && (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={handleLogout}
-                      className="inline-flex items-center gap-1 h-8 px-3 bg-red-500 border-border text-white hover:bg-red-600 hover:text-white cursor-pointer"
+                      className="inline-flex items-center gap-1 h-8 w-8 p-0 bg-red-500 border-border text-white hover:bg-red-600 hover:text-white cursor-pointer"
                       disabled={isSubmitting}
                     >
-                      <LogOut className="h-4 w-4 " />
+                      <LogOut className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
@@ -206,7 +209,7 @@ export function PatientStepShell({
         {/* Only middle content animates */}
         <div
           key={`${title}-${progressPercent}`}
-          className="space-y-1 bg-background"
+          className="space-y-1 bg-background "
           ref={contentRef}
         >
           {title && description && (
@@ -216,7 +219,7 @@ export function PatientStepShell({
                   {title}
                 </h1>
                 {description && (
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground italic mt-1 pb-[20px] ">
                     {description}
                   </p>
                 )}

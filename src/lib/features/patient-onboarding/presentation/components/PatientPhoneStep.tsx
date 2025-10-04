@@ -11,6 +11,7 @@ import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { useState } from "react";
 import { formatPhoneWithCountryCode } from "@/lib/constants/country-codes";
+import { LocationPermissionRequest } from "@/components/onboarding/common/LocationPermissionRequest";
 
 const phoneSchema = z.object({
   phone: z
@@ -119,7 +120,6 @@ export function PatientPhoneStep() {
       // Format phone number for API with environment-based country code
       const formattedPhone = formatPhoneWithCountryCode(values.phone);
 
-
       // Call OTP API with additional error handling
       let otpResponse;
       try {
@@ -132,7 +132,6 @@ export function PatientPhoneStep() {
 
       // Always save phone number locally, regardless of OTP API response
       try {
-
         // Save phone number directly to localStorage for immediate access
         localStorage.setItem('patient-phone-number', formattedPhone);
 
@@ -149,8 +148,7 @@ export function PatientPhoneStep() {
         // Continue anyway - we still want to navigate to OTP step
       }
 
-      // Always navigate to OTP verification step, regardless of API response
-
+      // Navigate to OTP verification step
       if (otpResponse && otpResponse.success) {
         router.push("/onboarding/patient/verify-otp");
       } else {
@@ -187,6 +185,7 @@ export function PatientPhoneStep() {
     router.push("/");
   };
 
+
   // Get real-time form state updates
   const { isValid } = useFormState({
     control: form.control,
@@ -194,7 +193,7 @@ export function PatientPhoneStep() {
 
   return (
     <PatientStepShell
-      title="What's your phone number?"
+      title="Enter your phone number"
       onBack={handleBack}
       onNext={async () => {
         try {
@@ -212,6 +211,17 @@ export function PatientPhoneStep() {
       currentStep={1}
       totalSteps={15}
     >
+      {/* Background location detection - invisible to user */}
+      <div className="hidden">
+        <LocationPermissionRequest
+          onLocationDetected={(city) => console.log('Location detected in background:', city)}
+          onPermissionDenied={() => console.log('Location permission denied in background')}
+          onSkip={() => console.log('Location request skipped in background')}
+          showSkipOption={false}
+          showLoadingState={false}
+        />
+      </div>
+      
       <FormProvider {...form}>
         <div className="max-w-xl mx-auto space-y-6">
           {/* Error Display */}
@@ -224,10 +234,14 @@ export function PatientPhoneStep() {
           <FormPhoneInput
             name="phone"
             type="tel"
-            label="Phone Number"
-            placeholder="Enter your phone number"
+            label="Enter your phone number"
+            placeholder="(604) 555-0123"
+            description=""
           />
         </div>
+        <p className="text-sm text-gray-500">
+          We&apos;ll text you a 6-digit code to verify it.
+        </p>
       </FormProvider>
     </PatientStepShell>
   );

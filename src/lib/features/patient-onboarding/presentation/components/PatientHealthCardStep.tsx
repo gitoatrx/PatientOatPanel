@@ -14,11 +14,14 @@ import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
 import { RadioOptionSkeleton } from "@/components/ui/skeleton-loaders";
 import { PhoneUpdateModal } from "@/components/ui/phone-update-modal";
+import { ReturningPatientDecisionModal } from "@/components/ui/returning-patient-decision-modal";
+import { OnboardingReturningPatientDecision, OnboardingHealthCardPhoneConflict } from "@/lib/types/api";
 
 const healthCardSchema = z
   .object({
     hasHealthCard: z.string().min(1, "Please select an option"),
     healthCardNumber: z.string().optional(),
+    emailAddress: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     // Only validate healthCardNumber if hasHealthCard is "yes"
@@ -65,6 +68,29 @@ const healthCardSchema = z
         return;
       }
     }
+
+    // Only validate emailAddress if hasHealthCard is "no"
+    if (data.hasHealthCard === "no") {
+      if (!data.emailAddress || data.emailAddress.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Email address is required",
+          path: ["emailAddress"],
+        });
+        return;
+      }
+
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.emailAddress)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a valid email address",
+          path: ["emailAddress"],
+        });
+        return;
+      }
+    }
   });
 
 type FormValues = z.infer<typeof healthCardSchema>;
@@ -82,8 +108,11 @@ export function PatientHealthCardStep() {
   const [error, setError] = useState<string | null>(null);
   const [isLoadingProgress, setIsLoadingProgress] = useState<boolean>(true);
   const [showPhoneUpdateModal, setShowPhoneUpdateModal] = useState<boolean>(false);
+  const [showReturningPatientModal, setShowReturningPatientModal] = useState<boolean>(false);
   const [pendingNavigation, setPendingNavigation] = useState<{ nextStep: string; nextRoute: string } | null>(null);
   const [phoneUpdateContext, setPhoneUpdateContext] = useState<{ existing_phone: string; submitted_phone: string } | null>(null);
+  const [phoneConflict, setPhoneConflict] = useState<OnboardingHealthCardPhoneConflict | null>(null);
+  const [returningPatientDecision, setReturningPatientDecision] = useState<OnboardingReturningPatientDecision | null>(null);
   
   // Get step configuration (unused but kept for consistency)
   // const stepData = getStepComponentData("healthCard");
@@ -94,7 +123,8 @@ export function PatientHealthCardStep() {
     reValidateMode: "onChange",
     defaultValues: { 
       hasHealthCard: "", 
-      healthCardNumber: "" 
+      healthCardNumber: "",
+      emailAddress: ""
     },
   });
 
@@ -112,17 +142,30 @@ export function PatientHealthCardStep() {
           form.setValue('healthCardNumber', healthCardData.health_card_number);
         } else {
           form.setValue('hasHealthCard', 'no');
+          // Prefill email if available
+          if (healthCardData.email_address) {
+            form.setValue('emailAddress', healthCardData.email_address);
+          }
         }
       } else {
         // Set default values if no existing data
         form.setValue('hasHealthCard', '');
         form.setValue('healthCardNumber', '');
+        form.setValue('emailAddress', '');
       }
+
+      // Check for returning patient decision in the progress response
+      // COMMENTED OUT FOR NOW - returning patient popup
+      // if (progressResponse.data.returning_patient_decision) {
+      //   setReturningPatientDecision(progressResponse.data.returning_patient_decision);
+      //   setShowReturningPatientModal(true);
+      // }
     } catch (error) {
       console.error('Error fetching progress data:', error);
       // Set default values on error
       form.setValue('hasHealthCard', '');
       form.setValue('healthCardNumber', '');
+      form.setValue('emailAddress', '');
     } finally {
       setIsLoadingProgress(false);
     }
@@ -145,6 +188,7 @@ export function PatientHealthCardStep() {
       form.reset({
         hasHealthCard: (state.draft.hasHealthCard as string) || "",
         healthCardNumber: (state.draft.healthCardNumber as string) || "",
+        emailAddress: (state.draft.emailAddress as string) || "",
       });
     }
   }, [state?.draft, form]);
@@ -161,11 +205,13 @@ export function PatientHealthCardStep() {
       // Determine health card number - send empty string if no health card, otherwise send the number
       const healthCardNumber = values.hasHealthCard === "yes" ? values.healthCardNumber : "";
       
+      // Determine email address - send empty string if user has health card, otherwise send the email
+      const emailAddress = values.hasHealthCard === "no" ? values.emailAddress : "";
       
       let apiResponse;
       try {
         // Call health card API
-        apiResponse = await patientService.saveHealthCard(phoneNumber, healthCardNumber);
+        apiResponse = await patientService.saveHealthCard(phoneNumber, healthCardNumber, undefined, emailAddress);
       } catch (apiError) {
         console.error('API call failed:', apiError);
         const errorMessage = 'Network error. Please check your connection and try again.';
@@ -183,7 +229,35 @@ export function PatientHealthCardStep() {
       }
       
       if (apiResponse.success) {
-        // Check if phone update is required
+        // Handle returning patient decision first
+        // COMMENTED OUT FOR NOW - returning patient popup
+        // if (apiResponse.data.returning_patient_decision) {
+        //   setReturningPatientDecision(apiResponse.data.returning_patient_decision);
+        //   setShowReturningPatientModal(true);
+        //   return;
+        // }
+
+        // Check for phone conflict (new structure)
+        const phoneConflictData = apiResponse.data.state?.health_card?.phone_conflict;
+        if (phoneConflictData && phoneConflictData.requires_confirmation) {
+          setPhoneConflict(phoneConflictData);
+          
+          // Store the navigation info
+          const nextStep = apiResponse.data.current_step;
+          const nextRoute = getRouteFromApiStep(nextStep);
+          setPendingNavigation({ nextStep, nextRoute });
+          
+          // Set phone update context from phone conflict data
+          setPhoneUpdateContext({
+            existing_phone: phoneConflictData.clinic_patient_phone || '',
+            submitted_phone: phoneConflictData.otp_phone || '',
+          });
+          
+          setShowPhoneUpdateModal(true);
+          return;
+        }
+
+        // Legacy phone update handling (backward compatibility)
         if (apiResponse.data.phone_update_required) {
           // Store the navigation info and phone update context, then show modal
           const nextStep = apiResponse.data.current_step;
@@ -196,26 +270,27 @@ export function PatientHealthCardStep() {
           }
           
           setShowPhoneUpdateModal(true);
-        } else {
-          // Navigate to next step normally
-          try {
-            const nextStep = apiResponse.data.current_step;
-            const nextRoute = getRouteFromApiStep(nextStep);
-            router.push(nextRoute);
-          } catch (saveError) {
-            console.error('Error saving step:', saveError);
-            const errorMessage = 'Failed to save your information. Please try again.';
-            
-            // Show error toast IMMEDIATELY
-            toast({
-              variant: "error",
-              title: "Save Error",
-              description: errorMessage,
-            });
-            
-            // Set error state after toast
-            setError(errorMessage);
-          }
+          return;
+        }
+
+        // Navigate to next step normally
+        try {
+          const nextStep = apiResponse.data.current_step;
+          const nextRoute = getRouteFromApiStep(nextStep);
+          router.push(nextRoute);
+        } catch (saveError) {
+          console.error('Error saving step:', saveError);
+          const errorMessage = 'Failed to save your information. Please try again.';
+          
+          // Show error toast IMMEDIATELY
+          toast({
+            variant: "error",
+            title: "Save Error",
+            description: errorMessage,
+          });
+          
+          // Set error state after toast
+          setError(errorMessage);
         }
       } else {
         // Handle API error response
@@ -281,11 +356,25 @@ export function PatientHealthCardStep() {
       // Get the current form values
       const formValues = form.getValues();
       const healthCardNumber = formValues.hasHealthCard === "yes" ? formValues.healthCardNumber : "";
+      const emailAddress = formValues.hasHealthCard === "no" ? formValues.emailAddress : "";
       
       // Resend health card API with update_primary_phone flag
-      const apiResponse = await patientService.saveHealthCard(phoneNumber, healthCardNumber, updatePrimaryPhone);
+      const apiResponse = await patientService.saveHealthCard(phoneNumber, healthCardNumber, updatePrimaryPhone, emailAddress);
       
       if (apiResponse.success) {
+        // Close phone update modal
+        setShowPhoneUpdateModal(false);
+        setPhoneUpdateContext(null);
+        setPhoneConflict(null);
+        
+        // Check for returning patient decision after phone update
+        // COMMENTED OUT FOR NOW - returning patient popup
+        // if (apiResponse.data.returning_patient_decision) {
+        //   setReturningPatientDecision(apiResponse.data.returning_patient_decision);
+        //   setShowReturningPatientModal(true);
+        //   return;
+        // }
+        
         // Navigate to next step
         const nextStep = apiResponse.data.current_step;
         const nextRoute = getRouteFromApiStep(nextStep);
@@ -308,6 +397,53 @@ export function PatientHealthCardStep() {
     setShowPhoneUpdateModal(false);
     setPendingNavigation(null);
     setPhoneUpdateContext(null);
+  };
+
+  const handleReturningPatientAction = async (action: 'start_new' | 'reschedule' | 'manage') => {
+    try {
+      setError(null);
+      
+      // Get the current form values
+      const formValues = form.getValues();
+      const healthCardNumber = formValues.hasHealthCard === "yes" ? formValues.healthCardNumber : "";
+      const emailAddress = formValues.hasHealthCard === "no" ? formValues.emailAddress : "";
+      
+      // Resend health card API - the backend should handle the returning patient decision
+      const apiResponse = await patientService.saveHealthCard(phoneNumber, healthCardNumber, undefined, emailAddress);
+      
+      if (apiResponse.success) {
+        // Close the modal and clear state
+        setShowReturningPatientModal(false);
+        setReturningPatientDecision(null);
+        
+        // Check if there are still phone conflicts or other issues
+        const phoneConflictData = apiResponse.data.state?.health_card?.phone_conflict;
+        if (phoneConflictData && phoneConflictData.requires_confirmation) {
+          setPhoneConflict(phoneConflictData);
+          setPhoneUpdateContext({
+            existing_phone: phoneConflictData.clinic_patient_phone || '',
+            submitted_phone: phoneConflictData.otp_phone || '',
+          });
+          setShowPhoneUpdateModal(true);
+          return;
+        }
+        
+        // Navigate to next step
+        const nextStep = apiResponse.data.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep);
+        router.push(nextRoute);
+      } else {
+        setError(apiResponse.message || "Failed to process returning patient decision");
+      }
+    } catch (error) {
+      console.error('Error handling returning patient action:', error);
+      setError("Network error. Please check your connection and try again.");
+    }
+  };
+
+  const handleCloseReturningPatientModal = () => {
+    setShowReturningPatientModal(false);
+    setReturningPatientDecision(null);
   };
 
   // Get real-time form state updates
@@ -453,6 +589,18 @@ export function PatientHealthCardStep() {
                 />
               </div>
             )}
+
+            {hasHealthCard === "no" && (
+              <div className="mt-6">
+                <FormInput
+                  name="emailAddress"
+                  label="What is your email address?"
+                  placeholder="Enter your email address"
+                  type="email"
+                  inputMode="email"
+                />
+              </div>
+            )}
           </div>
         </div>
       </FormProvider>
@@ -466,6 +614,17 @@ export function PatientHealthCardStep() {
         currentPhone={phoneNumber}
         phoneUpdateContext={phoneUpdateContext || undefined}
       />
+
+      {/* Returning Patient Decision Modal */}
+      {/* COMMENTED OUT FOR NOW - returning patient popup */}
+      {/* {returningPatientDecision && (
+        <ReturningPatientDecisionModal
+          isOpen={showReturningPatientModal}
+          onClose={handleCloseReturningPatientModal}
+          onAction={handleReturningPatientAction}
+          decision={returningPatientDecision}
+        />
+      )} */}
     </PatientStepShell>
   );
 }
