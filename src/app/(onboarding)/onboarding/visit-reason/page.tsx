@@ -149,7 +149,6 @@ export default function VisitReasonPage() {
             </div>
             <FormTextarea
               name="symptoms"
-              label="Please describe your symptoms in detail"
               placeholder={visitReasonInfo.placeholder}
               rows={6}
               onKeyDown={(e: React.KeyboardEvent) => {

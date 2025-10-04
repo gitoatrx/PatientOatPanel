@@ -119,8 +119,22 @@ export function PlacesAddressFields({
   // Google Places loading is handled by hook
 
   useEffect(() => {
-    if (!cityValue) detectLocation();
-  }, [cityValue, detectLocation]);
+    // Only auto-detect location if no city is set and we haven't already detected one
+    // This prevents unnecessary location requests since we now handle it earlier in onboarding
+    if (!cityValue && !detectedCity) {
+      // Check if we have a cached location from earlier in the onboarding process
+      const cachedLocation = localStorage.getItem('patient-detected-location');
+      if (cachedLocation) {
+        setValue(fieldNames.city, cachedLocation, {
+          shouldValidate: true,
+          shouldTouch: true,
+        });
+      } else {
+        // Only detect location if no cached location exists
+        detectLocation();
+      }
+    }
+  }, [cityValue, detectedCity, detectLocation, setValue, fieldNames.city]);
   useEffect(() => {
     if (detectedCity && !cityValue)
       rhfSetValue(fieldNames.city as never, detectedCity as never);
@@ -595,7 +609,7 @@ export function PlacesAddressFields({
                     : "Start typing your address...")
                 }
                 className={cn(
-                  "w-full h-14 rounded-md border-1 border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text",
+                  "w-full h-14 rounded-md border-1 border-input bg-white px-3 py-2 text-sm font-semibold ring-offset-background focus-visible:outline-none focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text",
                   "pl-3 pr-10",
                 )}
               />
@@ -680,8 +694,8 @@ export function PlacesAddressFields({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="relative">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="relative sm:col-span-2">
           <FormInput
             name={fieldNames.city}
             type="text"
@@ -713,14 +727,14 @@ export function PlacesAddressFields({
         </div>
         <FormSelect
           name={fieldNames.province}
-          label={labels?.province ?? "Province"}
-          placeholder="Province"
+          label={labels?.province ?? "Prov"}
+          placeholder="Prov"
           options={CANADIAN_PROVINCES}
         />
         <FormInput
           name={fieldNames.postalCode}
           type="text"
-          label={labels?.postalCode ?? "Postal Code"}
+          label={labels?.postalCode ?? "Zip"}
           placeholder={placeholders?.postalCode ?? "V6B 1A1"}
           maxLength={7}
           onChange={handlePostalCodeChange}
