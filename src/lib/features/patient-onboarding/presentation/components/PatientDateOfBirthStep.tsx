@@ -13,6 +13,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import Image from "next/image";
 
 const dateOfBirthSchema = z
   .object({
@@ -288,7 +289,13 @@ export function PatientDateOfBirthStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading your information...</p>
           </div>
         </div>
@@ -298,8 +305,8 @@ export function PatientDateOfBirthStep() {
 
   return (
     <PatientStepShell
-      title="When were you born?"
-      description="We need this information for your medical records."
+      title="Please enter your date of birth"
+      description="This helps us create your medical record and ensure accurate care."
       onBack={handleBack}
       onNext={async () => {
         try {
@@ -346,7 +353,7 @@ export function PatientDateOfBirthStep() {
               <FormSelect
                 name="birthMonth"
                 label="Month"
-                placeholder="Select month"
+                placeholder="Select"
                 options={monthOptions}
               />
             </div>

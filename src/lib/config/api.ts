@@ -8,6 +8,7 @@ export const API_CONFIG = {
 
   // API Endpoints - OTP operations and progress tracking
   ENDPOINTS: {
+    CLINIC_INFO: '/clinic/clinic-info',
     SEND_OTP: '/clinic/onboarding/send-otp',
     VERIFY_OTP: '/clinic/onboarding/verify-otp',
     ONBOARDING_PROGRESS: '/clinic/onboarding/progress',

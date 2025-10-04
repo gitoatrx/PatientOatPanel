@@ -12,6 +12,7 @@ import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
 import { useEnterKey } from "@/lib/hooks/useEnterKey";
+import Image from "next/image";
 
 const emailSchema = z.object({
   email: z
@@ -28,6 +29,7 @@ export function PatientEmailStep() {
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
+  const [hasExistingEmail, setHasExistingEmail] = useState(false);
   
   // Get step configuration
   const stepData = getStepComponentData("email");
@@ -50,12 +52,16 @@ export function PatientEmailStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.personal_info?.email) {
         const email = progressResponse.data.state.personal_info.email;
+        setHasExistingEmail(true);
         
         // Prefill form with existing data
         form.setValue('email', email);
+      } else {
+        setHasExistingEmail(false);
       }
     } catch (error) {
       console.error('Error fetching progress for prefill:', error);
+      setHasExistingEmail(false);
     } finally {
       setIsLoadingProgress(false);
     }
@@ -184,7 +190,13 @@ export function PatientEmailStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading your information...</p>
           </div>
         </div>
@@ -194,8 +206,8 @@ export function PatientEmailStep() {
 
   return (
     <PatientStepShell
-      title="What's your email address?"
-      description="We'll use this to send you appointment confirmations and updates."
+      title={hasExistingEmail ? "Confirm your email address" : "What is your email address?"}
+      description={hasExistingEmail ? "We have this on file. Update it if it has changed." : "We'll use this to send appointment confirmations and important updates."}
       onBack={handleBack}
       onNext={async () => {
         try {
