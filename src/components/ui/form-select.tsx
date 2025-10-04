@@ -51,7 +51,7 @@ export function FormSelect({
     <div className={cn("space-y-2 w-full", className)}>
       <label
         htmlFor={name}
-        className="block text-lg font-semibold text-foreground"
+        className="block text-lg font-normal text-foreground"
       >
         {label}
       </label>
@@ -61,10 +61,10 @@ export function FormSelect({
           {...register(name, {
             onChange: handleChange,
           })}
-          className="w-full p-4 pr-12 border border-border rounded-lg transition-colors text-base bg-background text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed min-w-0"
+          className="w-full p-4 pr-12 border border-border rounded-lg transition-colors text-base bg-white text-foreground appearance-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed min-w-0 font-bold"
         >
           {placeholder && (
-            <option value="" disabled>
+            <option value="" disabled className="font-normal">
               {placeholder}
             </option>
           )}

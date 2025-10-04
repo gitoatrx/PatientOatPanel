@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { hasActiveSession, getPhoneNumber } from "@/lib/utils/auth-utils";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep, API_STEP_TO_ROUTE_MAP } from "@/lib/config/api";
+import Image from "next/image";
 
 interface RouteProtectionProps {
   children: React.ReactNode;
@@ -84,7 +85,13 @@ export function RouteProtection({ children }: RouteProtectionProps) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <Image
+            src="/loading.svg"
+            alt="Loading"
+            width={48}
+            height={48}
+            className="mx-auto mb-2"
+          />
           <p className="text-sm text-muted-foreground">Checking your session...</p>
         </div>
       </div>

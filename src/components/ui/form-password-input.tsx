@@ -36,7 +36,7 @@ export function FormPasswordInput({
     <div className="space-y-2">
       <label
         htmlFor={name}
-        className="block text-lg font-semibold text-foreground"
+        className="block text-lg font-normal text-foreground"
       >
         {label}
       </label>
@@ -47,7 +47,7 @@ export function FormPasswordInput({
           {...register(name, options)}
           {...props}
           className={cn(
-            "w-full p-4 border border-border rounded-lg transition-colors text-base bg-background text-foreground placeholder:text-muted-foreground",
+            "w-full p-4 border border-border rounded-lg transition-colors text-base bg-white text-foreground placeholder:text-muted-foreground placeholder:font-normal font-bold",
             fieldError
               ? "border-destructive focus:border-destructive"
               : isSuccess

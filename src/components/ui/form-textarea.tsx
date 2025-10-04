@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export interface FormTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   name: string;
-  label: string;
+  label?: string;
   options?: RegisterOptions;
   error?: string;
 }
@@ -28,18 +28,20 @@ export function FormTextarea({
 
   return (
     <div className="space-y-2">
-      <label
-        htmlFor={name}
-        className="block text-lg font-semibold text-foreground"
-      >
-        {label}
-      </label>
+      {label && (
+        <label
+          htmlFor={name}
+          className="block text-lg font-normal text-foreground"
+        >
+          {label}
+        </label>
+      )}
       <textarea
         id={name}
         {...register(name, options)}
         {...props}
         className={cn(
-          "w-full p-4 border border-border rounded-lg transition-colors resize-none text-base bg-background text-foreground placeholder:text-muted-foreground",
+          "w-full p-4 border border-border rounded-lg transition-colors resize-none text-base bg-white text-foreground placeholder:text-muted-foreground placeholder:font-normal font-bold",
           fieldError
             ? "border-destructive focus:border-destructive"
             : "focus:border-primary",
