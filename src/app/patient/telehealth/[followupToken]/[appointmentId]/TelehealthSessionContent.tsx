@@ -14,8 +14,11 @@ import { useChatApi } from "@/lib/services/chatApiService";
 import { useWaitingRoomService } from "@/lib/services/waitingRoomService";
 import { useVideoEventsService } from "@/lib/services/videoEventsService";
 import { AblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
+import { patientService } from "@/lib/services/patientService";
+import { AppointmentStateData } from "@/lib/types/api";
+import { API_CONFIG } from "@/lib/config/api";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Shield, X } from "lucide-react";
+import { CheckCircle2, XCircle, X, Lock } from "lucide-react";
 
 interface TelehealthSessionContentProps {
   sessionId: string;
@@ -26,6 +29,7 @@ interface TelehealthSessionContentProps {
   messages: TelehealthChatMessage[];
   followupToken: string;
   appointmentId: string;
+  appointmentState: AppointmentStateData | null;
 }
 
 export function TelehealthSessionContent({
@@ -34,6 +38,7 @@ export function TelehealthSessionContent({
   participants: _participants,
   followupToken,
   appointmentId,
+  appointmentState: initialAppointmentState,
 }: TelehealthSessionContentProps) {
   const [remoteContainer, setRemoteContainer] = useState<HTMLDivElement | null>(null);
   const [localContainer, setLocalContainer] = useState<HTMLDivElement | null>(null);
@@ -45,6 +50,7 @@ export function TelehealthSessionContent({
   const [showPreJoin, setShowPreJoin] = useState(true);
   const [pendingJoin, setPendingJoin] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [autoStartFailed, setAutoStartFailed] = useState(false);
   
   // Picture-in-Picture state (now managed by the hook)
   const [pipPreferenceEnabled, setPipPreferenceEnabled] = useState(false);
@@ -65,6 +71,90 @@ export function TelehealthSessionContent({
   // State for previous chat messages (API) and loading status
   const [previousMessages, setPreviousMessages] = useState<TelehealthChatMessage[]>([]);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+  
+  // Appointment state - always fetch client-side
+  const [appointmentState, setAppointmentState] = useState<AppointmentStateData | null>(null);
+  const [appointmentStateLoaded, setAppointmentStateLoaded] = useState(false);
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log("🔍 Client-side: Current appointment state:", appointmentState);
+    console.log("🔍 Client-side: Appointment state loaded:", appointmentStateLoaded);
+    if (appointmentState) {
+      console.log("🔍 Client-side: Doctor name:", appointmentState.doctor?.full_name);
+      console.log("🔍 Client-side: Appointment time:", appointmentState.scheduled_for);
+      console.log("🔍 Client-side: is_with_doctor:", appointmentState.is_with_doctor);
+      console.log("🔍 Client-side: is_waiting:", appointmentState.is_waiting);
+      
+      // Determine which button will show
+      let buttonText = "Join Waiting Room";
+      if (appointmentState.is_with_doctor) {
+        buttonText = "Start Your Appointment";
+      } else if (appointmentState.is_waiting) {
+        buttonText = "Continue Waiting";
+      }
+      console.log("🔍 Client-side: Button will show:", buttonText);
+    }
+  }, [appointmentState, appointmentStateLoaded]);
+
+  // Always fetch appointment state on client-side when component mounts
+  React.useEffect(() => {
+    if (!appointmentStateLoaded && appointmentId && followupToken) {
+      console.log("🔄 Client-side: Fetching appointment state...");
+      console.log("🔄 Client-side: appointmentId:", appointmentId);
+      console.log("🔄 Client-side: followupToken:", followupToken);
+      
+      patientService.getAppointmentState(appointmentId, followupToken)
+        .then(response => {
+          console.log("📡 Client-side: Full API response:", JSON.stringify(response, null, 2));
+          if (response.success && response.data) {
+            console.log("📡 Client-side: Appointment data:", JSON.stringify(response.data, null, 2));
+            console.log("📡 Client-side: is_with_doctor:", response.data.is_with_doctor);
+            console.log("📡 Client-side: is_waiting:", response.data.is_waiting);
+            console.log("📡 Client-side: status:", response.data.status);
+            console.log("📡 Client-side: doctor info:", response.data.doctor);
+            
+            setAppointmentState(response.data);
+            console.log("✅ Client-side: Successfully fetched appointment state");
+          } else {
+            console.log("❌ Client-side: API call failed or returned no data");
+            console.log("❌ Client-side: Response success:", response.success);
+            console.log("❌ Client-side: Response data:", response.data);
+          }
+          setAppointmentStateLoaded(true);
+        })
+        .catch(error => {
+          console.error("💥 Client-side: Failed to fetch appointment state:", error);
+          setAppointmentStateLoaded(true);
+        });
+    }
+  }, [appointmentStateLoaded, appointmentId, followupToken]);
+
+  // Auto-start session when doctor is ready
+  React.useEffect(() => {
+    console.log("🔍 Auto-start check:", {
+      is_with_doctor: appointmentState?.is_with_doctor,
+      appointmentStateLoaded,
+      showPreJoin,
+      autoStartFailed,
+      appointmentState: appointmentState
+    });
+    
+    if (appointmentState?.is_with_doctor && appointmentStateLoaded && showPreJoin && !autoStartFailed) {
+      console.log("🚀 Auto-starting session - doctor is ready!");
+      console.log("🚀 Auto-start: appointmentState.is_with_doctor =", appointmentState.is_with_doctor);
+      // Small delay to ensure UI is ready
+      setTimeout(() => {
+        try {
+          console.log("🚀 Auto-start: Calling onJoinCallDirect()");
+          onJoinCallDirect();
+        } catch (error) {
+          console.error("❌ Auto-start failed:", error);
+          setAutoStartFailed(true);
+        }
+      }, 1000);
+    }
+  }, [appointmentState?.is_with_doctor, appointmentStateLoaded, showPreJoin, autoStartFailed]);
   
   // Waiting room service
   const waitingRoomService = useWaitingRoomService(appointmentId);
@@ -130,8 +220,8 @@ export function TelehealthSessionContent({
     if ('mediaSession' in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: sessionTitle || 'Telehealth Session',
-          artist: providerName || 'Healthcare Provider',
+          title: sessionTitle,
+          artist: providerName,
           album: 'Video Call',
         });
       } catch {}
@@ -190,6 +280,8 @@ export function TelehealthSessionContent({
     }
   }, [telehealth.chatMessages, chatApi]);
 
+  // Appointment state is now passed from server-side props, no need for client-side API call
+
   // Load previous chat messages ONCE when session starts (for chat history)
   useEffect(() => {
     if (appointmentId && followupToken && telehealth.isConnected && !messagesLoaded) {
@@ -198,12 +290,12 @@ export function TelehealthSessionContent({
         .then(messages => {
           // Convert API messages to UI format
           const convertedMessages = chatApi.convertToVonageFormat(messages).map(msg => ({
-    id: msg.id,
-    author: msg.author,
-    authoredAt: msg.timestamp,
-    content: msg.content,
-    isOwn: msg.isOwn,
-  }));
+            id: msg.id,
+            author: msg.author,
+            authoredAt: msg.timestamp,
+            content: msg.content,
+            isOwn: msg.isOwn,
+          }));
           setPreviousMessages(convertedMessages); // Store in state for UI display
           setMessagesLoaded(true); // Mark as loaded to prevent re-loading
         })
@@ -360,22 +452,41 @@ export function TelehealthSessionContent({
       // 3. Start listening for doctor connect events via Ably
       const newAblyService = new AblyVideoCallService({
         appointmentId,
+        clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
+          console.log('🚀 Ably: Received doctor/MOA connect event:', JSON.stringify(event, null, 2));
+          console.log('🚀 Ably: Event type:', event.event);
+          console.log('🚀 Ably: Event metadata:', event.metadata);
+          console.log('🚀 Ably: Event context:', event.context);
           
-          // Automatically start the session when doctor connects
+          // Automatically start the session when doctor or MOA connects
+          if (event.event === 'connect') {
+            console.log('👨‍⚕️ Doctor connected - starting session');
+            console.log('👨‍⚕️ Doctor ID:', event.context.actor.id);
+            console.log('👨‍⚕️ Doctor name:', event.context.actor.name);
+          } else if (event.event === 'moa-calling') {
+            console.log('👩‍💼 MOA calling - starting session');
+            console.log('👩‍💼 MOA ID:', event.context.actor.id);
+            console.log('👩‍💼 MOA name:', event.context.actor.name);
+            console.log('👩‍💼 MOA type:', event.context.actor.type);
+            console.log('👩‍💼 Clinic ID:', event.context.actor.clinic_id);
+          }
           
           // Disconnect from Ably since we're joining the session
           if (ablyService) {
+            console.log('🔌 Ably: Disconnecting from Ably service...');
             await ablyService.disconnect();
             setAblyService(null);
           }
           
           // Join the Vonage session directly
+          console.log('🚀 Ably: Setting pending join and exiting waiting room...');
           setPendingJoin(true);
           setIsInWaitingRoom(false);
           setDoctorConnected(false);
         },
         onError: (error: Error) => {
+          console.error('❌ Ably: Error in video call service:', error);
         }
       });
       
@@ -437,90 +548,317 @@ export function TelehealthSessionContent({
   );
 
 
-  const PreJoin = () => (
-    <div className="telehealth-full-viewport bg-background overflow-hidden p-4 lg:p-8 flex items-center justify-center">
-      <div className="w-full max-w-5xl grid grid-cols-1 gap-6">
-        <div className="bg-white rounded-xl shadow-lg p-6 lg:p-8 mx-auto text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Shield className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl sm:text-2xl font-semibold">Get ready to join</h2>
+  const PreJoin = () => {
+    // Format appointment time
+    const formatAppointmentTime = (scheduledFor: string) => {
+      try {
+        const date = new Date(scheduledFor);
+        return date.toLocaleString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      } catch {
+        return null;
+      }
+    };
+
+    const doctorName = appointmentState?.doctor?.full_name;
+    const appointmentTime = appointmentState?.scheduled_for ? formatAppointmentTime(appointmentState.scheduled_for) : null;
+    const isDoctorReady = appointmentState?.is_with_doctor;
+    const isWaiting = appointmentState?.is_waiting;
+    
+    console.log('🎨 PreJoin UI State:', {
+      doctorName,
+      appointmentTime,
+      isDoctorReady,
+      isWaiting,
+      appointmentState: appointmentState,
+      showPreJoin,
+      autoStartFailed
+    });
+
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="w-full max-w-lg">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-semibold text-gray-900 mb-2">
+              {isDoctorReady ? "Ready to start" : "Virtual meeting"}
+            </h1>
+            <p className="text-gray-600 flex items-center justify-center gap-2">
+              {isDoctorReady ? (
+                "Your healthcare provider is ready to see you"
+              ) : (
+                <>
+                  <Lock className="h-4 w-4 text-blue-600" />
+                  Secure video consultation
+                </>
+              )}
+            </p>
           </div>
-          <p className="text-gray-600 mb-4 text-sm sm:text-base">We will ask for camera and microphone access so your provider can see and hear you.</p>
-          <div className="space-y-3 mb-6">
-            <PermBadge ok={cameraPerm === 'granted'} label={`Camera permission: ${cameraPerm}`} />
-            <PermBadge ok={micPerm === 'granted'} label={`Microphone permission: ${micPerm}`} />
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button
-              type="button"
-              variant="default"
-              size="lg"
-              className="w-full sm:w-auto"
-              onClick={onJoinWaitlist}
-              disabled={isJoining || telehealth.isBusy}
-              aria-label="Join the waitlist"
-            >
-              {isJoining || telehealth.isBusy ? "Joining..." : "Join The Waitlist"}
-            </Button>
-            
-            {/* Development mode - Direct join button */}
-            {process.env.NODE_ENV === 'development' && (
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto"
-                onClick={onJoinCallDirect}
-                disabled={isJoining || telehealth.isBusy}
-                aria-label="Join call directly (dev mode)"
-              >
-                {isJoining || telehealth.isBusy ? "Joining..." : "🚀 Join Call (Dev)"}
-            </Button>
+
+          {/* Doctor Info */}
+          <div className="border-b border-gray-200 pb-6 mb-6">
+            {!appointmentStateLoaded ? (
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div>
+                  <div className="h-3 bg-gray-200 rounded animate-pulse w-48"></div>
+                </div>
+                <div className="h-6 bg-gray-200 rounded animate-pulse w-16"></div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-medium text-lg">
+                    {doctorName ? doctorName.split(' ').map(n => n[0]).join('').slice(0, 2) : 'P'}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900">{doctorName ? `Dr. ${doctorName}` : 'Provider'}</h3>
+                  <p className="text-sm text-gray-500">
+                    {isDoctorReady ? "Ready to see you now" : appointmentTime ? (
+                      <>
+                        Scheduled for <span className="font-semibold">{appointmentTime}</span>
+                      </>
+                    ) : "Scheduled appointment"}
+                  </p>
+                </div>
+                <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  {isDoctorReady ? 'Ready' : 'Scheduled'}
+                </div>
+              </div>
             )}
           </div>
-          <div className="mt-6 text-xs sm:text-sm text-gray-500">
-            If blocked, click the lock icon in your address bar and enable Camera and Microphone.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
-  const WaitingRoom = () => (
-    <div className="telehealth-full-viewport bg-background overflow-hidden p-4 lg:p-8 flex items-center justify-center">
-      <div className="w-full max-w-5xl grid grid-cols-1 gap-6">
-        <div className="bg-white rounded-xl shadow-lg p-6 lg:p-8 mx-auto text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Shield className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl sm:text-2xl font-semibold">Waiting for your provider</h2>
-          </div>
-          <p className="text-gray-600 mb-4 text-sm sm:text-base">
-            You&apos;re now in the waiting room. We&apos;ll notify you when your provider is ready to start the session.
-          </p>
-          
-          {doctorConnected ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-2 text-green-600">
-                <CheckCircle2 className="h-5 w-5" />
-                <span className="font-medium">Your provider is ready! Starting session...</span>
-              </div>
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-2 text-gray-500">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                <span>Waiting for provider to connect...</span>
+          {/* Status Messages */}
+          {isDoctorReady && !autoStartFailed && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                <div>
+                  <p className="font-medium text-green-800">Starting your session automatically...</p>
+                  <p className="text-sm text-green-600">Please wait while we connect you</p>
+                </div>
               </div>
             </div>
           )}
+
+          {autoStartFailed && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <XCircle className="h-5 w-5 text-gray-600" />
+                <div>
+                  <p className="font-medium text-gray-900">Auto-start failed</p>
+                  <p className="text-sm text-gray-600">Please try joining manually</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Device Status */}
+          <div className="space-y-4 mb-8">
+            <h4 className="font-medium text-gray-900">Device status</h4>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  {cameraPerm === 'granted' ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-500" />
+                  )}
+                  <span className="text-gray-900">Camera</span>
+                </div>
+                <span className={`text-sm ${cameraPerm === 'granted' ? 'text-green-600' : 'text-red-500'}`}>
+                  {cameraPerm === 'granted' ? 'Ready' : 'Permission needed'}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  {micPerm === 'granted' ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-500" />
+                  )}
+                  <span className="text-gray-900">Microphone</span>
+                </div>
+                <span className={`text-sm ${micPerm === 'granted' ? 'text-green-600' : 'text-red-500'}`}>
+                  {micPerm === 'granted' ? 'Ready' : 'Permission needed'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            {!appointmentStateLoaded ? (
+              <div className="space-y-3">
+                <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                )}
+              </div>
+            ) : (
+              <>
+                {appointmentState?.is_with_doctor && autoStartFailed ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="lg"
+                    className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={onJoinCallDirect}
+                    disabled={isJoining || telehealth.isBusy}
+                  >
+                    {isJoining || telehealth.isBusy ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Connecting...
+                      </div>
+                    ) : (
+                      "Join meeting now"
+                    )}
+                  </Button>
+                ) : !isDoctorReady ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="lg"
+                    className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={onJoinWaitlist}
+                    disabled={isJoining || telehealth.isBusy}
+                  >
+                    {isJoining || telehealth.isBusy ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Connecting...
+                      </div>
+                    ) : (
+                      "Join waiting room"
+                    )}
+                  </Button>
+                ) : null}
+                
+                {/* Development mode button */}
+                {process.env.NODE_ENV === 'development' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full h-12 text-base font-medium border-gray-300 text-gray-700 hover:bg-gray-50"
+                    onClick={onJoinCallDirect}
+                    disabled={isJoining || telehealth.isBusy}
+                  >
+                    Direct join (dev mode)
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Permission Help Text */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800 text-center">
+                If camera or microphone access is blocked, click the lock icon in your browser&apos;s address bar and enable permissions.
+              </p>
+            </div>
+          </div>
+
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
+  const WaitingRoom = () => {
+    const doctorName = appointmentState?.doctor?.full_name;
+    
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-lg bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-semibold text-gray-900 mb-2">
+              Waiting for your provider
+            </h1>
+            <p className="text-gray-600">
+              Your healthcare provider will join shortly
+            </p>
+          </div>
+
+          {/* Doctor Info */}
+          <div className="border-b border-gray-200 pb-6 mb-6">
+            {!appointmentStateLoaded ? (
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div>
+                  <div className="h-3 bg-gray-200 rounded animate-pulse w-48"></div>
+                </div>
+                <div className="h-6 bg-gray-200 rounded animate-pulse w-16"></div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-medium text-lg">
+                    {doctorName ? doctorName.split(' ').map(n => n[0]).join('').slice(0, 2) : 'P'}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900">{doctorName ? `Dr. ${doctorName}` : 'Provider'}</h3>
+                  <p className="text-sm text-gray-500">
+                    Will join the session shortly
+                  </p>
+                </div>
+                <div className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                  Waiting
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Status Messages */}
+          {doctorConnected ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-800">Your provider is ready!</p>
+                  <p className="text-sm text-green-600">Starting session automatically...</p>
+                </div>
+                <div className="w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                <div>
+                  <p className="font-medium text-gray-900">Waiting for provider to connect...</p>
+                  <p className="text-sm text-gray-600">Please stay on this page</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Help Text */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800 text-center">
+                You&apos;ll be automatically connected when your provider joins the session.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (showPreJoin) {
     return (

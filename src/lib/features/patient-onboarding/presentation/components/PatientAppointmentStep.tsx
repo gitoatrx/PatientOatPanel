@@ -48,8 +48,8 @@ export function PatientAppointmentStep() {
         appointmentTime: values.appointmentTime,
       });
       
-      // Navigate to review step
-      router.push("/onboarding/patient/review");
+      // Navigate to pharmacy step
+      router.push("/onboarding/patient/pharmacy");
     } catch (error) {
 
     }
@@ -149,8 +149,8 @@ export function PatientAppointmentStep() {
 
   return (
     <PatientStepShell
-      title={getPersonalizedLabel()}
-      description="Select your preferred date and time for the appointment."
+      title="Select Preferred Date"
+      description="Choose the day and time that works best for your appointment."
       onBack={handleBack}
       onNext={() => form.handleSubmit(handleSubmit)()}
       nextLabel="Continue"

@@ -69,7 +69,7 @@ export function FormMultiSelect({
     <div className={cn("space-y-2", className)}>
       <label
         htmlFor={name}
-        className="block text-lg font-semibold text-foreground"
+        className="block text-lg font-normal text-foreground"
       >
         {label}
       </label>
@@ -78,10 +78,10 @@ export function FormMultiSelect({
           id={name}
           value=""
           onChange={handleSelect}
-          className="w-full p-4 pr-12 border border-border rounded-lg transition-colors text-base bg-background text-foreground appearance-none"
+          className="w-full p-4 pr-12 border border-border rounded-lg transition-colors text-base bg-white text-foreground appearance-none font-bold"
         >
           {placeholder && (
-            <option value="" disabled>
+            <option value="" disabled className="font-normal">
               {placeholder}
             </option>
           )}

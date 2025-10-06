@@ -2,12 +2,13 @@ import React from "react";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ClinicProvider } from "@/contexts/ClinicContext";
 import { Toaster } from "@/components/ui/use-toast";
 
 export const metadata: Metadata = {
-  title: "123Walkin Clinic - Bimble",
+  title: "123 Walkin Clinic - Bimble",
   description:
-    "123Walkin Clinic - Bimble is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
+    "123 Walkin Clinic - Bimble is a telehealth platform that allows you to connect with your doctor from the comfort of your home.",
 };
 
 export default function RootLayout({
@@ -27,8 +28,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
+          <ClinicProvider>
+            {children}
+            <Toaster />
+          </ClinicProvider>
         </ThemeProvider>
       </body>
     </html>

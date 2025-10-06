@@ -70,6 +70,15 @@ export const wizardSchema = z
     doctorId: z.string().optional(),
     appointmentDate: z.string().min(1, "Please select a date"),
     appointmentTime: z.string().min(1, "Please select a time"),
+    pharmacyOption: z.enum(["delivery", "pickup"]).optional(),
+    selectedPharmacy: z.object({
+      id: z.number(),
+      name: z.string(),
+      address: z.string(),
+      city: z.string(),
+      province: z.string(),
+      phone: z.string(),
+    }).optional(),
   })
   .refine(
     (data) => {

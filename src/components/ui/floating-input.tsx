@@ -49,7 +49,7 @@ export function FloatingInput({
         onFocus={handleFocus}
         onBlur={handleBlur}
         className={cn(
-          "peer w-full rounded-md border-2 bg-transparent px-3 py-2 text-base transition-all duration-200",
+          "peer w-full rounded-md border-2 bg-white px-3 py-2 text-base transition-all duration-200 font-bold placeholder:font-normal",
           "placeholder:text-transparent focus:outline-none",
           "disabled:cursor-not-allowed disabled:opacity-50",
           error

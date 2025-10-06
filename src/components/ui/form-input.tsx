@@ -39,7 +39,7 @@ export function FormInput({
     <div className="space-y-2">
       <label
         htmlFor={name}
-        className="block text-lg font-semibold text-foreground"
+        className="block text-lg font-normal text-foreground pb-[1.5px]"
       >
         {label}
       </label>
@@ -65,7 +65,7 @@ export function FormInput({
           registerOnBlur(e);
         }}
         className={cn(
-          "w-full p-4 border border-border rounded-lg transition-colors text-base bg-background text-foreground placeholder:text-muted-foreground",
+          "w-full p-4 border border-border rounded-lg transition-colors text-base bg-white text-foreground placeholder:text-muted-foreground placeholder:font-normal font-bold",
           // Disabled styling: subtle grey overlay and muted colors
           "disabled:bg-muted disabled:text-muted-foreground disabled:border-muted disabled:cursor-not-allowed disabled:opacity-80",
           fieldError

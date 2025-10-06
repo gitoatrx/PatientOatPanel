@@ -8,6 +8,7 @@ export interface FormPhoneInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange"> {
   name: string;
   label: string;
+  description?: string;
   options?: RegisterOptions;
   error?: string;
   type?: string;
@@ -16,6 +17,7 @@ export interface FormPhoneInputProps
 export function FormPhoneInput({
   name,
   label,
+  description,
   options,
   error,
   className,
@@ -77,10 +79,15 @@ export function FormPhoneInput({
     <div className="space-y-2">
       <label
         htmlFor={name}
-        className="block text-lg font-semibold text-foreground"
+        className="block text-lg font-normal text-foreground"
       >
         {label}
       </label>
+      {description && (
+        <p className="text-sm text-muted-foreground">
+          {description}
+        </p>
+      )}
       <div className="flex relative">
         {/* Country Code Box */}
         <div className={cn(
@@ -107,7 +114,7 @@ export function FormPhoneInput({
           }}
           {...props}
           className={cn(
-            "flex-1 p-4 border border-border rounded-r-lg text-base bg-background text-foreground placeholder:text-muted-foreground",
+            "flex-1 p-4 border border-border rounded-r-lg text-base bg-white text-foreground placeholder:text-muted-foreground placeholder:font-normal font-bold",
             "focus:outline-none",
             // Disabled styling: greyed background and no country code/formatting changes
             "disabled:bg-muted disabled:text-muted-foreground disabled:border-muted disabled:cursor-not-allowed disabled:opacity-80",
@@ -117,7 +124,7 @@ export function FormPhoneInput({
             className,
           )}
           aria-describedby={errorId}
-          placeholder={getPhonePlaceholder()}
+          placeholder={props.placeholder || getPhonePlaceholder()}
         />
       </div>
       <AnimatePresence>

@@ -12,6 +12,7 @@ import { usePatientOnboarding } from "../context/PatientOnboardingContext";
 import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import Image from "next/image";
 
 const alphaOnly = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/;
 const schema = z.object({
@@ -33,6 +34,7 @@ export function PatientPersonalStep() {
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
+  const [isReturningPatient, setIsReturningPatient] = useState(false);
   
   // Get step configuration
   const stepData = getStepComponentData("personal");
@@ -55,6 +57,10 @@ export function PatientPersonalStep() {
       
       if (progressResponse.success && progressResponse.data?.state?.personal_info) {
         const personalInfo = progressResponse.data.state.personal_info;
+        
+        // Check if user has existing first and last name (returning patient)
+        const hasExistingName = !!(personalInfo.first_name && personalInfo.last_name);
+        setIsReturningPatient(hasExistingName);
         
         // Prefill form with existing data
         form.setValue('firstName', personalInfo.first_name || '');
@@ -103,11 +109,11 @@ export function PatientPersonalStep() {
         const errorMessage = 'Network error. Please check your connection and try again.';
         
         // Show error toast IMMEDIATELY
-        toast({
-          variant: "error",
-          title: "Network Error",
-          description: errorMessage,
-        });
+        // toast({
+        //   variant: "error",
+        //   title: "Network Error",
+        //   description: errorMessage,
+        // });
         
         // Set error state after toast
         setError(errorMessage);
@@ -125,11 +131,11 @@ export function PatientPersonalStep() {
         const errorMessage = apiResponse.message || "Failed to save personal information";
         
         // Show error toast IMMEDIATELY
-        toast({
-          variant: "error",
-          title: "Save Failed",
-          description: errorMessage,
-        });
+        // toast({
+        //   variant: "error",
+        //   title: "Save Failed",
+        //   description: errorMessage,
+        // });
         
         // Set error state after toast
         setError(errorMessage);
@@ -158,11 +164,11 @@ export function PatientPersonalStep() {
       }
       
       // Show error toast IMMEDIATELY
-      toast({
-        variant: "error",
-        title: errorTitle,
-        description: errorMessage,
-      });
+      // toast({
+      //   variant: "error",
+      //   title: errorTitle,
+      //   description: errorMessage,
+      // });
       
       // Set error state after toast
       setError(errorMessage);
@@ -192,7 +198,13 @@ export function PatientPersonalStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading your information...</p>
           </div>
         </div>
@@ -200,10 +212,16 @@ export function PatientPersonalStep() {
     );
   }
 
+  // Determine title and description based on returning patient status
+  const title = isReturningPatient ? "Confirm Your Information" : "Personal Information";
+  const description = isReturningPatient 
+    ? "We found your details. Please confirm they're correct." 
+    : "Tell us about yourself so we can create your profile.";
+
   return (
     <PatientStepShell
-      title="Personal Information"
-      description="Tell us about yourself"
+      title={title}
+      description={description}
       onBack={handleBack}
       onNext={async () => {
         try {
@@ -234,14 +252,14 @@ export function PatientPersonalStep() {
             <FormInput
               name="firstName"
               label="First Name"
-              placeholder="Enter your first name"
+              placeholder=""
               autoComplete="given-name"
             />
 
             <FormInput
               name="lastName"
               label="Last Name"
-              placeholder="Enter your last name"
+              placeholder=""
               autoComplete="family-name"
             />
           </div>

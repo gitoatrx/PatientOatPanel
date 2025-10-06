@@ -15,6 +15,7 @@ import { patientService } from "@/lib/services/patientService";
 import { Provider } from "@/lib/types/api";
 import { useToast } from "@/components/ui/use-toast";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import Image from "next/image";
 import { DoctorListSkeleton } from "@/components/ui/skeleton-loaders";
 
 // Doctor data interface
@@ -103,6 +104,22 @@ export function PatientDoctorSelectionStep() {
         
         if (response.success && response.data) {
           setProviders(response.data);
+          
+          // COMMENTED OUT: Auto-select and proceed if only one provider is available
+          // TODO: Revert this back later when needed
+          // if (response.data.length === 1) {
+          //   const singleProvider = response.data[0];
+          //   form.setValue('doctorId', singleProvider.id.toString());
+          //   
+          //   // Automatically submit the form to proceed to next step
+          //   setTimeout(async () => {
+          //     try {
+          //       await handleSubmit({ doctorId: singleProvider.id.toString() });
+          //     } catch (error) {
+          //       console.error('Auto-submit failed:', error);
+          //     }
+          //   }, 1000); // Small delay to show the single provider briefly
+          // }
         } else {
           setProvidersError(response.message || "Failed to load providers");
           console.error("Failed to load providers:", response.message);
@@ -229,7 +246,13 @@ export function PatientDoctorSelectionStep() {
       >
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <Image
+              src="/loading.svg"
+              alt="Loading"
+              width={48}
+              height={48}
+              className="mx-auto mb-2"
+            />
             <p className="text-sm text-muted-foreground">Loading your information...</p>
           </div>
         </div>
@@ -239,8 +262,8 @@ export function PatientDoctorSelectionStep() {
 
   return (
     <PatientStepShell
-      title="Choose Your Doctor"
-      description="Select a healthcare provider that best fits your needs"
+      title="Select Your Doctor"
+      description="Choose a healthcare provider available for your visit."
       progressPercent={stepData.progressPercent}
       currentStep={stepData.currentStep}
       totalSteps={stepData.totalSteps}

@@ -8,7 +8,7 @@
 // import { ChevronLeft, ChevronRight } from "lucide-react";
 // import { FormInput, FormTextarea, FormRadioGroup, FormPhoneInput } from "./ui";
 // import { Combobox } from "./ui/combobox";
-// import { BimbleLogoIcon } from "../../public/icons/icons";
+// import { BimbleLogoIcon } from "@/components/icons";
 // import { useSearchParams } from "next/navigation";
 // import { getHealthConditions } from "@/lib/constants/medical-specialties";
 // import { Button } from "@/components/ui/button";

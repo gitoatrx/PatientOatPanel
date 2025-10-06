@@ -15,9 +15,10 @@ import {
 interface AddToCalendarProps {
   appointment: AppointmentData;
   className?: string;
+  buttonWidth?: string;
 }
 
-export function AddToCalendar({ appointment, className = "" }: AddToCalendarProps) {
+export function AddToCalendar({ appointment, className = "", buttonWidth = "w-full" }: AddToCalendarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
@@ -124,7 +125,7 @@ export function AddToCalendar({ appointment, className = "" }: AddToCalendarProp
     <div ref={containerRef} className={`relative ${className}`}>
       <Button
         onClick={handleToggleDropdown}
-        className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white"
+        className={`${buttonWidth} h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white`}
         disabled={isGenerating}
       >
         <CalendarPlus className="w-5 h-5 mr-2" />

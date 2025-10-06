@@ -50,6 +50,25 @@ export interface ApiRequestConfig {
   skipErrorBoundary?: boolean;
 }
 
+// Clinic Information Types
+export interface ClinicInfo {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  province: string;
+  postal_code: string;
+  country: string;
+  logo: string;
+}
+
+export interface ClinicInfoResponse {
+  success: boolean;
+  clinic: ClinicInfo;
+}
+
 // Patient Onboarding Specific Types - OTP verification and progress tracking
 
 export interface OnboardingProgressResponse {
@@ -68,6 +87,8 @@ export interface OnboardingProgressResponse {
       };
       health_card?: {
         health_card_number: string | null;
+        email_address?: string | null;
+        phone_conflict?: OnboardingHealthCardPhoneConflict;
       };
       personal_info?: {
         first_name: string;
@@ -114,11 +135,45 @@ export interface OnboardingProgressResponse {
         appointment_id: number;
         guest_patient_id: number;
       };
+      existing_patient?: {
+        id: number;
+        patient_id: number;
+        patient_type: string;
+      };
       otp_verified_at: string;
     };
+    patient_id: string | null;
     guest_patient_id: string | null;
     appointment_id: string | null;
+    returning_patient_decision?: OnboardingReturningPatientDecision;
   };
+}
+
+// New types for returning patient decision and phone conflict
+export interface OnboardingReturningPatientDecisionAppointment {
+  id: number;
+  clinic_patient_id: number;
+  date_and_time: string | null;
+  status: string | null;
+  has_passed: boolean;
+  is_no_show: boolean;
+  reason: string;
+}
+
+export interface OnboardingReturningPatientDecision {
+  action: 'start_new' | 'reschedule' | 'manage';
+  latest_appointment: OnboardingReturningPatientDecisionAppointment | null;
+}
+
+export interface OnboardingHealthCardPhoneConflict {
+  clinic_patient_id: number;
+  clinic_patient_phone: string | null;
+  otp_phone: string | null;
+  otp_phone_raw: string | null;
+  decision: 'matched' | 'updated' | 'declined' | 'pending';
+  decision_source: 'match' | 'patient_choice' | 'implicit';
+  decision_recorded_at: string;
+  requires_confirmation: boolean;
 }
 
 export interface HealthCardResponse {
@@ -130,12 +185,72 @@ export interface HealthCardResponse {
     current_step: string;
     status: string;
     otp_verified_at: string;
+    // Legacy fields for backward compatibility
+    phone_update_required?: boolean;
+    phone_update_context?: {
+      existing_phone: string;
+      submitted_phone: string;
+    };
     state: {
       contact: {
         phone: string;
       };
       health_card?: {
         health_card_number: string;
+        email_address?: string;
+        phone_conflict?: OnboardingHealthCardPhoneConflict;
+        // Legacy fields for backward compatibility
+        phone_update_required?: boolean;
+        phone_update_context?: {
+          existing_phone: string;
+          submitted_phone: string;
+        };
+      };
+      personal_info?: {
+        first_name: string;
+        last_name: string;
+        gender: string;
+        date_of_birth: string;
+        email: string | null;
+      };
+      address?: {
+        address_line1: string;
+        address_line2: string | null;
+        city: string;
+        state_province: string;
+        postal_code: string;
+        country: string;
+      };
+      emergency_contact?: {
+        name: string | null;
+        relationship: string | null;
+        phone: string | null;
+      };
+      existing_patient?: {
+        id: number;
+        patient_id: number;
+        patient_type: string;
+      };
+      otp_verified_at: string;
+    };
+    patient_id: string | null;
+    appointment_id: string | null;
+    returning_patient_decision?: OnboardingReturningPatientDecision;
+  };
+}
+
+export interface PhoneUpdateResponse {
+  success: boolean;
+  message: string;
+  data: {
+    clinic_id: number;
+    phone: string;
+    current_step: string;
+    status: string;
+    otp_verified_at: string;
+    state: {
+      contact: {
+        phone: string;
       };
       otp_verified_at: string;
     };
@@ -573,6 +688,66 @@ export interface FollowupQuestion {
   asked_at: string;
   priority: number;
   red_flag: boolean;
+}
+
+// Appointment State Snapshot Types
+export interface AppointmentStateData {
+  id: number;
+  is_no_show: boolean;
+  no_show_since: string | null;
+  no_show_action: string | null;
+  is_waiting: boolean;
+  waiting_since: string | null;
+  is_with_doctor: boolean;
+  with_doctor_since: string | null;
+  is_completed: boolean;
+  completed_since: string | null;
+  scheduled_for: string;
+  status: string;
+  appointment: {
+    id: number;
+    clinic_id: number;
+    patient_id: number;
+    doctor_id: number;
+    visit_type_name: string;
+    visit_type_duration: number;
+    visit_type_is_video_call: boolean;
+    payer_type: string;
+    visit_reason: string;
+    message_to_moa: string | null;
+    concerns: Array<{
+      question: string;
+      answer: string;
+    }>;
+    join_call: boolean;
+    join_call_at: string | null;
+    scheduled_for: string;
+    created_at: string;
+    updated_at: string;
+  };
+  doctor: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+    email: string;
+    phone: string;
+  };
+  patient: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+    phone: string;
+    phn: string;
+    patient_type: string;
+  };
+}
+
+export interface AppointmentStateResponse {
+  success: boolean;
+  message: string;
+  data: AppointmentStateData;
 }
 
 // Error Types for Different Scenarios
