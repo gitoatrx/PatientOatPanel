@@ -4,10 +4,9 @@ import { ReactNode, useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import Image from "next/image";
 import { ChevronLeft, LogOut } from "lucide-react";
-import { BimbleLogoIcon } from "../../../../../../public/icons/icons";
+import { BimbleLogoIcon } from "@/components/icons";
 // import { gsap } from "gsap"; // COMMENTED OUT FOR TESTING
 import { BaseErrorBoundary } from "@/components/error-boundaries/BaseErrorBoundary";
 import { hasActiveSession, logout } from "@/lib/utils/auth-utils";
@@ -219,7 +218,7 @@ export function PatientStepShell({
                   {title}
                 </h1>
                 {description && (
-                  <p className="text-sm text-muted-foreground italic mt-1 pb-[20px] ">
+                  <p className="text-sm text-muted-foreground italic mt-1 sm:pb-[20px] md:pb-[18px] ">
                     {description}
                   </p>
                 )}
@@ -295,7 +294,7 @@ export function PatientStepShell({
               >
                 {isSubmitting ? (
                   <>
-                    <LoadingSpinner size="sm" className="text-white" />
+                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
                     <span>Loading...</span>
                   </>
                 ) : (

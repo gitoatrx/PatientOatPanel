@@ -132,12 +132,23 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
   } = useFormContext();
   const formValues = watch();
 
-  // Sync selected date with form state
+  // Track if this is the initial load with pre-filled data
+  const [hasAutoNavigated, setHasAutoNavigated] = useState(false);
+
+  // Sync selected date with form state and auto-navigate to time step if both are pre-filled (only on initial load)
   useEffect(() => {
     if (formValues.appointmentDate && formValues.appointmentDate !== selectedDate) {
       setSelectedDate(formValues.appointmentDate);
     }
-  }, [formValues.appointmentDate, selectedDate]);
+    
+    // Auto-navigate to time step if both date and time are pre-filled (only once on initial load)
+    if (formValues.appointmentDate && formValues.appointmentTime && currentStep === 1 && !hasAutoNavigated) {
+      setHasAutoNavigated(true);
+      setTimeout(() => {
+        goToStep(2, 1);
+      }, 500);
+    }
+  }, [formValues.appointmentDate, formValues.appointmentTime, selectedDate, currentStep, hasAutoNavigated]);
 
   // Fetch available dates from API when providerId is available
   useEffect(() => {
@@ -314,26 +325,27 @@ export const AppointmentDateTimeStep = memo(function AppointmentDateTimeStep({
 
   // Handle date selection with validation
   const handleDateSelect = async (dateToSelect: ComponentDate) => {
-    // Prevent unnecessary updates if the same date is already selected
-    if (selectedDate === dateToSelect.value) {
-      return;
-    }
-
-    // Use the date string directly from the API - no timezone conversion needed
+    // Always update the date selection, even if it's the same date
+    // This ensures time slots are fetched and step navigation works
     setValue("appointmentDate", dateToSelect.value);
     setSelectedDate(dateToSelect.value); // Update local state
 
     // Validate the field
     await trigger("appointmentDate");
 
-    // Clear any existing time selection when date changes
-    setValue("appointmentTime", "");
-    clearErrors("appointmentTime");
+    // Clear any existing time selection when date changes (only if it's a different date)
+    if (selectedDate !== dateToSelect.value) {
+      setValue("appointmentTime", "");
+      clearErrors("appointmentTime");
+    }
 
-    // Auto-advance to next step
-    setTimeout(() => {
-      goToNextStep();
-    }, 500);
+    // Always navigate to time step to show time slots when a date is selected
+    // This ensures time slots are visible whether it's initial load or manual date change
+    if (currentStep === 1) {
+      setTimeout(() => {
+        goToNextStep();
+      }, 500);
+    }
   };
 
   // Handle time selection with validation

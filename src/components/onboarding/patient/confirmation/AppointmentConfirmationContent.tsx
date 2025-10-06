@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   ChevronRight,
   Calendar,
-  Computer,
   Link,
   MapPin,
   Phone,
@@ -21,6 +20,7 @@ import {
   Timer,
   Lock,
 } from "lucide-react";
+import { InclinicIcon, WalkinIcon } from "@/components/icons";
 import { AiAssessmentChat } from "./AiAssessmentChat";
 import { AddToCalendar } from "./AddToCalendar";
 import { ShareAppointment } from "./ShareAppointment";
@@ -310,10 +310,10 @@ export function AppointmentConfirmationContent() {
           <div className="mb-6 pt-8">
             <div className="w-full">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                <div className="w-6 h-6 min-w-[24px] min-h-[24px] bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 aspect-square">
                   <Check className="w-4 h-4 text-white" />
                 </div>
-                <h1 className="text-2xl font-bold text-gray-900">Your appointment is confirmed!</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Your appointment is confirmed!</h1>
               </div>
             </div>
           </div>
@@ -333,7 +333,11 @@ export function AppointmentConfirmationContent() {
               
               {/* Visit Type */}
               <div className="flex items-center gap-3 w-fit">
-                <Computer className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                {isVirtualVisit(appt.visitType) ? (
+                  <InclinicIcon className="w-5 h-5 flex-shrink-0" />
+                ) : (
+                  <WalkinIcon className="w-5 h-5 flex-shrink-0" />
+                )}
                 <span className="text-gray-900">
                   {isVirtualVisit(appt.visitType) ? 'Virtual Visit' : 'In-Clinic Visit'}
                 </span>

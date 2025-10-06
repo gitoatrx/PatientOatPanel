@@ -10,6 +10,7 @@ import type { WizardForm } from "@/types/wizard";
 import { useRouter } from "next/navigation";
 import { patientService } from "@/lib/services/patientService";
 import { useToast } from "@/components/ui/use-toast";
+import { isAppointmentToday } from "@/lib/services/videoEventsService";
 
 const reviewSchema = z.record(z.string(), z.unknown());
 
@@ -23,6 +24,7 @@ export function PatientReviewStep() {
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
 
   const form = useForm<FormValues>({
     resolver: zodResolver(reviewSchema),
@@ -52,6 +54,10 @@ export function PatientReviewStep() {
       if (progressResponse.success && progressResponse.data?.state) {
         const state = progressResponse.data.state;
 
+        // Get pharmacy data from localStorage
+        const pharmacyDataStr = localStorage.getItem('pharmacy-data');
+        const pharmacyData = pharmacyDataStr ? JSON.parse(pharmacyDataStr) : {};
+
         // Map API response data to review form structure
         const combinedData: WizardForm = {
           firstName: state.personal_info?.first_name || "",
@@ -77,6 +83,9 @@ export function PatientReviewStep() {
           doctorId: state.provider ? `${state.provider.first_name} ${state.provider.last_name}` : "",
           appointmentDate: state.appointment?.date || "",
           appointmentTime: state.appointment?.time || "",
+          // Add pharmacy data
+          pharmacyOption: pharmacyData.pharmacyOption || "delivery",
+          selectedPharmacy: pharmacyData.selectedPharmacy || null,
         };
 
         setReviewData(combinedData);
@@ -104,18 +113,80 @@ export function PatientReviewStep() {
       setIsSubmitting(true);
       setError(null);
 
-      // Call confirm appointment API to complete the onboarding process
+      // First check if appointment is already confirmed by getting progress
+      const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
+      
+      if (progressResponse.success && progressResponse.data) {
+        const progressData = progressResponse.data;
+        
+        // Check if appointment is already confirmed
+        if (progressData.status === "completed" && progressData.state?.confirmation) {
+          console.log('✅ Appointment already confirmed, navigating to confirmation page');
+          
+          // Trigger new-appointment event if appointment is for today (Vancouver time)
+          if (reviewData?.appointmentDate && isAppointmentToday(reviewData.appointmentDate)) {
+            try {
+              const appointmentId = progressData.appointment_id;
+              const patientName = `${reviewData.firstName || ''} ${reviewData.lastName || ''}`.trim();
+              const patientId = progressData.patient_id || 0;
+              
+              // Get followup token from localStorage
+              const followupToken = localStorage.getItem('followup-token');
+              
+              if (appointmentId && patientName) {
+                // Create a new instance of VideoEventsService
+                const { VideoEventsService } = await import('@/lib/services/videoEventsService');
+                const videoEventsService = new VideoEventsService(appointmentId.toString());
+                
+                await videoEventsService.triggerNewAppointmentEvent(followupToken || '', {
+                  id: Number(appointmentId),
+                  patient_name: patientName,
+                  patient_id: Number(patientId)
+                });
+                console.log('✅ New appointment event triggered for today\'s appointment');
+              }
+            } catch (eventError) {
+              console.error('❌ Failed to trigger new-appointment event:', eventError);
+              // Don't fail the appointment confirmation if event fails
+            }
+          }
+          
+          // Navigate to confirmation page
+          router.push("/onboarding/patient/confirmation");
+          return;
+        }
+      }
+
+      // If not already confirmed, call confirm appointment API
       const apiResponse = await patientService.confirmAppointment(phoneNumber);
       
       if (apiResponse.success) {
-
-        // Store confirmation details in localStorage for the confirmation page
-        if (apiResponse.data) {
-          localStorage.setItem('appointment-confirmation', JSON.stringify({
-            appointment_id: apiResponse.data.appointment_id,
-            confirmation_number: apiResponse.data.confirmation_number,
-            phone: phoneNumber
-          }));
+        // Trigger new-appointment event if appointment is for today (Vancouver time)
+        if (reviewData?.appointmentDate && isAppointmentToday(reviewData.appointmentDate)) {
+          try {
+            const appointmentId = apiResponse.data?.appointment_id;
+            const patientName = `${reviewData.firstName || ''} ${reviewData.lastName || ''}`.trim();
+            const patientId = 0; // Patient ID not available in confirmation response, using 0 as default
+            
+            // Get followup token from localStorage
+            const followupToken = localStorage.getItem('followup-token');
+            
+            if (appointmentId && patientName) {
+              // Create a new instance of VideoEventsService
+              const { VideoEventsService } = await import('@/lib/services/videoEventsService');
+              const videoEventsService = new VideoEventsService(appointmentId.toString());
+              
+              await videoEventsService.triggerNewAppointmentEvent(followupToken || '', {
+                id: Number(appointmentId),
+                patient_name: patientName,
+                patient_id: Number(patientId)
+              });
+              console.log('✅ New appointment event triggered for today\'s appointment');
+            }
+          } catch (eventError) {
+            console.error('❌ Failed to trigger new-appointment event:', eventError);
+            // Don't fail the appointment confirmation if event fails
+          }
         }
         
         // Navigate to confirmation page

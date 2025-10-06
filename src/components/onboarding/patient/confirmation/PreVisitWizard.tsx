@@ -18,7 +18,7 @@ import {
   Star,
   Zap,
 } from "lucide-react";
-import { BimbleLogoIcon } from "../../../../../public/icons/icons";
+import { BimbleLogoIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { healthCheckInWizard } from "@/data/wizardQuestions";
 import { StepRenderer } from "./StepRenderer";

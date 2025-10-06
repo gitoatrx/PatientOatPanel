@@ -3,7 +3,8 @@ import React, { memo } from "react";
 import { motion } from "framer-motion";
 import { formatDateShort, formatDateOfBirthShort } from "@/lib/utils/date";
 import type { WizardForm } from "@/types/wizard";
-import { Calendar } from "lucide-react";
+import { Calendar, User, Stethoscope, FileText, Truck, Store } from "lucide-react";
+import { InclinicIcon, WalkinIcon } from "@/components/icons";
 import { MEDICAL_SPECIALTIES } from "@/lib/constants/medical-specialties";
 
 interface ReviewStepProps {
@@ -46,6 +47,43 @@ export const ReviewStep = memo(function ReviewStep({
     }
   };
 
+  const formatDateOfBirthWithAge = () => {
+    if (
+      !formValues.birthMonth ||
+      !formValues.birthDay ||
+      !formValues.birthYear
+    ) {
+      return "Not provided";
+    }
+
+    try {
+      const birthDate = new Date(
+        parseInt(formValues.birthYear),
+        parseInt(formValues.birthMonth) - 1,
+        parseInt(formValues.birthDay),
+      );
+
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+
+      // Format date as "12 Aug 1986" without age
+      const formattedDate = birthDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+      
+      return `${formattedDate} (${age}y)`;
+    } catch {
+      return "Invalid date";
+    }
+  };
+
   const formatTime = (timeString: string) => {
     if (!timeString) return "Not selected";
     try {
@@ -63,20 +101,8 @@ export const ReviewStep = memo(function ReviewStep({
   };
 
   const getVisitTypeLabel = (visitType: string) => {
-    switch (visitType) {
-      case "Virtual":
-        return "Virtual/Telehealth visit";
-      case "InPerson":
-        return "In-person visit";
-      case "Either":
-        return "Either option works for me";
-      case "video calling":
-        return "Video calling";
-      case "in-person":
-        return "In-person visit";
-      default:
-        return visitType || "Not selected";
-    }
+    // Use the visit type name directly from the API
+    return visitType || "Not selected";
   };
 
   const getGenderLabel = (gender: string) => {
@@ -195,8 +221,8 @@ export const ReviewStep = memo(function ReviewStep({
   );
 
   // Simple info item component
-  const InfoItem = ({ label, value }: { label: string; value: string }) => (
-    <div className="w-full rounded-lg p-3 bg-gradient-to-br from-primary/5 to-primary/10 border border-border/30">
+  const InfoItem = ({ label, value, noBorder = false }: { label: string; value: string; noBorder?: boolean }) => (
+    <div className={`w-full rounded-lg p-3 bg-gradient-to-br from-primary/5 to-primary/10 ${noBorder ? '' : 'border border-border/30'}`}>
       <div className="w-full">
         <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
           {label}
@@ -213,177 +239,210 @@ export const ReviewStep = memo(function ReviewStep({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="w-full max-w-2xl mx-auto space-y-6  pt-3"
+      className="w-full max-w-2xl mx-auto space-y-6 pt-3"
     >
-      {/* Appointment Summary */}
+      {/* Appointment Card - Compact Box */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.4 }}
-        className="w-full relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-border/30 p-6"
+        transition={{ delay: 0.1 }}
+        className="w-full relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-border/30 p-4"
       >
         <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-50" />
-        <div className="relative z-10 space-y-4">
-          {/* Patient and Visit Type */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Calendar className="w-6 h-6 text-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold text-foreground truncate">
-                  {formValues.firstName && formValues.lastName
-                    ? `${formValues.firstName} ${formValues.lastName}`
-                    : formValues.firstName || formValues.lastName || "Patient"}
-                </h3>
-                <p className="text-primary font-medium text-sm truncate">
-                  {getVisitTypeLabel(formValues.visitType)}
-                </p>
-              </div>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <div className="text-lg font-bold text-primary mb-1">
-                {formatDate(formValues.appointmentDate)}
-              </div>
-              <div className="text-sm text-foreground/70 font-medium">
-                {formatTime(formValues.appointmentTime)}
-              </div>
-            </div>
+        <div className="relative z-10 space-y-3">
+          {/* Date and Time */}
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-foreground">
+              {formatDate(formValues.appointmentDate)} · {formatTime(formValues.appointmentTime)}
+            </span>
           </div>
 
-          {/* Doctor Information */}
+          {/* Visit Type */}
+          <div className="flex items-center gap-2">
+            {formValues.visitType?.toLowerCase().includes('virtual') || formValues.visitType?.toLowerCase().includes('video') ? (
+              <InclinicIcon className="w-4 h-4" />
+            ) : (
+              <WalkinIcon className="w-4 h-4" />
+            )}
+            <span className="text-sm font-medium text-foreground">
+              {getVisitTypeLabel(formValues.visitType)}
+            </span>
+          </div>
+
+          {/* Doctor */}
           {formValues.doctorId && (
-            <div className="border-t border-border/30 pt-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground/80 mb-1">Selected Doctor</p>
-                  <p className="text-base font-semibold text-foreground truncate">
-                    {getDoctorName(formValues.doctorId)}
-                  </p>
-                </div>
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">
+                {getDoctorName(formValues.doctorId)}
+              </span>
+            </div>
+          )}
+
+          {/* Reason */}
+          {formValues.selectedReason && (
+            <div className="flex items-center gap-2">
+              <Stethoscope className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">
+                Reason: {getHealthConcernLabel(formValues.selectedReason)}
+              </span>
+            </div>
+          )}
+
+          {/* Details */}
+          {formValues.symptoms && (
+            <div className="flex items-start gap-2">
+              <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Details: </span>
+                <span className="text-sm text-foreground/70">{formValues.symptoms}</span>
               </div>
             </div>
           )}
         </div>
       </motion.div>
 
-      {/* Information Sections */}
-      <div className="space-y-6 w-full">
-        {/* Personal Information (now includes address) */}
-        {hasPersonalInfo && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-3"
-          >
-            <h3 className="text-lg font-semibold text-foreground">
-              Personal Information
-            </h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              {formValues.firstName && (
-                <InfoItem label="First Name" value={formValues.firstName} />
-              )}
-              {formValues.lastName && (
-                <InfoItem label="Last Name" value={formValues.lastName} />
-              )}
-              {formValues.birthDay &&
-                formValues.birthMonth &&
-                formValues.birthYear && (
-                  <InfoItem
-                    label="Date of Birth"
-                    value={formatDateOfBirthDisplay()}
-                  />
-                )}
-              {formValues.gender && (
-                <InfoItem
-                  label="Gender"
-                  value={getGenderLabel(formValues.gender)}
-                />
-              )}
-              {formValues.email && (
-                <InfoItem label="Email Address" value={formValues.email} />
-              )}
-              {formValues.phone && (
-                <InfoItem label="Phone Number" value={formValues.phone} />
-              )}
-              {/* Address moved to personal info section */}
-              {(formValues.streetAddress ||
-                formValues.city ||
-                formValues.province ||
-                formValues.postalCode) && (
-                <InfoItem label="Address" value={formatAddress()} />
-              )}
+      {/* Patient Info - Condensed Two-Column Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="w-full rounded-lg bg-gradient-to-br from-primary/5 to-primary/10 border border-border/30 p-4"
+      >
+        <h3 className="text-lg font-semibold text-foreground mb-4">Patient Info</h3>
+        <div className="grid grid-cols-2 gap-4">
+          {/* PHN */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              PHN
             </div>
-          </motion.div>
-        )}
+            <div className="text-sm font-semibold text-foreground">
+              {formValues.hasHealthCard === "yes" && formValues.healthCardNumber
+                ? formValues.healthCardNumber
+                : "Not provided"}
+            </div>
+          </div>
 
-        {/* Health Information */}
-        {hasHealthInfo && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-3"
-          >
-            <h3 className="text-lg font-semibold text-foreground">
-              Health Information
-            </h3>
-            <div className="space-y-3">
-              {/* Health Card and Health Concern - side by side */}
-              <div className="grid gap-3 md:grid-cols-2">
-                {/* Health Card - show status */}
-                <InfoItem
-                  label="BC Health Card"
-                  value={
-                    formValues.hasHealthCard === "yes" && formValues.healthCardNumber
-                      ? formValues.healthCardNumber
-                      : formValues.hasHealthCard === "no"
-                      ? "No health card"
-                      : "Not specified"
-                  }
-                />
+          {/* Last Name */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              Last Name
+            </div>
+            <div className="text-sm font-semibold text-foreground">
+              {formValues.lastName || "Not provided"}
+            </div>
+          </div>
 
-                {/* Health Concern */}
-                {formValues.selectedReason && (
-                  <InfoItem
-                    label="Health Concern"
-                    value={getHealthConcernLabel(formValues.selectedReason)}
-                  />
-                )}
+          {/* First Name */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              First Name
+            </div>
+            <div className="text-sm font-semibold text-foreground">
+              {formValues.firstName || "Not provided"}
+            </div>
+          </div>
+
+          {/* DOB */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              DOB
+            </div>
+            <div className="text-sm font-semibold text-foreground">
+              {formatDateOfBirthWithAge()}
+            </div>
+          </div>
+
+          {/* Gender */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              Gender
+            </div>
+            <div className="text-sm font-semibold text-foreground">
+              {getGenderLabel(formValues.gender)}
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              Phone
+            </div>
+            <div className="text-sm font-semibold text-foreground">
+              {formValues.phone || "Not provided"}
+            </div>
+          </div>
+
+          {/* Email - only show if provided */}
+          {formValues.email && (
+            <div className="col-span-2">
+              <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+                Email
               </div>
-
-              {/* Symptoms & Details - full width */}
-              {formValues.symptoms && (
-                <InfoItem
-                  label="Symptoms & Details"
-                  value={formValues.symptoms}
-                />
-              )}
+              <div className="text-sm font-semibold text-foreground">
+                {formValues.email}
+              </div>
             </div>
-          </motion.div>
-        )}
+          )}
 
-        {/* Emergency Contact - single line format */}
-        {hasEmergencyContact && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-3"
-          >
-            <h3 className="text-lg font-semibold text-foreground">
-              Emergency Contact
-            </h3>
-            <InfoItem
-              label="Emergency Contact"
-              value={formatEmergencyContact()}
-            />
-          </motion.div>
-        )}
-      </div>
+          {/* Address - 1 column, truncate if long */}
+          {(formValues.streetAddress || formValues.city || formValues.province || formValues.postalCode) && (
+            <div className="col-span-2">
+              <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+                Address
+              </div>
+              <div 
+                className="text-sm font-semibold text-foreground truncate cursor-help" 
+                title={formatAddress()}
+              >
+                {formatAddress()}
+              </div>
+            </div>
+          )}
+
+          {/* Pharmacy Option */}
+          <div className="col-span-2">
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              Pharmacy
+            </div>
+            <div className="flex items-center gap-2">
+              {formValues.pharmacyOption === 'delivery' ? (
+                <Truck className="w-4 h-4 text-primary" />
+              ) : (
+                <Store className="w-4 h-4 text-primary" />
+              )}
+              <span className="text-sm font-semibold text-foreground">
+                {formValues.pharmacyOption === 'delivery' ? 'Delivery' : 'Pickup'}
+                {formValues.selectedPharmacy && formValues.pharmacyOption === 'pickup' && (
+                  <span className="text-foreground/70"> - {formValues.selectedPharmacy.name}</span>
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Emergency Contact - only show if provided */}
+      {hasEmergencyContact && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="w-full rounded-lg bg-gradient-to-br from-primary/5 to-primary/10 border border-border/30 p-4"
+        >
+          <div className="space-y-3">
+            <div className="w-full">
+              <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+                Emergency Contact
+              </div>
+              <div className="text-sm font-semibold text-foreground leading-relaxed break-words">
+                {formatEmergencyContact()}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 });

@@ -48,8 +48,8 @@ export function PatientAppointmentStep() {
         appointmentTime: values.appointmentTime,
       });
       
-      // Navigate to review step
-      router.push("/onboarding/patient/review");
+      // Navigate to pharmacy step
+      router.push("/onboarding/patient/pharmacy");
     } catch (error) {
 
     }

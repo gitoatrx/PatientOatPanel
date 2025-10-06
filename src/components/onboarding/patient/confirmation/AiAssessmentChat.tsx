@@ -783,7 +783,7 @@ export function AiAssessmentChat({
           {isTyping && (
             <div className="flex gap-2 sm:gap-3 justify-start">
               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden flex-shrink-0">
-                <BimbleLogoIcon width={24} height={24} />
+                <BimbleLogoIcon className="w-6 h-6" />
               </div>
               <div className="bg-gray-100 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl max-w-[80%] sm:max-w-none">
                 <div className="flex items-center gap-2">
@@ -891,7 +891,7 @@ export function AiAssessmentChat({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-              <BimbleLogoIcon width={32} height={32} />
+              <BimbleLogoIcon className="w-8 h-8" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
@@ -981,7 +981,7 @@ export function AiAssessmentChat({
         {isTyping && (
           <div className="flex gap-3 justify-start">
             <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-              <BimbleLogoIcon width={32} height={32} />
+              <BimbleLogoIcon className="w-8 h-8" />
             </div>
             <div className="bg-gray-100 px-4 py-3 rounded-2xl">
               <div className="flex items-center gap-2">

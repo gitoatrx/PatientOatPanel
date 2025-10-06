@@ -17,7 +17,7 @@ import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
 import Image from "next/image";
 import { VisitType } from "@/lib/types/api";
-import { Video, Building2 } from "lucide-react";
+import { WalkinIcon, InclinicIcon } from "@/components/icons";
 
 const visitTypeSchema = z.object({
   visitType: z.string().min(1, "Please select a visit type"),
@@ -228,10 +228,10 @@ export function PatientVisitTypeStep() {
   const getVisitTypeIcon = (visitTypeName: string) => {
     const name = visitTypeName.toLowerCase();
     if (name.includes('walkin') || name.includes('walk-in')) {
-      return <Building2 className="h-8 w-8 text-primary" />;
+      return <WalkinIcon className="h-8 w-8" />;
     }
-    // Default to video icon for other types
-    return <Video className="h-8 w-8 text-primary" />;
+    // Default to inclinic icon for other types
+    return <InclinicIcon className="h-8 w-8" />;
   };
 
   // Show loading state while fetching progress data

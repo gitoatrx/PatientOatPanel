@@ -81,11 +81,9 @@ export function PatientAppointmentDateTimeStep() {
             // Use setTimeout to ensure form is ready
             setTimeout(() => {
               if (appointment.date) {
-
                 form.setValue('appointmentDate', appointment.date, { shouldValidate: true });
               }
               if (appointment.time) {
-
                 form.setValue('appointmentTime', appointment.time, { shouldValidate: true });
               }
             }, 100);
