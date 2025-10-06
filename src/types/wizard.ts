@@ -77,6 +77,7 @@ export const wizardSchema = z
       address: z.string(),
       city: z.string(),
       province: z.string(),
+      postal_code: z.string().optional(),
       phone: z.string(),
     }).optional(),
   })

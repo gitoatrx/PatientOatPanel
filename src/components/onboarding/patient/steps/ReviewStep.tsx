@@ -78,7 +78,7 @@ export const ReviewStep = memo(function ReviewStep({
         year: 'numeric'
       });
       
-      return `${formattedDate} (${age}y)`;
+      return `${formattedDate} (${age} years old)`;
     } catch {
       return "Invalid date";
     }
@@ -414,8 +414,11 @@ export const ReviewStep = memo(function ReviewStep({
               )}
               <span className="text-sm font-semibold text-foreground">
                 {formValues.pharmacyOption === 'delivery' ? 'Delivery' : 'Pickup'}
-                {formValues.selectedPharmacy && formValues.pharmacyOption === 'pickup' && (
-                  <span className="text-foreground/70"> - {formValues.selectedPharmacy.name}</span>
+                {formValues.selectedPharmacy && (
+                  <span className="text-foreground/70">
+                    {' '}-
+                    {` ${formValues.selectedPharmacy.name}, ${formValues.selectedPharmacy.address}, ${formValues.selectedPharmacy.province} ${formValues.selectedPharmacy.postal_code || ''}`.trim()}
+                  </span>
                 )}
               </span>
             </div>

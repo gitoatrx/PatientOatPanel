@@ -86,6 +86,7 @@ export const ROUTES = {
       VISIT_TYPE: "/onboarding/patient/visit-type",
       DOCTOR_SELECTION: "/onboarding/patient/doctor-selection",
       APPOINTMENT_DATETIME: "/onboarding/patient/appointment-datetime",
+      PHARMACY: "/onboarding/patient/pharmacy",
       REVIEW: "/onboarding/patient/review",
     },
   },

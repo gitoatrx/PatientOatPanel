@@ -15,6 +15,7 @@ import { getStepComponentData } from "../../config/patient-onboarding-config";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
 import Image from "next/image";
+import { MaleIcon, FemaleIcon } from "@/components/icons";
 
 const genderSchema = z.object({
   gender: z.string().min(1, "Please select your gender"),
@@ -23,8 +24,8 @@ const genderSchema = z.object({
 type FormValues = z.infer<typeof genderSchema>;
 
 const genderOptions = [
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
+  { value: "male", label: "Male", icon: MaleIcon },
+  { value: "female", label: "Female", icon: FemaleIcon },
 ];
 
 export function PatientGenderStep() {
@@ -237,41 +238,56 @@ export function PatientGenderStep() {
           )}
           
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {genderOptions.map((option) => (
-                <label key={option.value} className="cursor-pointer">
-                  <input
-                    {...form.register("gender", {
-                      required: "Please select your gender",
-                      validate: (value) => {
-                        if (!value) return "Please select your gender";
-                        return true;
-                      },
-                    })}
-                    type="radio"
-                    value={option.value}
-                    className="sr-only"
-                  />
-                  <Card
-                    className={cn(
-                      "transition-all duration-200 border-1",
-                      selectedGender === option.value
-                        ? option.value.toLowerCase() === "female"
-                          ? "border-pink-400 bg-pink-500/20 "
-                          : "border-primary bg-primary/10 "
-                        : "border-border ",
-                    )}
-                  >
-                    <CardContent className=" text-center">
-                      <div className="space-y-0.5">
-                        <h3 className="text-md sm:text-lg font-medium text-foreground">
-                          {option.label}
-                        </h3>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </label>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {genderOptions.map((option) => {
+                const IconComponent = option.icon;
+                return (
+                  <label key={option.value} className="cursor-pointer">
+                    <input
+                      {...form.register("gender", {
+                        required: "Please select your gender",
+                        validate: (value) => {
+                          if (!value) return "Please select your gender";
+                          return true;
+                        },
+                      })}
+                      type="radio"
+                      value={option.value}
+                      className="sr-only"
+                    />
+                    <Card
+                      className={cn(
+                        "cursor-pointer transition-all duration-300 border-2 p-0",
+                        selectedGender === option.value
+                          ? option.value.toLowerCase() === "female"
+                            ? "border-pink-400 bg-gradient-to-br from-pink-500/10 to-pink-500/5"
+                            : "border-primary bg-gradient-to-br from-primary/10 to-primary/5"
+                          : "border-gray-200 hover:border-primary/30 hover:bg-gradient-to-br hover:from-gray-50 to-gray-100"
+                      )}
+                    >
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex items-center gap-4 sm:gap-6">
+                          <div className={cn(
+                            "w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 flex-shrink-0",
+                            selectedGender === option.value
+                              ? option.value.toLowerCase() === "female"
+                                ? "bg-pink-500 text-white"
+                                : "bg-primary text-white"
+                              : "bg-gray-100 text-gray-500"
+                          )}>
+                            <IconComponent className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-base sm:text-lg text-gray-900">
+                              {option.label}
+                            </h3>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </label>
+                );
+              })}
             </div>
 
             <AnimatePresence>

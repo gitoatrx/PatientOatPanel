@@ -55,6 +55,18 @@ export function AppointmentConfirmationContent() {
       address: string;
       phone: string;
     };
+    fulfillment?: {
+      method: 'pickup' | 'delivery';
+      pharmacy?: {
+        id: number;
+        name: string;
+        address: string;
+        city: string;
+        province: string;
+        postal_code?: string;
+        phone: string;
+      };
+    };
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
@@ -108,7 +120,11 @@ export function AppointmentConfirmationContent() {
                 name: clinicInfo?.name || 'Health Clinic',
                 address: clinicInfo ? `${clinicInfo.address}, ${clinicInfo.city}, ${clinicInfo.province} ${clinicInfo.postal_code}` : '123 Main Street, Prince Rupert, BC V8J 1A1',
                 phone: clinicInfo?.phone || '(250) 555-0123'
-              }
+              },
+              fulfillment: apiData.state.fulfillment ? {
+                method: apiData.state.fulfillment.method,
+                pharmacy: apiData.state.fulfillment.pharmacy
+              } : undefined
             };
 
             setConfirmationData(confirmation);
@@ -390,34 +406,85 @@ export function AppointmentConfirmationContent() {
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="font-medium text-gray-900">Delivery — to your home address</p>
-                      {appt.address && (
-                        <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
-                      )}
+                  {appt.fulfillment?.method === 'delivery' ? (
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
+                      <div>
+                        <p className="font-medium text-gray-900">Delivery — to your home address</p>
+                        {appt.address && (
+                          <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="font-medium text-gray-900">Pickup — Shoppers Drug Mart</p>
-                      <p className="text-sm text-gray-600 mt-1">123 Main Street, Prince Rupert</p>
-                      <p className="text-xs text-gray-500 mt-1">(250) 555-0123</p>
+                  ) : (
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                      <div>
+                        <p className="font-medium text-gray-900">Pickup — {appt.fulfillment?.pharmacy?.name || 'Selected Pharmacy'}</p>
+                        {appt.fulfillment?.pharmacy && (
+                          <>
+                            <p className="text-sm text-gray-600 mt-1">{`${appt.fulfillment.pharmacy.address}, ${appt.fulfillment.pharmacy.province} ${appt.fulfillment.pharmacy.postal_code ?? ''}`}</p>
+                            <p className="text-xs text-gray-500 mt-1">{appt.fulfillment.pharmacy.phone}</p>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-start gap-3">
-                    <Store className="w-4 h-4 text-gray-600 mt-1" />
+                  {appt.fulfillment?.pharmacy && (
+                    <div className="flex items-start gap-3">
+                      <Store className="w-4 h-4 text-gray-600 mt-1" />
+                      <div>
+                        <p className="font-medium text-gray-900">Your Pharmacy</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {`${appt.fulfillment.pharmacy.name}, ${appt.fulfillment.pharmacy.address}, ${appt.fulfillment.pharmacy.province} ${appt.fulfillment.pharmacy.postal_code ?? ''}`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Clinic Info Card - Only for in-person visits */}
+              {appt.visitType && !appt.visitType.name.toLowerCase().includes('virtual') && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Hospital className="w-5 h-5 text-gray-600" />
+                    <h3 className="text-lg font-semibold text-gray-900">Clinic Info</h3>
+                  </div>
+                  
+                  <div className="space-y-3">
                     <div>
-                      <p className="font-medium text-gray-900">Your Pharmacy</p>
-                      <p className="text-sm text-gray-600 mt-1">Shoppers Drug Mart, 123 Main Street, Prince Rupert</p>
+                      <p className="font-medium text-gray-900">{appt.clinic?.name || 'Health Clinic'}</p>
+                      <p className="text-sm text-gray-600 mt-1">{appt.clinic?.address || '123 Main Street, Prince Rupert, BC V8J 1A1'}</p>
+                    </div>
+                    
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                        onClick={() => window.open(`tel:${appt.clinic?.phone || '(250) 555-0123'}`)}
+                      >
+                        <Phone className="w-4 h-4" />
+                        Call
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2"
+                        onClick={() => {
+                          const address = encodeURIComponent(appt.clinic?.address || '123 Main Street, Prince Rupert, BC V8J 1A1');
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank');
+                        }}
+                      >
+                        <Navigation className="w-4 h-4" />
+                        Get Directions
+                      </Button>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Pre-Visit Questions Card */}
               {shouldShowHealthCheckin && (

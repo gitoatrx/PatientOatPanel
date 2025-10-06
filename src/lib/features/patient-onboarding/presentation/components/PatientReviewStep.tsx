@@ -54,10 +54,6 @@ export function PatientReviewStep() {
       if (progressResponse.success && progressResponse.data?.state) {
         const state = progressResponse.data.state;
 
-        // Get pharmacy data from localStorage
-        const pharmacyDataStr = localStorage.getItem('pharmacy-data');
-        const pharmacyData = pharmacyDataStr ? JSON.parse(pharmacyDataStr) : {};
-
         // Map API response data to review form structure
         const combinedData: WizardForm = {
           firstName: state.personal_info?.first_name || "",
@@ -83,9 +79,17 @@ export function PatientReviewStep() {
           doctorId: state.provider ? `${state.provider.first_name} ${state.provider.last_name}` : "",
           appointmentDate: state.appointment?.date || "",
           appointmentTime: state.appointment?.time || "",
-          // Add pharmacy data
-          pharmacyOption: pharmacyData.pharmacyOption || "delivery",
-          selectedPharmacy: pharmacyData.selectedPharmacy || null,
+          // Add fulfillment data from API response
+          pharmacyOption: state.fulfillment?.method || "delivery",
+          selectedPharmacy: state.fulfillment?.pharmacy ? {
+            id: state.fulfillment.pharmacy.id,
+            name: state.fulfillment.pharmacy.name,
+            address: state.fulfillment.pharmacy.address,
+            city: state.fulfillment.pharmacy.city,
+            province: state.fulfillment.pharmacy.province,
+            postal_code: state.fulfillment.pharmacy.postal_code,
+            phone: state.fulfillment.pharmacy.phone
+          } : undefined,
         };
 
         setReviewData(combinedData);
@@ -243,8 +247,8 @@ export function PatientReviewStep() {
 
   const handleBack = () => {
 
-    // Navigate back to appointment date/time step
-    router.push("/onboarding/patient/appointment-datetime");
+    // Navigate back to pharmacy/fulfillment step
+    router.push("/onboarding/patient/pharmacy");
   };
 
   // Get real-time form state updates
