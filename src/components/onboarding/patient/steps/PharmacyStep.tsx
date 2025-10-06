@@ -52,10 +52,10 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
     };
   }, []);
 
-  // Fetch pharmacies when component mounts or search term changes
+  // Fetch pharmacies only when pickup is selected or address changes (NOT on search term changes)
   useEffect(() => {
     const fetchPharmacies = async () => {
-      if (pharmacyOption === 'pickup') {
+      if (pharmacyOption === 'pickup' && pharmacies.length === 0) {
         setIsLoading(true);
         setError(null);
         
@@ -66,12 +66,13 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
             return;
           }
 
+          // Fetch ALL pharmacies without search term - we'll filter locally
           const fetchedPharmacies = await OatrxPharmacyService.getPharmaciesFromAddress(
-            address,
-            searchTerm
+            address
+            // No searchTerm parameter - get all pharmacies
           );
           
-          // Pharmacies are already sorted by distance and filtered in the service
+          // Pharmacies are sorted by distance in the service
           setPharmacies(fetchedPharmacies);
         } catch (err) {
           console.error('Failed to fetch pharmacies:', err);
@@ -82,10 +83,8 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
       }
     };
 
-    // Debounce search
-    const timeoutId = setTimeout(fetchPharmacies, 300);
-    return () => clearTimeout(timeoutId);
-  }, [pharmacyOption, searchTerm, formValues.streetAddress, formValues.city, formValues.province, formValues.postalCode]);
+    fetchPharmacies();
+  }, [pharmacyOption, formValues.streetAddress, formValues.city, formValues.province, formValues.postalCode]);
 
   // Save pharmacy data to localStorage when selections change
   React.useEffect(() => {
@@ -104,8 +103,38 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
     localStorage.setItem('pharmacy-data', JSON.stringify(pharmacyData));
   }, [pharmacyOption, selectedPharmacy]);
 
-  // Pharmacies are already filtered and sorted in the service
-  const filteredPharmacies = pharmacies;
+  // Apply intelligent local filtering for user-friendly search
+  const filteredPharmacies = React.useMemo(() => {
+    if (!searchTerm.trim()) {
+      return pharmacies;
+    }
+    
+    // Split search term into individual words for better matching
+    const searchWords = searchTerm.toLowerCase().trim().split(/\s+/).filter(word => word.length > 0);
+    
+    return pharmacies.filter(pharmacy => {
+      // Normalize phone numbers by removing dashes, spaces, and parentheses for better matching
+      const normalizedPhone = (pharmacy.phone || '').replace(/[-\(\)\s]/g, '');
+      
+      const searchableText = [
+        pharmacy.name || '',
+        pharmacy.address || '',
+        pharmacy.city || '',
+        pharmacy.province || '',
+        pharmacy.zip_code || '',
+        pharmacy.manager_name || '',
+        normalizedPhone // Use normalized phone number
+      ].join(' ').toLowerCase();
+      
+      // Check if ALL search words are found in the searchable text
+      // This allows searches like "shoppers langley" to match pharmacies with both words
+      return searchWords.every(word => {
+        // For phone number searches, also check against normalized version
+        const normalizedWord = word.replace(/[-\(\)\s]/g, '');
+        return searchableText.includes(word) || searchableText.includes(normalizedWord);
+      });
+    });
+  }, [pharmacies, searchTerm]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -133,9 +162,6 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-bold text-lg text-gray-900">Delivery</h3>
-                    {pharmacyOption === 'delivery' && (
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                    )}
                   </div>
                 </div>
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
@@ -172,10 +198,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-bold text-xl text-gray-900">Pickup</h3>
-                    {pharmacyOption === 'pickup' && (
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                    )}
+                    <h3 className="font-bold text-lg text-gray-900">Pickup</h3>
                   </div>
                 </div>
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
@@ -204,7 +227,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
             className="space-y-6"
           >
             {/* Search Section */}
-            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+            <div className="bg-gray-50 p-0">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
                   <Search className="w-4 h-4 text-primary" />
@@ -221,7 +244,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  className="pl-12 h-12 text-base border border-gray-300 focus:border-gray-400 rounded-lg"
+                  className="pl-12 h-12 text-base border border-gray-300 focus:border-gray-400 rounded-lg focus:shadow-none"
                 />
                 {isLoading && (
                   <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -230,7 +253,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                 )}
                 
                 {/* Pharmacy Suggestions Dropdown - positioned exactly within input field */}
-                {showSuggestions && searchTerm.length >= 1 && (
+                {showSuggestions && (
                   <div ref={suggestionsRef} className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
                     {isLoading ? (
                       <div className="p-4 text-center">
@@ -240,11 +263,15 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                     ) : filteredPharmacies.length === 0 ? (
                       <div className="p-4 text-center">
                         <Search className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600">No pharmacies found</p>
-                        <p className="text-xs text-gray-500">Try a different search term</p>
+                        <p className="text-sm text-gray-600">
+                          {searchTerm ? 'No pharmacies found' : 'Loading pharmacies...'}
+                        </p>
+                        {searchTerm && (
+                          <p className="text-xs text-gray-500">Try a different search term</p>
+                        )}
                       </div>
                     ) : (
-                      <div className="py-1">
+                      <div className="py-0">
                         {filteredPharmacies.map((pharmacy, index) => (
                           <button
                             key={pharmacy.id}
@@ -252,13 +279,13 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                               setSelectedPharmacy(pharmacy);
                               setShowSuggestions(false);
                             }}
-                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                            className={`w-full text-left px-2 py-2 hover:bg-gray-50 transition-colors ${
                               selectedPharmacy?.id === pharmacy.id ? 'bg-blue-50' : ''
                             }`}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-gray-900 text-sm mb-1">
+                                <div className="font-semibold text-gray-900 text-xs ">
                                   {pharmacy.name}
                                 </div>
                                 <div className="text-xs text-gray-600">
@@ -266,9 +293,10 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                                 </div>
                               </div>
                               {pharmacy.distance !== null && (
-                                <div className="ml-3 flex-shrink-0">
-                                  <div className="text-xs font-medium text-gray-600">
-                                    {pharmacy.distance.toFixed(1)} km
+                                <div className="ml-0 flex-shrink-0">
+                                  
+                                  <div className="text-xs font-medium text-blue-600">
+                                  {pharmacy.distance.toFixed(1)} km
                                   </div>
                                 </div>
                               )}

@@ -519,7 +519,7 @@ export function PatientEmergencyContactStep() {
                     variant="outline"
                     onClick={() => handleReturningPatientAction('update')}
                     size="lg"
-                    className="flex-1 text-lg cursor-pointer w-full sm:w-auto"
+                    className="w-full text-lg cursor-pointer"
                   >
                     Update contact
                   </Button>
@@ -527,7 +527,7 @@ export function PatientEmergencyContactStep() {
                     variant="outline"
                     onClick={() => handleReturningPatientAction('remove')}
                     size="lg"
-                    className="flex-1 text-lg cursor-pointer w-full sm:w-auto"
+                    className="w-full text-lg cursor-pointer"
                   >
                     Remove contact
                   </Button>
