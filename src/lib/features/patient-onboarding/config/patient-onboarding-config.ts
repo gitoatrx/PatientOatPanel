@@ -20,6 +20,7 @@ const PATIENT_ONBOARDING_ROUTES = {
   EMERGENCY_CONTACT: "/onboarding/patient/emergency-contact",
   DOCTOR_SELECTION: "/onboarding/patient/doctor-selection",
   APPOINTMENT_DATETIME: "/onboarding/patient/appointment-datetime",
+  PHARMACY: "/onboarding/patient/pharmacy",
   REVIEW: "/onboarding/patient/review",
   CONFIRMATION: "/onboarding/patient/confirmation",
 } as const;
@@ -157,6 +158,15 @@ export const PATIENT_ONBOARDING_STEPS: readonly PatientOnboardingStepConfig[] =
     },
     {
       id: 14,
+      name: "pharmacy",
+      title: "Pharmacy Selection",
+      route: PATIENT_ONBOARDING_ROUTES.PHARMACY,
+      apiStepName: "FULFILLMENT",
+      isCompleted: false,
+      isAccessible: false,
+    },
+    {
+      id: 15,
       name: "review",
       title: "Review & Book",
       route: PATIENT_ONBOARDING_ROUTES.REVIEW,
@@ -165,7 +175,7 @@ export const PATIENT_ONBOARDING_STEPS: readonly PatientOnboardingStepConfig[] =
       isAccessible: false,
     },
     {
-      id: 15,
+      id: 16,
       name: "confirmation",
       title: "Appointment Confirmed",
       route: PATIENT_ONBOARDING_ROUTES.CONFIRMATION,

@@ -9,6 +9,7 @@ import { PharmacyStep } from "@/components/onboarding/patient/steps/PharmacyStep
 import type { WizardForm } from "@/types/wizard";
 import { useRouter } from "next/navigation";
 import { patientService } from "@/lib/services/patientService";
+import { getRouteFromApiStep } from "@/lib/config/api";
 
 const pharmacySchema = z.record(z.string(), z.unknown());
 
@@ -115,14 +116,46 @@ export function PatientPharmacyStep() {
   };
 
   const handleNext = async () => {
+    if (!phoneNumber) {
+      setError("Phone number not found. Please start over.");
+      return;
+    }
+
+    // Validate that if pickup is selected, a pharmacy must be selected
+    if (pharmacySelection.pharmacyOption === 'pickup' && !pharmacySelection.selectedPharmacy) {
+      setError("Please select a pharmacy for pickup.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError(null);
-
-      // Navigate to review step
-      router.push("/onboarding/patient/review");
+      
+      // Prepare fulfillment data for API
+      const fulfillmentData = {
+        method: (pharmacySelection.pharmacyOption as 'pickup' | 'delivery') || 'delivery',
+        ...(pharmacySelection.pharmacyOption === 'pickup' && pharmacySelection.selectedPharmacy && { 
+          pharmacy_id: pharmacySelection.selectedPharmacy.id 
+        })
+      };
+      
+      // Call fulfillment API
+      const apiResponse = await patientService.saveFulfillment(phoneNumber, fulfillmentData);
+      
+      if (apiResponse.success) {
+        // Navigate to next step based on API response
+        const nextStep = apiResponse.data.current_step;
+        const nextRoute = getRouteFromApiStep(nextStep);
+        router.push(nextRoute);
+      } else {
+        // Handle API error response
+        const errorMessage = apiResponse.message || "Failed to save fulfillment preference";
+        setError(errorMessage);
+      }
     } catch (err) {
-      setError("Failed to save pharmacy information. Please try again.");
+      console.error('Unexpected error in handleNext:', err);
+      const errorMessage = 'Network error. Please check your connection and try again.';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

@@ -238,7 +238,7 @@ export function PatientGenderStep() {
           )}
           
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {genderOptions.map((option) => {
                 const IconComponent = option.icon;
                 return (
@@ -265,36 +265,22 @@ export function PatientGenderStep() {
                           : "border-gray-200 hover:border-primary/30 hover:bg-gradient-to-br hover:from-gray-50 to-gray-100"
                       )}
                     >
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-6">
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex items-center gap-4 sm:gap-6">
                           <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300",
+                            "w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 flex-shrink-0",
                             selectedGender === option.value
                               ? option.value.toLowerCase() === "female"
                                 ? "bg-pink-500 text-white"
                                 : "bg-primary text-white"
                               : "bg-gray-100 text-gray-500"
                           )}>
-                            <IconComponent className="w-6 h-6" />
+                            <IconComponent className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="font-bold text-lg text-gray-900">
-                                {option.label}
-                              </h3>
-                            </div>
-                          </div>
-                          <div className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300",
-                            selectedGender === option.value
-                              ? option.value.toLowerCase() === "female"
-                                ? "border-pink-500 bg-pink-500"
-                                : "border-primary bg-primary"
-                              : "border-gray-300"
-                          )}>
-                            {selectedGender === option.value && (
-                              <div className="w-2 h-2 bg-white rounded-full"></div>
-                            )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-base sm:text-lg text-gray-900">
+                              {option.label}
+                            </h3>
                           </div>
                         </div>
                       </CardContent>

@@ -187,7 +187,7 @@ export function PatientAppointmentDateTimeStep() {
 
         // Navigate to next step based on API response
         const nextStep = apiResponse.data?.current_step;
-        const nextRoute = getRouteFromApiStep(nextStep || 'review');
+        const nextRoute = getRouteFromApiStep(nextStep || 'fulfillment');
 
         router.push(nextRoute);
       } else {

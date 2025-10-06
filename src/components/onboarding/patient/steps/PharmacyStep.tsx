@@ -109,12 +109,20 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
       return pharmacies;
     }
     
-    // Split search term into individual words for better matching
-    const searchWords = searchTerm.toLowerCase().trim().split(/\s+/).filter(word => word.length > 0);
+    const searchTermLower = searchTerm.toLowerCase().trim();
     
     return pharmacies.filter(pharmacy => {
       // Normalize phone numbers by removing dashes, spaces, and parentheses for better matching
       const normalizedPhone = (pharmacy.phone || '').replace(/[-\(\)\s]/g, '');
+      const normalizedSearchTerm = searchTermLower.replace(/[-\(\)\s]/g, '');
+      
+      // Check if search term matches phone number (exact match for phone)
+      if (normalizedPhone && normalizedPhone.includes(normalizedSearchTerm)) {
+        return true;
+      }
+      
+      // For non-phone searches, split into words and check if ALL words are found
+      const searchWords = searchTermLower.split(/\s+/).filter(word => word.length > 0);
       
       const searchableText = [
         pharmacy.name || '',
@@ -122,19 +130,14 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
         pharmacy.city || '',
         pharmacy.province || '',
         pharmacy.zip_code || '',
-        pharmacy.manager_name || '',
-        normalizedPhone // Use normalized phone number
+        pharmacy.manager_name || ''
       ].join(' ').toLowerCase();
       
       // Check if ALL search words are found in the searchable text
-      // This allows searches like "shoppers langley" to match pharmacies with both words
-      return searchWords.every(word => {
-        // For phone number searches, also check against normalized version
-        const normalizedWord = word.replace(/[-\(\)\s]/g, '');
-        return searchableText.includes(word) || searchableText.includes(normalizedWord);
-      });
+      return searchWords.every(word => searchableText.includes(word));
     });
   }, [pharmacies, searchTerm]);
+
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -164,15 +167,6 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                     <h3 className="font-bold text-lg text-gray-900">Delivery</h3>
                   </div>
                 </div>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                  pharmacyOption === 'delivery' 
-                    ? 'border-primary bg-primary' 
-                    : 'border-gray-300'
-                }`}>
-                  {pharmacyOption === 'delivery' && (
-                    <div className="w-2 h-2 bg-white rounded-full"></div>
-                  )}
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -200,15 +194,6 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-bold text-lg text-gray-900">Pickup</h3>
                   </div>
-                </div>
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                  pharmacyOption === 'pickup' 
-                    ? 'border-primary bg-primary' 
-                    : 'border-gray-300'
-                }`}>
-                  {pharmacyOption === 'pickup' && (
-                    <div className="w-2 h-2 bg-white rounded-full"></div>
-                  )}
                 </div>
               </div>
             </CardContent>
@@ -244,7 +229,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  className="pl-12 h-12 text-base border border-gray-300 focus:border-gray-400 rounded-lg focus:shadow-none"
+                  className="pl-12 h-12 text-base border border-gray-300 focus:border-gray-400 rounded-lg focus:shadow-none focus-visible:ring-0"
                 />
                 {isLoading && (
                   <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -357,6 +342,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
 
     </div>
   );

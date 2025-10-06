@@ -131,6 +131,19 @@ export interface OnboardingProgressResponse {
         date: string;
         time: string;
       };
+      fulfillment?: {
+        method: 'pickup' | 'delivery';
+        pharmacy?: {
+          id: number;
+          name: string;
+          address: string;
+          city: string;
+          province: string;
+          postal_code: string;
+          phone: string;
+        };
+        pharmacy_id?: number;
+      };
       confirmation?: {
         appointment_id: number;
         guest_patient_id: number;
@@ -585,6 +598,31 @@ export interface EmergencyContactResponse {
         name: string;
         relationship: string;
         phone: string;
+      };
+      otp_verified_at: string;
+    };
+    guest_patient_id: string | null;
+    appointment_id: string | null;
+  };
+}
+
+export interface FulfillmentResponse {
+  success: boolean;
+  message: string;
+  data: {
+    clinic_id: number;
+    phone: string;
+    current_step: string;
+    status: string;
+    otp_verified_at: string;
+    state: {
+      contact: {
+        phone: string;
+        email?: string;
+      };
+      fulfillment?: {
+        method: 'pickup' | 'delivery';
+        pharmacy_id?: number;
       };
       otp_verified_at: string;
     };

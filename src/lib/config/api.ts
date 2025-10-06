@@ -28,6 +28,7 @@ export const API_CONFIG = {
     HEALTH_CONCERN: '/clinic/onboarding/health-concerns',
     APPOINTMENT: '/clinic/onboarding/appointment',
     CONFIRM_APPOINTMENT: '/clinic/onboarding/confirm',
+    FULFILLMENT: '/clinic/onboarding/fulfillment',
     AVAILABLE_SLOTS_PROVIDER: '/clinic/onboarding/available-slots-provider',
     AVAILABLE_SLOTS: '/clinic/onboarding/available-slots',
     // Followup endpoints
@@ -101,6 +102,7 @@ export const API_STEP_TO_ROUTE_MAP: Record<string, string> = {
   'provider_selection': '/onboarding/patient/doctor-selection', // Alternative step name
   'appointment': '/onboarding/patient/appointment-datetime', // API returns 'appointment'
   'appointment_datetime': '/onboarding/patient/appointment-datetime', // Alternative step name
+  'fulfillment': '/onboarding/patient/pharmacy', // API returns 'fulfillment'
   'review': '/onboarding/patient/review',
   'confirmation': '/onboarding/patient/confirmation',
   'completed': '/onboarding/patient/confirmation', // API returns 'completed' when onboarding is complete

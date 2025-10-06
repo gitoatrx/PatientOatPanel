@@ -451,8 +451,13 @@ export function PlacesAddressFields({
     let streetNumber = "";
     let route = "";
     
+    // Debug logging to see what components we're getting
+    console.log('Address components:', components);
+    
     components.forEach((component) => {
       const types = component.types;
+      console.log(`Component: ${component.long_name}, Types: ${types.join(', ')}`);
+      
       if (types.includes("street_number")) {
         streetNumber = component.long_name;
       } else if (types.includes("route")) {
@@ -475,6 +480,9 @@ export function PlacesAddressFields({
       result.street = route;
     }
     
+    console.log('Parsed result:', result);
+    console.log('Street number:', streetNumber, 'Route:', route);
+    
     return result;
   };
   const handleAddressSelect = (addressValue: string) => {
@@ -494,12 +502,14 @@ export function PlacesAddressFields({
 
           // Set the full street address (street number + route)
           if (c.street) {
+            console.log('Setting street address to:', c.street);
             setValue(fieldNames.street, c.street, {
               shouldValidate: true,
               shouldTouch: true,
             });
           } else {
             // Fallback to the full formatted address if street parsing fails
+            console.log('Street parsing failed, using formatted address:', place.formatted_address);
             setValue(fieldNames.street, place.formatted_address, {
               shouldValidate: true,
               shouldTouch: true,

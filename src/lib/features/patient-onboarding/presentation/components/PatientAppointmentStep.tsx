@@ -48,7 +48,7 @@ export function PatientAppointmentStep() {
         appointmentTime: values.appointmentTime,
       });
       
-      // Navigate to pharmacy step
+      // Navigate to next step based on API response (pharmacy step comes after appointment)
       router.push("/onboarding/patient/pharmacy");
     } catch (error) {
 

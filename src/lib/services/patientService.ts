@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse } from '@/lib/types/api';
+import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, FulfillmentResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse } from '@/lib/types/api';
 import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
@@ -517,6 +517,47 @@ export const patientService = {
           clinic_id: API_CONFIG.CLINIC_ID,
           phone: phone,
           current_step: 'emergency_contact',
+          status: 'error',
+          otp_verified_at: '',
+          state: {
+            contact: { phone: phone },
+            otp_verified_at: '',
+          },
+          guest_patient_id: null,
+          appointment_id: null,
+        },
+      };
+    }
+  },
+
+  // Fulfillment API
+  async saveFulfillment(phone: string, fulfillmentData: {
+    method: 'pickup' | 'delivery';
+    pharmacy_id?: number;
+  }): Promise<FulfillmentResponse> {
+    try {
+
+      const response = await apiClient.post<FulfillmentResponse>(API_CONFIG.ENDPOINTS.FULFILLMENT, {
+        clinic_id: API_CONFIG.CLINIC_ID,
+        phone: phone,
+        ...fulfillmentData,
+      }, {
+        showLoading: true,
+        showErrorToast: true,
+        showSuccessToast: false, // Success is handled by navigation
+      });
+
+      return response.data;
+    } catch (error) {
+
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to save fulfillment preference',
+        data: {
+          clinic_id: API_CONFIG.CLINIC_ID,
+          phone: phone,
+          current_step: 'fulfillment',
           status: 'error',
           otp_verified_at: '',
           state: {
