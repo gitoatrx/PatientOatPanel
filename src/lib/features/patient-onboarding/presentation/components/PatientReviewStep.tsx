@@ -117,49 +117,49 @@ export function PatientReviewStep() {
       setIsSubmitting(true);
       setError(null);
 
-      // First check if appointment is already confirmed by getting progress
-      const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
+      // COMMENTED OUT FOR TESTING: First check if appointment is already confirmed by getting progress
+      // const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
       
-      if (progressResponse.success && progressResponse.data) {
-        const progressData = progressResponse.data;
+      // if (progressResponse.success && progressResponse.data) {
+      //   const progressData = progressResponse.data;
         
-        // Check if appointment is already confirmed
-        if (progressData.status === "completed" && progressData.state?.confirmation) {
-          console.log('✅ Appointment already confirmed, navigating to confirmation page');
+      //   // Check if appointment is already confirmed
+      //   if (progressData.status === "completed" && progressData.state?.confirmation) {
+      //     console.log('✅ Appointment already confirmed, navigating to confirmation page');
           
-          // Trigger new-appointment event if appointment is for today (Vancouver time)
-          if (reviewData?.appointmentDate && isAppointmentToday(reviewData.appointmentDate)) {
-            try {
-              const appointmentId = progressData.appointment_id;
-              const patientName = `${reviewData.firstName || ''} ${reviewData.lastName || ''}`.trim();
-              const patientId = progressData.patient_id || 0;
+      //     // Trigger new-appointment event if appointment is for today (Vancouver time)
+      //     if (reviewData?.appointmentDate && isAppointmentToday(reviewData.appointmentDate)) {
+      //       try {
+      //         const appointmentId = progressData.appointment_id;
+      //         const patientName = `${reviewData.firstName || ''} ${reviewData.lastName || ''}`.trim();
+      //         const patientId = progressData.patient_id || 0;
               
-              // Get followup token from localStorage
-              const followupToken = localStorage.getItem('followup-token');
+      //         // Get followup token from localStorage
+      //         const followupToken = localStorage.getItem('followup-token');
               
-              if (appointmentId && patientName) {
-                // Create a new instance of VideoEventsService
-                const { VideoEventsService } = await import('@/lib/services/videoEventsService');
-                const videoEventsService = new VideoEventsService(appointmentId.toString());
+      //         if (appointmentId && patientName) {
+      //           // Create a new instance of VideoEventsService
+      //           const { VideoEventsService } = await import('@/lib/services/videoEventsService');
+      //           const videoEventsService = new VideoEventsService(appointmentId.toString());
                 
-                await videoEventsService.triggerNewAppointmentEvent(followupToken || '', {
-                  id: Number(appointmentId),
-                  patient_name: patientName,
-                  patient_id: Number(patientId)
-                });
-                console.log('✅ New appointment event triggered for today\'s appointment');
-              }
-            } catch (eventError) {
-              console.error('❌ Failed to trigger new-appointment event:', eventError);
-              // Don't fail the appointment confirmation if event fails
-            }
-          }
+      //           await videoEventsService.triggerNewAppointmentEvent(followupToken || '', {
+      //             id: Number(appointmentId),
+      //             patient_name: patientName,
+      //             patient_id: Number(patientId)
+      //           });
+      //           console.log('✅ New appointment event triggered for today\'s appointment');
+      //         }
+      //       } catch (eventError) {
+      //         console.error('❌ Failed to trigger new-appointment event:', eventError);
+      //         // Don't fail the appointment confirmation if event fails
+      //       }
+      //     }
           
-          // Navigate to confirmation page
-          router.push("/onboarding/patient/confirmation");
-          return;
-        }
-      }
+      //     // Navigate to confirmation page
+      //     router.push("/onboarding/patient/confirmation");
+      //     return;
+      //   }
+      // }
 
       // If not already confirmed, call confirm appointment API
       const apiResponse = await patientService.confirmAppointment(phoneNumber);

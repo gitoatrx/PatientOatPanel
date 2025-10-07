@@ -407,14 +407,29 @@ export function AppointmentConfirmationContent() {
                 
                 <div className="space-y-4">
                   {appt.fulfillment?.method === 'delivery' ? (
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
-                      <div>
-                        <p className="font-medium text-gray-900">Delivery — to your home address</p>
-                        {appt.address && (
-                          <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
-                        )}
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
+                        <div>
+                          <p className="font-medium text-gray-900">Delivery — to your home address</p>
+                          {appt.address && (
+                            <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
+                          )}
+                        </div>
                       </div>
+                      
+                      {/* Show pharmacy info for delivery method */}
+                      {appt.fulfillment?.pharmacy && (
+                        <div className="flex items-start gap-3">
+                          <Store className="w-4 h-4 text-gray-600 mt-1" />
+                          <div>
+                            <p className="font-medium text-gray-900">Your Pharmacy</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {`${appt.fulfillment.pharmacy.name}, ${appt.fulfillment.pharmacy.address}, ${appt.fulfillment.pharmacy.province} ${appt.fulfillment.pharmacy.postal_code ?? ''}`}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-start gap-3">
@@ -427,18 +442,6 @@ export function AppointmentConfirmationContent() {
                             <p className="text-xs text-gray-500 mt-1">{appt.fulfillment.pharmacy.phone}</p>
                           </>
                         )}
-                      </div>
-                    </div>
-                  )}
-
-                  {appt.fulfillment?.pharmacy && (
-                    <div className="flex items-start gap-3">
-                      <Store className="w-4 h-4 text-gray-600 mt-1" />
-                      <div>
-                        <p className="font-medium text-gray-900">Your Pharmacy</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {`${appt.fulfillment.pharmacy.name}, ${appt.fulfillment.pharmacy.address}, ${appt.fulfillment.pharmacy.province} ${appt.fulfillment.pharmacy.postal_code ?? ''}`}
-                        </p>
                       </div>
                     </div>
                   )}
