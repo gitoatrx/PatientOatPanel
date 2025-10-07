@@ -11,6 +11,9 @@ import { useRouter } from "next/navigation";
 import { patientService } from "@/lib/services/patientService";
 import { useToast } from "@/components/ui/use-toast";
 import { isAppointmentToday } from "@/lib/services/videoEventsService";
+// import { ManageExistingAppointmentBanner } from "@/components/onboarding/patient/ManageExistingAppointmentBanner";
+// import { RescheduleSuggestionBanner } from "@/components/onboarding/patient/RescheduleSuggestionBanner";
+// import { OnboardingReturningPatientDecision } from "@/lib/types/api";
 
 const reviewSchema = z.record(z.string(), z.unknown());
 
@@ -24,6 +27,8 @@ export function PatientReviewStep() {
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // const [returningPatientDecision, setReturningPatientDecision] = useState<OnboardingReturningPatientDecision | null>(null);
+  // const [manageConflict, setManageConflict] = useState<OnboardingReturningPatientDecision | null>(null);
   
 
   const form = useForm<FormValues>({
@@ -94,6 +99,11 @@ export function PatientReviewStep() {
 
         setReviewData(combinedData);
 
+        // Extract returning patient decision
+        // if (progressResponse.data.returning_patient_decision) {
+        //   setReturningPatientDecision(progressResponse.data.returning_patient_decision);
+        // }
+
       } else {
 
         setError("No progress data found. Please complete the onboarding process first.");
@@ -113,9 +123,16 @@ export function PatientReviewStep() {
       return;
     }
 
+    // Check if we should block booking due to manage decision
+    // if (returningPatientDecision?.action === "manage") {
+    //   setError("You already have an upcoming appointment. Please manage it before booking a new one.");
+    //   return;
+    // }
+
     try {
       setIsSubmitting(true);
       setError(null);
+      // setManageConflict(null);
 
       // COMMENTED OUT FOR TESTING: First check if appointment is already confirmed by getting progress
       // const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
@@ -161,8 +178,8 @@ export function PatientReviewStep() {
       //   }
       // }
 
-      // If not already confirmed, call confirm appointment API
-      const apiResponse = await patientService.confirmAppointment(phoneNumber);
+      // Call confirm appointment API with decision action telemetry
+      const apiResponse = await patientService.confirmAppointment(phoneNumber, "start_new");
       
       if (apiResponse.success) {
         // Trigger new-appointment event if appointment is for today (Vancouver time)
@@ -196,7 +213,14 @@ export function PatientReviewStep() {
         // Navigate to confirmation page
         router.push("/onboarding/patient/confirmation");
       } else {
-        // Handle API error response
+        // Handle 409 conflict - show manage UI
+        // if (apiResponse.returning_patient_decision?.action === "manage") {
+        //   setManageConflict(apiResponse.returning_patient_decision);
+        //   setError(null); // Clear any previous errors
+        //   return;
+        // }
+
+        // Handle other API error responses
         const errorMessage = apiResponse.message || "Failed to confirm appointment";
         
         // Show error toast IMMEDIATELY
@@ -369,10 +393,70 @@ export function PatientReviewStep() {
           {isDataLoading && !error ? (
             <SkeletonLoader />
           ) : hasData && !error ? (
-            <ReviewStep
-              getPersonalizedLabel={getPersonalizedLabel}
-              formValues={reviewFormValues as WizardForm}
-            />
+            <>
+              {/* Show manage UI if decision is manage */}
+              {/* {returningPatientDecision?.action === "manage" && returningPatientDecision.latest_appointment && (
+                <ManageExistingAppointmentBanner
+                  appointment={returningPatientDecision.latest_appointment}
+                  onView={() => {
+                    // TODO: Implement view appointment functionality
+                    console.log('View appointment:', returningPatientDecision.latest_appointment?.id);
+                  }}
+                  onCancel={() => {
+                    // TODO: Implement cancel appointment functionality
+                    console.log('Cancel appointment:', returningPatientDecision.latest_appointment?.id);
+                  }}
+                  onReschedule={() => {
+                    // TODO: Implement reschedule appointment functionality
+                    console.log('Reschedule appointment:', returningPatientDecision.latest_appointment?.id);
+                  }}
+                />
+              )} */}
+
+              {/* Show reschedule suggestion if decision is reschedule */}
+              {/* {returningPatientDecision?.action === "reschedule" && returningPatientDecision.latest_appointment && (
+                <RescheduleSuggestionBanner
+                  appointment={returningPatientDecision.latest_appointment}
+                  onReschedule={() => {
+                    // TODO: Implement reschedule appointment functionality
+                    console.log('Reschedule appointment:', returningPatientDecision.latest_appointment?.id);
+                  }}
+                  onDismiss={() => {
+                    // Allow user to continue with new booking
+                    setReturningPatientDecision(prev => prev ? { ...prev, action: "start_new" } : null);
+                  }}
+                />
+              )} */}
+
+              {/* Show manage conflict UI if 409 occurred */}
+              {/* {manageConflict && manageConflict.latest_appointment && (
+                <ManageExistingAppointmentBanner
+                  appointment={manageConflict.latest_appointment}
+                  onView={() => {
+                    // TODO: Implement view appointment functionality
+                    console.log('View appointment:', manageConflict.latest_appointment?.id);
+                  }}
+                  onCancel={() => {
+                    // TODO: Implement cancel appointment functionality
+                    console.log('Cancel appointment:', manageConflict.latest_appointment?.id);
+                  }}
+                  onReschedule={() => {
+                    // TODO: Implement reschedule appointment functionality
+                    console.log('Reschedule appointment:', manageConflict.latest_appointment?.id);
+                  }}
+                />
+              )} */}
+
+              {/* Show review step only if action is start_new or reschedule */}
+              {/* {(returningPatientDecision?.action === "start_new" || 
+                returningPatientDecision?.action === "reschedule" || 
+                !returningPatientDecision) && ( */}
+                <ReviewStep
+                  getPersonalizedLabel={getPersonalizedLabel}
+                  formValues={reviewFormValues as WizardForm}
+                />
+              {/* )} */}
+            </>
           ) : !error ? (
             <div className="text-center py-8">
               <div className="text-gray-500 mb-4">

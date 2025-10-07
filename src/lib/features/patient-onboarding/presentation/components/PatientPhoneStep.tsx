@@ -203,7 +203,7 @@ export function PatientPhoneStep() {
           throw error;
         }
       }}
-      nextLabel="Send Verification Code"
+      nextLabel="Continue"
       isSubmitting={isLoading}
       isNextDisabled={!isValid || isLoading}
       useCard={false}
@@ -234,7 +234,7 @@ export function PatientPhoneStep() {
           <FormPhoneInput
             name="phone"
             type="tel"
-            label="Enter your phone number"
+            label=""
             placeholder="(604) 555-0123"
             description=""
           />

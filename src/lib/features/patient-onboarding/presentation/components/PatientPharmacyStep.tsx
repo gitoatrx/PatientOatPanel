@@ -139,8 +139,8 @@ export function PatientPharmacyStep() {
         })
       };
       
-      // Call fulfillment API
-      const apiResponse = await patientService.saveFulfillment(phoneNumber, fulfillmentData);
+      // Call fulfillment API with decision action telemetry
+      const apiResponse = await patientService.saveFulfillment(phoneNumber, fulfillmentData, "start_new");
       
       if (apiResponse.success) {
         // Navigate to next step based on API response
@@ -234,8 +234,8 @@ export function PatientPharmacyStep() {
 
   return (
     <PatientStepShell
-      title={getPersonalizedLabel()}
-      description={getDescription()}
+      title="Choose Your Pharmacy"
+      description="Select how you'd like to receive your medication"
       onBack={handleBack}
       onNext={handleNext}
       nextLabel="Continue"
@@ -247,43 +247,29 @@ export function PatientPharmacyStep() {
       totalSteps={15}
     >
       <FormProvider {...form}>
-        <div className="max-w-4xl mx-auto">
-          {/* Error State */}
-          {error && (
-            <div className="text-center py-8">
-              <div className="text-red-500 mb-4">
-                {error}
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-              >
-                Reload Page
-              </button>
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-8">
+            <div className="text-red-500 mb-4">
+              {error}
             </div>
-          )}
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+            >
+              Reload Page
+            </button>
+          </div>
+        )}
 
-          {/* Loading State */}
-          {isDataLoading && !error ? (
-            <SkeletonLoader />
-          ) : hasData && !error ? (
-            <PharmacyStep
-              formValues={pharmacyFormValues as WizardForm}
-            />
-          ) : !error ? (
-            <div className="text-center py-8">
-              <div className="text-gray-500 mb-4">
-                No data available for pharmacy selection
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-              >
-                Reload Page
-              </button>
-            </div>
-          ) : null}
-        </div>
+        {/* Loading State */}
+        {isDataLoading && !error ? (
+          <SkeletonLoader />
+        ) : (
+          <PharmacyStep
+            formValues={pharmacyFormValues as WizardForm}
+          />
+        )}
       </FormProvider>
     </PatientStepShell>
   );

@@ -140,7 +140,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
 
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-4 sm:space-y-6">
 
       {/* Pharmacy Options */}
       <div className="grid md:grid-cols-2 gap-4">

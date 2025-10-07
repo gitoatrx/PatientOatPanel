@@ -39,13 +39,14 @@ export function FormInput({
     <div className="space-y-2">
       <label
         htmlFor={name}
-        className="block text-lg font-normal text-foreground pb-[1.5px]"
+        className="block text-md font-normal text-foreground pb-[1.5px]"
       >
         {label}
       </label>
       <input
         id={name}
         type={type}
+        autoComplete="off"
         {...registerProps}
         {...props}
         onChange={(e) => {

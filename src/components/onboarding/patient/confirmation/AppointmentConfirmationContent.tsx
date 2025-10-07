@@ -30,6 +30,7 @@ import { patientService } from "@/lib/services/patientService";
 import { PatientStepShell } from "@/lib/features/patient-onboarding/presentation/components/PatientStepShell";
 import { getStepComponentData } from "@/lib/features/patient-onboarding/config/patient-onboarding-config";
 import { useClinic } from "@/contexts/ClinicContext";
+import { OnboardingReturningPatientDecision } from "@/lib/types/api";
 
 
 export function AppointmentConfirmationContent() {
@@ -72,6 +73,7 @@ export function AppointmentConfirmationContent() {
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shouldShowHealthCheckin, setShouldShowHealthCheckin] = useState(false);
+  const [returningPatientDecision, setReturningPatientDecision] = useState<OnboardingReturningPatientDecision | null>(null);
   const router = useRouter();
 
   // Get step configuration
@@ -97,6 +99,12 @@ export function AppointmentConfirmationContent() {
 
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
+          
+          // Extract returning patient decision first (regardless of confirmation status)
+          if (apiData.returning_patient_decision) {
+            setReturningPatientDecision(apiData.returning_patient_decision);
+          }
+
           const followupStatuses = apiData.state?.health_concerns?.followup_status;
           const hasFollowupFlag = Array.isArray(followupStatuses)
             ? followupStatuses.some((status) => status === true || status === "true")
@@ -395,6 +403,7 @@ export function AppointmentConfirmationContent() {
                 </div>
               </div>
             )}
+
 
             {/* Additional Services */}
             <div className="grid grid-cols-1 gap-6">
