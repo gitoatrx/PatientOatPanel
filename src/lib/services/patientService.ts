@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, FulfillmentResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse } from '@/lib/types/api';
+import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, FulfillmentResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse, ConfirmAppointmentResponse, PaymentSessionResponse, OnboardingReturningPatientDecision } from '@/lib/types/api';
 import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
@@ -534,14 +534,20 @@ export const patientService = {
   async saveFulfillment(phone: string, fulfillmentData: {
     method: 'pickup' | 'delivery';
     pharmacy_id?: number;
-  }): Promise<FulfillmentResponse> {
+  }, decisionAction?: 'start_new' | 'manage' | 'reschedule'): Promise<FulfillmentResponse> {
     try {
-
-      const response = await apiClient.post<FulfillmentResponse>(API_CONFIG.ENDPOINTS.FULFILLMENT, {
+      const payload: Record<string, unknown> = {
         clinic_id: API_CONFIG.CLINIC_ID,
         phone: phone,
         ...fulfillmentData,
-      }, {
+      };
+
+      // Add optional telemetry field
+      if (decisionAction) {
+        payload.decision_action = decisionAction;
+      }
+
+      const response = await apiClient.post<FulfillmentResponse>(API_CONFIG.ENDPOINTS.FULFILLMENT, payload, {
         showLoading: true,
         showErrorToast: true,
         showSuccessToast: false, // Success is handled by navigation
@@ -806,15 +812,21 @@ export const patientService = {
   },
 
   // Confirm Appointment API
-  async confirmAppointment(phone: string): Promise<ApiResponse<{ appointment_id: number; confirmation_number: string }>> {
+  async confirmAppointment(phone: string, decisionAction?: 'start_new' | 'manage' | 'reschedule'): Promise<ConfirmAppointmentResponse> {
     try {
+      const payload: Record<string, unknown> = {
+        phone,
+        clinic_id: API_CONFIG.CLINIC_ID,
+      };
 
-      const response = await apiClient.post<ApiResponse<{ appointment_id: number; confirmation_number: string }>>(
+      // Add optional telemetry field
+      if (decisionAction) {
+        payload.decision_action = decisionAction;
+      }
+
+      const response = await apiClient.post<ConfirmAppointmentResponse>(
         API_CONFIG.ENDPOINTS.CONFIRM_APPOINTMENT,
-        {
-          phone,
-          clinic_id: API_CONFIG.CLINIC_ID,
-        },
+        payload,
         {
           showLoading: true,
           showErrorToast: false, // Handle errors in component
@@ -823,9 +835,20 @@ export const patientService = {
       );
 
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
+      // Handle 409 conflict responses
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status?: number; data?: { message?: string; returning_patient_decision?: OnboardingReturningPatientDecision } } };
+        if (axiosError.response?.status === 409) {
+          return {
+            success: false,
+            message: axiosError.response.data?.message || 'Appointment conflict detected',
+            returning_patient_decision: axiosError.response.data?.returning_patient_decision,
+          };
+        }
+      }
 
-      // Return a structured error response instead of throwing
+      // Return a structured error response for other errors
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to confirm appointment',
@@ -981,6 +1004,59 @@ export const patientService = {
             phone: '',
             phn: '',
             patient_type: '',
+          },
+        },
+      };
+    }
+  },
+
+  // Get Payment Session API
+  async getPaymentSession(sessionId: string): Promise<PaymentSessionResponse> {
+    try {
+      const response = await apiClient.get<PaymentSessionResponse>(
+        `${API_CONFIG.ENDPOINTS.PAYMENT_SESSION}/${sessionId}`,
+        {
+          showLoading: true,
+          showErrorToast: true,
+          showSuccessToast: false,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch payment session',
+        data: {
+          stripe: {
+            checkout_session_id: sessionId,
+            payment_intent_id: '',
+            status: 'unknown',
+          },
+          payment: {
+            id: 0,
+            amount: '0.00',
+            status: 'unknown',
+          },
+          patient: {
+            id: 0,
+            first_name: '',
+            last_name: '',
+            phone: '',
+            phn: '',
+          },
+          appointment: {
+            id: 0,
+            date_and_time: '',
+            status: 'unknown',
+            visit_type_name: '',
+            visit_type_duration: 0,
+            doctor: {
+              id: 0,
+              first_name: '',
+              last_name: '',
+            },
           },
         },
       };

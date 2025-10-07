@@ -151,10 +151,10 @@ export function PatientStepShell({
           {/* Header row */}
           <div className="w-full pt-4 pb-4">
             <div
-              className={`${contentMaxWidthClass} mx-auto px-4 sm:px-6 lg:px-8`}
+              className={`${contentMaxWidthClass} mx-auto px-4 sm:px-6 lg:px-8 relative`}
             >
               <div className="flex items-center justify-between">
-                <div className="w-24">
+                <div className="w-24 flex justify-start">
                   {onBack ? (
                     <Button
                       type="button"
@@ -169,7 +169,7 @@ export function PatientStepShell({
                     </Button>
                   ) : null}
                 </div>
-                <div className="flex-1 flex justify-center">
+                <div className="absolute left-1/2 transform -translate-x-1/2">
                   <Link
                     href="/"
                     aria-label={`${clinicInfo?.name || 'Clinic'} home`}
@@ -178,7 +178,7 @@ export function PatientStepShell({
                     <BimbleLogoIcon className="w-7 h-7" />
                   </Link>
                 </div>
-                <div className="flex justify-end">
+                <div className="w-24 flex justify-end">
                   {showLogout && hasUserToken && (
                     <Button
                       type="button"
@@ -211,14 +211,14 @@ export function PatientStepShell({
           className="space-y-1 bg-background "
           ref={contentRef}
         >
-          {title && description && (
+          {title && (
             <div className="space-y-1">
               <div>
                 <h1 className="text-xl sm:text-2xl font-semibold leading-tight">
                   {title}
                 </h1>
                 {description && (
-                  <p className="text-sm text-muted-foreground italic mt-1 sm:pb-[20px] md:pb-[18px] ">
+                  <p className="text-sm text-muted-foreground italic mt-1 pb-[20px] sm:pb-[20px] md:pb-[18px] ">
                     {description}
                   </p>
                 )}

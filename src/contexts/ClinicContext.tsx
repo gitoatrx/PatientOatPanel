@@ -17,24 +17,111 @@ interface ClinicProviderProps {
   children: ReactNode;
 }
 
+// Cache clinic info to prevent multiple API calls
+let clinicInfoCache: ClinicInfo | null = null;
+let isFetching = false;
+let fetchPromise: Promise<void> | null = null;
+
+// Cache key for localStorage
+const CLINIC_CACHE_KEY = 'clinic-info-cache';
+const CACHE_EXPIRY_KEY = 'clinic-info-cache-expiry';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Load cache from localStorage on module load
+const loadCacheFromStorage = (): ClinicInfo | null => {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const cached = localStorage.getItem(CLINIC_CACHE_KEY);
+    const expiry = localStorage.getItem(CACHE_EXPIRY_KEY);
+    
+    if (cached && expiry) {
+      const expiryTime = parseInt(expiry, 10);
+      if (Date.now() < expiryTime) {
+        return JSON.parse(cached);
+      } else {
+        // Cache expired, clear it
+        localStorage.removeItem(CLINIC_CACHE_KEY);
+        localStorage.removeItem(CACHE_EXPIRY_KEY);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load clinic cache from localStorage:', error);
+  }
+  
+  return null;
+};
+
+// Save cache to localStorage
+const saveCacheToStorage = (clinicInfo: ClinicInfo): void => {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    localStorage.setItem(CLINIC_CACHE_KEY, JSON.stringify(clinicInfo));
+    localStorage.setItem(CACHE_EXPIRY_KEY, (Date.now() + CACHE_DURATION).toString());
+  } catch (error) {
+    console.warn('Failed to save clinic cache to localStorage:', error);
+  }
+};
+
+// Initialize cache from localStorage
+clinicInfoCache = loadCacheFromStorage();
+
 export function ClinicProvider({ children }: ClinicProviderProps) {
-  const [clinicInfo, setClinicInfo] = useState<ClinicInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [clinicInfo, setClinicInfo] = useState<ClinicInfo | null>(clinicInfoCache);
+  const [isLoading, setIsLoading] = useState(!clinicInfoCache);
   const [error, setError] = useState<string | null>(null);
 
   const fetchClinicInfo = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await patientService.getClinicInfo();
-      
-      if (response.success) {
-        setClinicInfo(response.clinic);
-      } else {
-        setError('Failed to fetch clinic information');
+    // If already fetching, wait for the existing promise
+    if (isFetching && fetchPromise) {
+      await fetchPromise;
+      return;
+    }
+
+    // If already cached, use cache
+    if (clinicInfoCache) {
+      setClinicInfo(clinicInfoCache);
+      setIsLoading(false);
+      return;
+    }
+
+    // Start fetching
+    isFetching = true;
+    setIsLoading(true);
+    setError(null);
+
+    fetchPromise = (async () => {
+      try {
+        const response = await patientService.getClinicInfo();
+        
+        if (response.success) {
+          clinicInfoCache = response.clinic;
+          setClinicInfo(response.clinic);
+          saveCacheToStorage(response.clinic);
+        } else {
+          setError('Failed to fetch clinic information');
+          // Set fallback clinic info
+          const fallbackInfo: ClinicInfo = {
+            id: 4,
+            name: '123 Walkin Clinic',
+            email: 'info@123walkinclinic.com',
+            phone: '604-755-4408',
+            address: '2777 Gladwin Road #108',
+            city: 'Abbotsford',
+            province: 'BC',
+            postal_code: 'V2T 4V1',
+            country: 'Canada',
+            logo: 'https://cloud.oatrx.ca/storage/clinic_logos/123-walkin-clinic-abbotsford-logo.jpg',
+          };
+          clinicInfoCache = fallbackInfo;
+          setClinicInfo(fallbackInfo);
+          saveCacheToStorage(fallbackInfo);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch clinic information');
         // Set fallback clinic info
-        setClinicInfo({
+        const fallbackInfo: ClinicInfo = {
           id: 4,
           name: '123 Walkin Clinic',
           email: 'info@123walkinclinic.com',
@@ -45,26 +132,18 @@ export function ClinicProvider({ children }: ClinicProviderProps) {
           postal_code: 'V2T 4V1',
           country: 'Canada',
           logo: 'https://cloud.oatrx.ca/storage/clinic_logos/123-walkin-clinic-abbotsford-logo.jpg',
-        });
+        };
+        clinicInfoCache = fallbackInfo;
+        setClinicInfo(fallbackInfo);
+        saveCacheToStorage(fallbackInfo);
+      } finally {
+        setIsLoading(false);
+        isFetching = false;
+        fetchPromise = null;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch clinic information');
-      // Set fallback clinic info
-      setClinicInfo({
-        id: 4,
-        name: '123 Walkin Clinic',
-        email: 'info@123walkinclinic.com',
-        phone: '604-755-4408',
-        address: '2777 Gladwin Road #108',
-        city: 'Abbotsford',
-        province: 'BC',
-        postal_code: 'V2T 4V1',
-        country: 'Canada',
-        logo: 'https://cloud.oatrx.ca/storage/clinic_logos/123-walkin-clinic-abbotsford-logo.jpg',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    })();
+
+    await fetchPromise;
   };
 
   useEffect(() => {
@@ -72,6 +151,17 @@ export function ClinicProvider({ children }: ClinicProviderProps) {
   }, []);
 
   const refetch = async () => {
+    // Clear cache and force refetch
+    clinicInfoCache = null;
+    isFetching = false;
+    fetchPromise = null;
+    
+    // Clear localStorage cache
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(CLINIC_CACHE_KEY);
+      localStorage.removeItem(CACHE_EXPIRY_KEY);
+    }
+    
     await fetchClinicInfo();
   };
 

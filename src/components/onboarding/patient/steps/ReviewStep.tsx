@@ -324,16 +324,6 @@ export const ReviewStep = memo(function ReviewStep({
             </div>
           </div>
 
-          {/* Last Name */}
-          <div>
-            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
-              Last Name
-            </div>
-            <div className="text-sm font-semibold text-foreground">
-              {formValues.lastName || "Not provided"}
-            </div>
-          </div>
-
           {/* First Name */}
           <div>
             <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
@@ -341,6 +331,16 @@ export const ReviewStep = memo(function ReviewStep({
             </div>
             <div className="text-sm font-semibold text-foreground">
               {formValues.firstName || "Not provided"}
+            </div>
+          </div>
+
+          {/* Last Name */}
+          <div>
+            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
+              Last Name
+            </div>
+            <div className="text-sm font-semibold text-foreground">
+              {formValues.lastName || "Not provided"}
             </div>
           </div>
 
@@ -386,16 +386,13 @@ export const ReviewStep = memo(function ReviewStep({
             </div>
           )}
 
-          {/* Address - 1 column, truncate if long */}
+          {/* Address - 1 column, full display */}
           {(formValues.streetAddress || formValues.city || formValues.province || formValues.postalCode) && (
             <div className="col-span-2">
               <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide mb-1">
                 Address
               </div>
-              <div 
-                className="text-sm font-semibold text-foreground truncate cursor-help" 
-                title={formatAddress()}
-              >
+              <div className="text-sm font-semibold text-foreground">
                 {formatAddress()}
               </div>
             </div>

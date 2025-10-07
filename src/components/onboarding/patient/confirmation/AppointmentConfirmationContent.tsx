@@ -30,6 +30,7 @@ import { patientService } from "@/lib/services/patientService";
 import { PatientStepShell } from "@/lib/features/patient-onboarding/presentation/components/PatientStepShell";
 import { getStepComponentData } from "@/lib/features/patient-onboarding/config/patient-onboarding-config";
 import { useClinic } from "@/contexts/ClinicContext";
+import { OnboardingReturningPatientDecision } from "@/lib/types/api";
 
 
 export function AppointmentConfirmationContent() {
@@ -72,6 +73,7 @@ export function AppointmentConfirmationContent() {
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shouldShowHealthCheckin, setShouldShowHealthCheckin] = useState(false);
+  const [returningPatientDecision, setReturningPatientDecision] = useState<OnboardingReturningPatientDecision | null>(null);
   const router = useRouter();
 
   // Get step configuration
@@ -97,6 +99,12 @@ export function AppointmentConfirmationContent() {
 
         if (progressResponse.success && progressResponse.data) {
           const apiData = progressResponse.data;
+          
+          // Extract returning patient decision first (regardless of confirmation status)
+          if (apiData.returning_patient_decision) {
+            setReturningPatientDecision(apiData.returning_patient_decision);
+          }
+
           const followupStatuses = apiData.state?.health_concerns?.followup_status;
           const hasFollowupFlag = Array.isArray(followupStatuses)
             ? followupStatuses.some((status) => status === true || status === "true")
@@ -396,6 +404,7 @@ export function AppointmentConfirmationContent() {
               </div>
             )}
 
+
             {/* Additional Services */}
             <div className="grid grid-cols-1 gap-6">
               {/* Prescription Services Card */}
@@ -407,14 +416,29 @@ export function AppointmentConfirmationContent() {
                 
                 <div className="space-y-4">
                   {appt.fulfillment?.method === 'delivery' ? (
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
-                      <div>
-                        <p className="font-medium text-gray-900">Delivery — to your home address</p>
-                        {appt.address && (
-                          <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
-                        )}
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
+                        <div>
+                          <p className="font-medium text-gray-900">Delivery — to your home address</p>
+                          {appt.address && (
+                            <p className="text-sm text-gray-600 mt-1">{formatAddress(appt.address)}</p>
+                          )}
+                        </div>
                       </div>
+                      
+                      {/* Show pharmacy info for delivery method */}
+                      {appt.fulfillment?.pharmacy && (
+                        <div className="flex items-start gap-3">
+                          <Store className="w-4 h-4 text-gray-600 mt-1" />
+                          <div>
+                            <p className="font-medium text-gray-900">Your Pharmacy</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {`${appt.fulfillment.pharmacy.name}, ${appt.fulfillment.pharmacy.address}, ${appt.fulfillment.pharmacy.province} ${appt.fulfillment.pharmacy.postal_code ?? ''}`}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-start gap-3">
@@ -427,18 +451,6 @@ export function AppointmentConfirmationContent() {
                             <p className="text-xs text-gray-500 mt-1">{appt.fulfillment.pharmacy.phone}</p>
                           </>
                         )}
-                      </div>
-                    </div>
-                  )}
-
-                  {appt.fulfillment?.pharmacy && (
-                    <div className="flex items-start gap-3">
-                      <Store className="w-4 h-4 text-gray-600 mt-1" />
-                      <div>
-                        <p className="font-medium text-gray-900">Your Pharmacy</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {`${appt.fulfillment.pharmacy.name}, ${appt.fulfillment.pharmacy.address}, ${appt.fulfillment.pharmacy.province} ${appt.fulfillment.pharmacy.postal_code ?? ''}`}
-                        </p>
                       </div>
                     </div>
                   )}

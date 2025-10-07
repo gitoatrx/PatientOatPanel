@@ -44,6 +44,8 @@ export const API_CONFIG = {
     VIDEO_EVENTS_PATIENT: '/clinic/appointments',
     // Appointment state snapshot endpoint
     APPOINTMENT_STATE_PATIENT: '/clinic/appointments',
+    // Payment session endpoint
+    PAYMENT_SESSION: '/clinic/payment/session',
   },
 
   // Request Configuration

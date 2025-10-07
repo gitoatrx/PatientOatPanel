@@ -49,13 +49,21 @@ export function PatientEmailStep() {
     try {
       setIsLoadingProgress(true);
       const progressResponse = await patientService.getOnboardingProgress(phone);
-      
-      if (progressResponse.success && progressResponse.data?.state?.personal_info?.email) {
-        const email = progressResponse.data.state.personal_info.email;
-        setHasExistingEmail(true);
-        
-        // Prefill form with existing data
-        form.setValue('email', email);
+
+      if (progressResponse.success) {
+        const state = progressResponse.data?.state;
+        // Prefer explicit personal_info.email, then contact.email, then health_card.email_address
+        const email = state?.personal_info?.email
+          || state?.contact?.email
+          || state?.health_card?.email_address
+          || "";
+
+        if (email && email.trim().length > 0) {
+          setHasExistingEmail(true);
+          form.setValue('email', email);
+        } else {
+          setHasExistingEmail(false);
+        }
       } else {
         setHasExistingEmail(false);
       }

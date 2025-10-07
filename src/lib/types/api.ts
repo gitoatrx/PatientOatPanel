@@ -514,6 +514,7 @@ export interface ProviderSelectionResponse {
     };
     guest_patient_id: string | null;
     appointment_id: string | null;
+    returning_patient_decision?: OnboardingReturningPatientDecision;
   };
 }
 
@@ -628,6 +629,7 @@ export interface FulfillmentResponse {
     };
     guest_patient_id: string | null;
     appointment_id: string | null;
+    returning_patient_decision?: OnboardingReturningPatientDecision;
   };
 }
 
@@ -800,3 +802,63 @@ export const API_ERROR_TYPES = {
 } as const;
 
 export type ApiErrorType = typeof API_ERROR_TYPES[keyof typeof API_ERROR_TYPES];
+
+// Confirm Appointment Response with Decision
+export interface ConfirmAppointmentResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    appointment_id: number;
+    confirmation_number: string;
+  };
+  returning_patient_decision?: OnboardingReturningPatientDecision;
+}
+
+// Payment Session Types
+export interface PaymentSessionStripe {
+  checkout_session_id: string;
+  payment_intent_id: string;
+  status: string;
+}
+
+export interface PaymentSessionPayment {
+  id: number;
+  amount: string;
+  status: string;
+}
+
+export interface PaymentSessionPatient {
+  id: number;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  phn: string;
+}
+
+export interface PaymentSessionDoctor {
+  id: number;
+  first_name: string;
+  last_name: string;
+}
+
+export interface PaymentSessionAppointment {
+  id: number;
+  date_and_time: string;
+  status: string;
+  visit_type_name: string;
+  visit_type_duration: number;
+  doctor: PaymentSessionDoctor;
+}
+
+export interface PaymentSessionData {
+  stripe: PaymentSessionStripe;
+  payment: PaymentSessionPayment;
+  patient: PaymentSessionPatient;
+  appointment: PaymentSessionAppointment;
+}
+
+export interface PaymentSessionResponse {
+  success: boolean;
+  data: PaymentSessionData;
+  message: string;
+}

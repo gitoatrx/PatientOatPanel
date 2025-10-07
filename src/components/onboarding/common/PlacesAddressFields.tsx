@@ -704,8 +704,59 @@ export function PlacesAddressFields({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="relative sm:col-span-2">
+      {/* Mobile Layout: Stacked vertically */}
+      <div className="space-y-3 sm:hidden">
+        <div className="relative">
+          <FormInput
+            name={fieldNames.city}
+            type="text"
+            label={labels?.city ?? "City"}
+            placeholder={
+              cityLoading
+                ? "Detecting location..."
+                : (placeholders?.city ?? "City")
+            }
+            onChange={handleCityChange}
+          />
+          {showCityDropdown && bcCities.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              {bcCities.map((city) => (
+                <button
+                  key={city.value}
+                  type="button"
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none cursor-pointer"
+                  onClick={() => handleCitySelect(city)}
+                >
+                  <div className="font-medium">{city.label}</div>
+                  {city.region && (
+                    <div className="text-sm text-gray-500">{city.region}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <FormSelect
+            name={fieldNames.province}
+            label={labels?.province ?? "Prov"}
+            placeholder="Prov"
+            options={CANADIAN_PROVINCES}
+          />
+          <FormInput
+            name={fieldNames.postalCode}
+            type="text"
+            label={labels?.postalCode ?? "Zip"}
+            placeholder={placeholders?.postalCode ?? "V6B 1A1"}
+            maxLength={7}
+            onChange={handlePostalCodeChange}
+          />
+        </div>
+      </div>
+
+      {/* Desktop Layout: All in one row */}
+      <div className="hidden sm:grid sm:grid-cols-3 gap-3">
+        <div className="relative">
           <FormInput
             name={fieldNames.city}
             type="text"
