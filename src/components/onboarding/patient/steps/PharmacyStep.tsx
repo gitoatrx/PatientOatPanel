@@ -112,12 +112,18 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
     const searchTermLower = searchTerm.toLowerCase().trim();
     
     return pharmacies.filter(pharmacy => {
-      // Normalize phone numbers by removing dashes, spaces, and parentheses for better matching
+      // Normalize phone and fax numbers by removing dashes, spaces, and parentheses for better matching
       const normalizedPhone = (pharmacy.phone || '').replace(/[-\(\)\s]/g, '');
+      const normalizedFax = (pharmacy.fax || '').replace(/[-\(\)\s]/g, '');
       const normalizedSearchTerm = searchTermLower.replace(/[-\(\)\s]/g, '');
       
       // Check if search term matches phone number (exact match for phone)
       if (normalizedPhone && normalizedPhone.includes(normalizedSearchTerm)) {
+        return true;
+      }
+      
+      // Check if search term matches fax number (exact match for fax)
+      if (normalizedFax && normalizedFax.includes(normalizedSearchTerm)) {
         return true;
       }
       
