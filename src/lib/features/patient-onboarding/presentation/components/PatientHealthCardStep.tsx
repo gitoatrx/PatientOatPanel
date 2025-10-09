@@ -133,19 +133,29 @@ export function PatientHealthCardStep() {
       setIsLoadingProgress(true);
       const progressResponse = await patientService.getOnboardingProgress(phone);
       
-      if (progressResponse.success && progressResponse.data?.state?.health_card) {
-        const healthCardData = progressResponse.data.state.health_card;
+      if (progressResponse.success && progressResponse.data?.state) {
+        const state = progressResponse.data.state;
+        const healthCardData = state.health_card;
         
         // Prefill form with existing data
-        if (healthCardData.health_card_number) {
+        if (healthCardData?.health_card_number) {
+          // User has a health card
           form.setValue('hasHealthCard', 'yes');
           form.setValue('healthCardNumber', healthCardData.health_card_number);
-        } else {
+          form.setValue('emailAddress', '');
+        } else if (healthCardData?.no_health_card === true || !healthCardData?.health_card_number) {
+          // User doesn't have a health card
           form.setValue('hasHealthCard', 'no');
-          // Prefill email if available
-          if (healthCardData.email_address) {
-            form.setValue('emailAddress', healthCardData.email_address);
+          form.setValue('healthCardNumber', '');
+          // Prefill email from personal_info.email if available
+          if (state.personal_info?.email) {
+            form.setValue('emailAddress', state.personal_info.email);
           }
+        } else {
+          // Set default values if no existing data
+          form.setValue('hasHealthCard', '');
+          form.setValue('healthCardNumber', '');
+          form.setValue('emailAddress', '');
         }
       } else {
         // Set default values if no existing data

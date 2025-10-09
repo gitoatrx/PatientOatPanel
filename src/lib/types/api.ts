@@ -88,6 +88,7 @@ export interface OnboardingProgressResponse {
       health_card?: {
         health_card_number: string | null;
         email_address?: string | null;
+        no_health_card?: boolean;
         phone_conflict?: OnboardingHealthCardPhoneConflict;
       };
       personal_info?: {
