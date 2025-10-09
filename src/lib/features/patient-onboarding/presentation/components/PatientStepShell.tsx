@@ -55,7 +55,7 @@ export function PatientStepShell({
   useCard = true,
   contentMaxWidthClass = "max-w-xl",
   onLogout,
-  showLogout = true,
+  showLogout = process.env.NODE_ENV !== 'production',
   // currentStep,
   // totalSteps,
 }: PatientStepShellProps) {
