@@ -612,6 +612,7 @@ export function PlacesAddressFields({
                     shouldTouch: true,
                   });
                 }}
+                autoComplete="off"
                 placeholder={
                   placeholders?.street ??
                   (searchMode === "clinic"

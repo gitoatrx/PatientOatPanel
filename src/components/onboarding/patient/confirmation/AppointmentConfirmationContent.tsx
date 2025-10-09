@@ -381,28 +381,6 @@ export function AppointmentConfirmationContent() {
               </div>
             </div>
 
-            {/* Clinic Info for in-person visits */}
-            {!isVirtualVisit(appt.visitType) && appt.clinic && (
-              <div className="mt-8 pt-8 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Clinic Information</h3>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900 mb-1">{appt.clinic.name}</p>
-                    <p className="text-gray-600">{appt.clinic.address}</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <Button variant="outline" size="sm" className="flex items-center gap-2">
-                      <Phone className="w-4 h-4" />
-                      Call
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex items-center gap-2">
-                      <Navigation className="w-4 h-4" />
-                      Directions
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
 
 
             {/* Additional Services */}
@@ -462,37 +440,69 @@ export function AppointmentConfirmationContent() {
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
                   <div className="flex items-center gap-3 mb-4">
                     <Hospital className="w-5 h-5 text-gray-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Clinic Info</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Clinic Information</h3>
                   </div>
                   
-                  <div className="space-y-3">
-                    <div>
-                      <p className="font-medium text-gray-900">{appt.clinic?.name || 'Health Clinic'}</p>
-                      <p className="text-sm text-gray-600 mt-1">{appt.clinic?.address || '123 Main Street, Prince Rupert, BC V8J 1A1'}</p>
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      {clinicInfo?.logo ? (
+                        <img
+                          src={clinicInfo.logo}
+                          alt={`${clinicInfo.name} logo`}
+                          className="w-6 h-6 rounded object-cover border border-gray-200 mt-1"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            // Show fallback dot if logo fails
+                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'block';
+                          }}
+                        />
+                      ) : null}
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" style={{ display: clinicInfo?.logo ? 'none' : 'block' }}></div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {clinicInfo?.name || appt.clinic?.name || 'Health Clinic'}
+                        </p>
+                        <div className="space-y-1 mt-1">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-sm text-gray-600">
+                              {clinicInfo 
+                                ? `${clinicInfo.address}, ${clinicInfo.city}, ${clinicInfo.province} ${clinicInfo.postal_code}`
+                                : (appt.clinic?.address || '123 Main Street, Prince Rupert, BC V8J 1A1')
+                              }
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <a
+                              href={`tel:${clinicInfo?.phone || appt.clinic?.phone || '(250) 555-0123'}`}
+                              className="text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                            >
+                              {clinicInfo?.phone || appt.clinic?.phone || '(250) 555-0123'}
+                            </a>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
-                    <div className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2"
-                        onClick={() => window.open(`tel:${appt.clinic?.phone || '(250) 555-0123'}`)}
-                      >
-                        <Phone className="w-4 h-4" />
-                        Call
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2"
-                        onClick={() => {
-                          const address = encodeURIComponent(appt.clinic?.address || '123 Main Street, Prince Rupert, BC V8J 1A1');
-                          window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank');
-                        }}
-                      >
-                        <Navigation className="w-4 h-4" />
-                        Get Directions
-                      </Button>
+                    {/* Directions Button */}
+                    <div className="flex items-start gap-3">
+                      <Navigation className="w-4 h-4 text-gray-600 mt-1" />
+                      <div>
+                        <a
+                          href={
+                            clinicInfo 
+                              ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${clinicInfo.address}, ${clinicInfo.city}, ${clinicInfo.province}`)}`
+                              : "https://www.google.com/maps/search/?api=1&query=2777+Gladwin+Road+%23108,+Abbotsford,+BC"
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                        >
+                          Get Directions
+                        </a>
+                      </div>
                     </div>
                   </div>
                 </div>

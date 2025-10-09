@@ -48,6 +48,7 @@ export function FloatingInput({
         onChange={handleChange}
         onFocus={handleFocus}
         onBlur={handleBlur}
+        autoComplete="off"
         className={cn(
           "peer w-full rounded-md border-2 bg-white px-3 py-2 text-base transition-all duration-200 font-bold placeholder:font-normal",
           "placeholder:text-transparent focus:outline-none",
