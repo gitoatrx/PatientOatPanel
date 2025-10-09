@@ -234,8 +234,8 @@ export function PatientPharmacyStep() {
 
   return (
     <PatientStepShell
-      title="Choose Your Pharmacy"
-      description="Select how you'd like to receive your medication"
+      title=""
+      description=""
       onBack={handleBack}
       onNext={handleNext}
       nextLabel="Continue"
@@ -247,6 +247,15 @@ export function PatientPharmacyStep() {
       totalSteps={15}
     >
       <FormProvider {...form}>
+        {/* Static Title and Description */}
+        <div className="pt-8">
+          <h1 className="text-2xl font-semibold text-left mb-2">
+            Choose Your Pharmacy
+          </h1>
+          <p className="text-sm text-muted-foreground text-left mb-8">
+            Select how you'd like to receive your medication
+          </p>
+        </div>
         {/* Error State */}
         {error && (
           <div className="text-center py-8">
