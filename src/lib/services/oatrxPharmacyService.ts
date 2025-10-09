@@ -200,7 +200,9 @@ export class OatrxPharmacyService {
         pharmacy.city || '',
         pharmacy.province || '',
         pharmacy.zip_code || '',
-        pharmacy.manager_name || ''
+        pharmacy.manager_name || '',
+        pharmacy.phone || '',
+        pharmacy.fax || ''
       ].join(' ').toLowerCase();
 
       // Check if any search variation matches
