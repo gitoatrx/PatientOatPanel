@@ -10,6 +10,7 @@ import type { WizardForm } from "@/types/wizard";
 import { useRouter } from "next/navigation";
 import { patientService } from "@/lib/services/patientService";
 import { getRouteFromApiStep } from "@/lib/config/api";
+import { useToast } from "@/components/ui/use-toast";
 
 const pharmacySchema = z.record(z.string(), z.unknown());
 
@@ -17,6 +18,7 @@ type FormValues = Record<string, unknown>;
 
 export function PatientPharmacyStep() {
   const router = useRouter();
+  const { toast } = useToast();
   const [pharmacyData, setPharmacyData] = useState<WizardForm | null>(null);
   const [pharmacySelection, setPharmacySelection] = useState<{pharmacyOption?: string, selectedPharmacy?: {id: number, name: string, address: string, city: string, province: string, phone: string}}>({});
   const [phoneNumber, setPhoneNumber] = useState<string>("");
@@ -39,7 +41,13 @@ export function PatientPharmacyStep() {
       fetchProgressAndPrefillForm(savedPhone);
     } else {
       setIsLoadingProgress(false);
-      setError("Phone number not found. Please start over.");
+      const errorMessage = "Phone number not found. Please start over.";
+      setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Error",
+        description: errorMessage,
+      });
     }
   }, []);
 
@@ -106,10 +114,22 @@ export function PatientPharmacyStep() {
 
         setPharmacyData(combinedData);
       } else {
-        setError("No progress data found. Please complete the onboarding process first.");
+        const errorMessage = "No progress data found. Please complete the onboarding process first.";
+        setError(errorMessage);
+        toast({
+          variant: "error",
+          title: "Error",
+          description: errorMessage,
+        });
       }
     } catch (error) {
-      setError("Failed to load your information. Please try again.");
+      const errorMessage = "Failed to load your information. Please try again.";
+      setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Error",
+        description: errorMessage,
+      });
     } finally {
       setIsLoadingProgress(false);
     }
@@ -117,13 +137,25 @@ export function PatientPharmacyStep() {
 
   const handleNext = async () => {
     if (!phoneNumber) {
-      setError("Phone number not found. Please start over.");
+      const errorMessage = "Phone number not found. Please start over.";
+      setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Error",
+        description: errorMessage,
+      });
       return;
     }
 
     // Validate that if pickup is selected, a pharmacy must be selected
     if (pharmacySelection.pharmacyOption === 'pickup' && !pharmacySelection.selectedPharmacy) {
-      setError("Please select a pharmacy for pickup.");
+      const errorMessage = "Please select a pharmacy for pickup.";
+      setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Validation Error",
+        description: errorMessage,
+      });
       return;
     }
 
@@ -151,11 +183,21 @@ export function PatientPharmacyStep() {
         // Handle API error response
         const errorMessage = apiResponse.message || "Failed to save fulfillment preference";
         setError(errorMessage);
+        toast({
+          variant: "error",
+          title: "Save Failed",
+          description: errorMessage,
+        });
       }
     } catch (err) {
       console.error('Unexpected error in handleNext:', err);
       const errorMessage = 'Network error. Please check your connection and try again.';
       setError(errorMessage);
+      toast({
+        variant: "error",
+        title: "Network Error",
+        description: errorMessage,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -253,7 +295,7 @@ export function PatientPharmacyStep() {
             Choose Your Pharmacy
           </h1>
           <p className="text-sm text-muted-foreground text-left mb-8">
-            Select how you'd like to receive your medication
+            Select how you&apos;d like to receive your medication
           </p>
         </div>
         {/* Error State */}
