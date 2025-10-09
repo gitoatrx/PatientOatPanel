@@ -112,6 +112,7 @@ export function FormPhoneInput({
               shouldTouch: true,
             });
           }}
+          autoComplete="off"
           {...props}
           className={cn(
             "flex-1 p-4 border border-border rounded-r-lg text-base bg-white text-foreground placeholder:text-muted-foreground placeholder:font-normal font-bold",

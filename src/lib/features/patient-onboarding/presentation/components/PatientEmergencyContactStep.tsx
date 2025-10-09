@@ -71,7 +71,6 @@ const RELATIONSHIP_OPTIONS = [
   { value: "child", label: "Child" },
   { value: "sibling", label: "Sibling" },
   { value: "friend", label: "Friend" },
-  { value: "other", label: "Other" },
 ];
 
 // Flow states for different user types

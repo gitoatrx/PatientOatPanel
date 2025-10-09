@@ -164,9 +164,9 @@ export const patientService = {
         payload.health_card_number = healthCardNumber;
       }
 
-      // Only include email_address if it's not empty
+      // Only include email if it's not empty
       if (emailAddress && emailAddress.trim() !== "") {
-        payload.email_address = emailAddress;
+        payload.email = emailAddress;
       }
 
       // Include update_primary_phone flag if provided (for phone update flow)
