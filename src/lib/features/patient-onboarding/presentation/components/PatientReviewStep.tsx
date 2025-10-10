@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { patientService } from "@/lib/services/patientService";
 import { useToast } from "@/components/ui/use-toast";
 import { isAppointmentToday } from "@/lib/services/videoEventsService";
+import { API_CONFIG } from "@/lib/config/api";
 // import { ManageExistingAppointmentBanner } from "@/components/onboarding/patient/ManageExistingAppointmentBanner";
 // import { RescheduleSuggestionBanner } from "@/components/onboarding/patient/RescheduleSuggestionBanner";
 // import { OnboardingReturningPatientDecision } from "@/lib/types/api";
@@ -182,33 +183,74 @@ export function PatientReviewStep() {
       const apiResponse = await patientService.confirmAppointment(phoneNumber, "start_new");
       
       if (apiResponse.success) {
+        console.log('🎯 Appointment confirmation successful, checking for event trigger...');
+        console.log('🎯 reviewData?.appointmentDate:', reviewData?.appointmentDate);
+        console.log('🎯 Current date (new Date()):', new Date().toISOString());
+        console.log('🎯 Current date (Vancouver time):', new Date().toLocaleString("en-US", {timeZone: "America/Vancouver"}));
+        
+        // Get appointment date from the confirmation response
+        const progressResponse = await patientService.getOnboardingProgress(phoneNumber);
+        const appointmentDateFromAPI = progressResponse.success && progressResponse.data?.state?.appointment?.date;
+        console.log('🎯 Appointment date from API:', appointmentDateFromAPI);
+        console.log('🎯 isAppointmentToday result:', appointmentDateFromAPI ? isAppointmentToday(appointmentDateFromAPI) : 'no date');
+        
         // Trigger new-appointment event if appointment is for today (Vancouver time)
-        if (reviewData?.appointmentDate && isAppointmentToday(reviewData.appointmentDate)) {
+        // This happens AFTER appointment confirmation is successful
+        if (appointmentDateFromAPI && isAppointmentToday(appointmentDateFromAPI)) {
+          console.log('🎯 Appointment is for today, proceeding with event trigger...');
           try {
             const appointmentId = apiResponse.data?.appointment_id;
-            const patientName = `${reviewData.firstName || ''} ${reviewData.lastName || ''}`.trim();
-            const patientId = 0; // Patient ID not available in confirmation response, using 0 as default
+            // Get patient name from API response
+            const patientName = progressResponse.success && progressResponse.data?.state?.personal_info 
+              ? `${progressResponse.data.state.personal_info.first_name || ''} ${progressResponse.data.state.personal_info.last_name || ''}`.trim()
+              : `${reviewData?.firstName || ''} ${reviewData?.lastName || ''}`.trim();
+            const patientId = progressResponse.success && progressResponse.data?.patient_id ? progressResponse.data.patient_id : 0;
             
-            // Get followup token from localStorage
-            const followupToken = localStorage.getItem('followup-token');
+            console.log('🎯 Using appointment data:');
+            console.log('🎯 - appointmentId:', appointmentId);
+            console.log('🎯 - patientName:', patientName);
+            console.log('🎯 - patientId:', patientId);
             
             if (appointmentId && patientName) {
-              // Create a new instance of VideoEventsService
-              const { VideoEventsService } = await import('@/lib/services/videoEventsService');
-              const videoEventsService = new VideoEventsService(appointmentId.toString());
+              console.log('🎯 Generating followup token for appointmentId:', appointmentId);
+              // Generate followup token for the event (don't use localStorage)
+              const tokenResponse = await patientService.getFollowupsToken(API_CONFIG.CLINIC_ID, appointmentId);
+              console.log('🎯 Token response:', tokenResponse);
               
-              await videoEventsService.triggerNewAppointmentEvent(followupToken || '', {
-                id: Number(appointmentId),
-                patient_name: patientName,
-                patient_id: Number(patientId)
-              });
-              console.log('✅ New appointment event triggered for today\'s appointment');
-            }
-          } catch (eventError) {
-            console.error('❌ Failed to trigger new-appointment event:', eventError);
-            // Don't fail the appointment confirmation if event fails
-          }
+              // Handle both response formats: {token: "..."} and {data: {token: "..."}}
+              let followupToken = null;
+              if (tokenResponse && typeof tokenResponse === 'object' && 'token' in tokenResponse) {
+                followupToken = tokenResponse.token as string;
+              } else if (tokenResponse.success && tokenResponse.data?.token) {
+                followupToken = tokenResponse.data.token;
+              }
+              
+              if (followupToken) {
+                console.log('🎯 Followup token generated successfully, triggering event...');
+                
+                // Create a new instance of VideoEventsService
+                const { VideoEventsService } = await import('@/lib/services/videoEventsService');
+                const videoEventsService = new VideoEventsService(appointmentId.toString());
+                
+                await videoEventsService.triggerNewAppointmentEvent(followupToken, {
+                  id: Number(appointmentId),
+                  patient_name: patientName,
+                  patient_id: Number(patientId)
+                });
+                console.log('✅ New appointment event triggered for today\'s appointment');
+              } else {
+                console.warn('⚠️ Could not generate followup token for new-appointment event:', tokenResponse);
+              }
+        } else {
+          console.log('🎯 Missing required data - appointmentId:', appointmentId, 'patientName:', patientName);
         }
+      } catch (eventError) {
+        console.error('❌ Failed to trigger new-appointment event:', eventError);
+        // Don't fail the appointment confirmation if event fails
+      }
+    } else {
+      console.log('🎯 Appointment is NOT for today, skipping event trigger');
+    }
         
         // Navigate to confirmation page
         router.push("/onboarding/patient/confirmation");

@@ -9,12 +9,22 @@ export function isAppointmentToday(appointmentDate: string): boolean {
     const appointmentDateObj = new Date(appointmentDate);
     const today = new Date();
     
-    // Convert both dates to Vancouver timezone (America/Vancouver)
-    const vancouverAppointment = new Date(appointmentDateObj.toLocaleString("en-US", {timeZone: "America/Vancouver"}));
+    console.log('🎯 isAppointmentToday: Input appointmentDate:', appointmentDate);
+    console.log('🎯 isAppointmentToday: appointmentDateObj:', appointmentDateObj.toISOString());
+    console.log('🎯 isAppointmentToday: today:', today.toISOString());
+    
+    // Only convert today to Vancouver timezone, keep appointment date as is
     const vancouverToday = new Date(today.toLocaleString("en-US", {timeZone: "America/Vancouver"}));
     
+    console.log('🎯 isAppointmentToday: vancouverToday:', vancouverToday.toISOString());
+    console.log('🎯 isAppointmentToday: appointmentDateObj.toDateString():', appointmentDateObj.toDateString());
+    console.log('🎯 isAppointmentToday: vancouverToday.toDateString():', vancouverToday.toDateString());
+    
     // Compare dates (ignore time)
-    return vancouverAppointment.toDateString() === vancouverToday.toDateString();
+    const isToday = appointmentDateObj.toDateString() === vancouverToday.toDateString();
+    console.log('🎯 isAppointmentToday: Final result:', isToday);
+    
+    return isToday;
   } catch (error) {
     console.error('Error checking if appointment is today:', error);
     return false;
@@ -60,6 +70,12 @@ export class VideoEventsService {
   ): Promise<VideoEventResponse> {
     const endpoint = this.getVideoEventsUrl();
     
+    console.log('🎯 VideoEventsService: triggerVideoEvent called');
+    console.log('🎯 Event type:', eventType);
+    console.log('🎯 Endpoint:', endpoint);
+    console.log('🎯 Metadata:', metadata);
+    console.log('🎯 Token (first 10 chars):', followupToken.substring(0, 10) + '...');
+    
     try {
       const requestBody: VideoEventRequest = {
         type: eventType,
@@ -67,17 +83,22 @@ export class VideoEventsService {
         token: followupToken,
       };
 
-      
+      console.log('🎯 Making API call to video events endpoint...');
+      console.log('🎯 Request body:', requestBody);
       const response = await apiClient.post<VideoEventResponse>(endpoint, requestBody);
+      console.log('🎯 API response received:', response.data);
       
       const result = response.data;
       
       if (!result.success) {
+        console.error('🎯 API returned success: false, message:', result.message);
         throw new Error(result.message || 'Failed to trigger video event');
       }
 
+      console.log('🎯 Video event triggered successfully!');
       return result;
     } catch (error) {
+      console.error('🎯 Video event API call failed:', error);
       throw error;
     }
   }
@@ -99,6 +120,10 @@ export class VideoEventsService {
     followupToken: string,
     appointmentData: { id: number; patient_name: string; patient_id: number }
   ): Promise<VideoEventResponse> {
+    console.log('🎯 VideoEventsService: triggerNewAppointmentEvent called');
+    console.log('🎯 Appointment data:', appointmentData);
+    console.log('🎯 Followup token (first 10 chars):', followupToken.substring(0, 10) + '...');
+    
     const metadata = {
       id: appointmentData.id,
       is_waiting: false,
@@ -107,6 +132,7 @@ export class VideoEventsService {
       patient_id: appointmentData.patient_id
     };
     
+    console.log('🎯 Calling triggerVideoEvent with metadata:', metadata);
     return this.triggerVideoEvent(followupToken, 'new-appointment', metadata);
   }
 
@@ -114,7 +140,9 @@ export class VideoEventsService {
    * Get the video events endpoint URL
    */
   private getVideoEventsUrl(): string {
-    return getVideoEventsPatientUrl(this.appointmentId);
+    const url = getVideoEventsPatientUrl(this.appointmentId);
+    console.log('🎯 VideoEventsService: Generated endpoint URL:', url);
+    return url;
   }
 }
 

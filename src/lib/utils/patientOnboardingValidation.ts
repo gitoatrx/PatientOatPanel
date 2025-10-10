@@ -48,7 +48,17 @@ export const dateOfBirthSchema = z.object({
 });
 
 export const emailSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  email: z
+    .string()
+    .optional()
+    .refine((val) => {
+      // If email is provided, it must be valid
+      if (val && val.trim().length > 0) {
+        return z.string().email().safeParse(val).success;
+      }
+      // Empty email is allowed (optional)
+      return true;
+    }, "Please enter a valid email address"),
 });
 
 export const phoneSchema = z.object({
