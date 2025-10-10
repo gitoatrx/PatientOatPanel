@@ -17,8 +17,15 @@ import Image from "next/image";
 const emailSchema = z.object({
   email: z
     .string()
-    .min(1, "Email is required")
-    .email("Please enter a valid email address"),
+    .optional()
+    .refine((val) => {
+      // If email is provided, it must be valid
+      if (val && val.trim().length > 0) {
+        return z.string().email().safeParse(val).success;
+      }
+      // Empty email is allowed (optional)
+      return true;
+    }, "Please enter a valid email address"),
 });
 
 type FormValues = z.infer<typeof emailSchema>;
@@ -95,9 +102,9 @@ export function PatientEmailStep() {
     try {
       setError(null);
       
-      // Prepare email data for API
+      // Prepare email data for API - handle empty/optional email
       const emailData = {
-        email: values.email,
+        email: values.email?.trim() || "", // Convert empty/null to empty string for API
       };
       
       let apiResponse;
@@ -215,7 +222,7 @@ export function PatientEmailStep() {
   return (
     <PatientStepShell
       title={hasExistingEmail ? "Confirm your email address" : "What is your email address?"}
-      description={hasExistingEmail ? "We have this on file. Update it if it has changed." : "We'll use this to send appointment confirmations and important updates."}
+      description={hasExistingEmail ? "We have this on file. Update it if it has changed." : "We'll use this to send appointment confirmations and important updates. (Optional)"}
       onBack={handleBack}
       onNext={async () => {
         try {
@@ -245,7 +252,7 @@ export function PatientEmailStep() {
           <FormInput
             name="email"
             type="email"
-            label="Email Address"
+            label="Email Address (Optional)"
             placeholder="your.email@example.com"
             autoComplete="email"
           />

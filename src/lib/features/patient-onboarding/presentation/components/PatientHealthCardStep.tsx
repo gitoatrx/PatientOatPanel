@@ -69,26 +69,20 @@ const healthCardSchema = z
       }
     }
 
-    // Only validate emailAddress if hasHealthCard is "no"
+    // Only validate emailAddress if hasHealthCard is "no" and email is provided
     if (data.hasHealthCard === "no") {
-      if (!data.emailAddress || data.emailAddress.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Email address is required",
-          path: ["emailAddress"],
-        });
-        return;
-      }
-
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(data.emailAddress)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Please enter a valid email address",
-          path: ["emailAddress"],
-        });
-        return;
+      // Email is now optional, so only validate if provided
+      if (data.emailAddress && data.emailAddress.trim().length > 0) {
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(data.emailAddress)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please enter a valid email address",
+            path: ["emailAddress"],
+          });
+          return;
+        }
       }
     }
   });
@@ -604,7 +598,7 @@ export function PatientHealthCardStep() {
               <div className="mt-6">
                 <FormInput
                   name="emailAddress"
-                  label="What is your email address?"
+                  label="What is your email address? (Optional)"
                   placeholder="Enter your email address"
                   type="email"
                   inputMode="email"
