@@ -283,14 +283,14 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                                   {pharmacy.address}, {pharmacy.city}, {pharmacy.province} {pharmacy.zip_code}
                                 </div>
                               </div>
-                              {pharmacy.distance !== null && (
+                              {/* {pharmacy.distance !== null && (
                                 <div className="ml-0 flex-shrink-0">
                                   
                                   <div className="text-xs font-medium text-blue-600">
                                   {pharmacy.distance.toFixed(1)} km
                                   </div>
                                 </div>
-                              )}
+                              )} */}
                             </div>
                           </button>
                         ))}
