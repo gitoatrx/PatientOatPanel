@@ -283,14 +283,14 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                                   {pharmacy.address}, {pharmacy.city}, {pharmacy.province} {pharmacy.zip_code}
                                 </div>
                               </div>
-                              {pharmacy.distance !== null && (
+                              {/* {pharmacy.distance !== null && (
                                 <div className="ml-0 flex-shrink-0">
                                   
                                   <div className="text-xs font-medium text-blue-600">
                                   {pharmacy.distance.toFixed(1)} km
                                   </div>
                                 </div>
-                              )}
+                              )} */}
                             </div>
                           </button>
                         ))}
@@ -331,7 +331,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                       {selectedPharmacy.city}, {selectedPharmacy.province}
                     </div>
                   </div>
-                  {selectedPharmacy.distance !== null && (
+                  {/* {selectedPharmacy.distance !== null && (
                     <div className="ml-3 flex-shrink-0">
                       <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded-full">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -341,7 +341,7 @@ export function PharmacyStep({ formValues }: PharmacyStepProps) {
                         {selectedPharmacy.distance.toFixed(1)} km
                       </div>
                     </div>
-                  )}
+                  )} */}
                 </div>
               </motion.div>
             )}
