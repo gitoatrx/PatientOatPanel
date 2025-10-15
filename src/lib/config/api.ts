@@ -1,10 +1,10 @@
 // API Configuration
 export const API_CONFIG = {
   // Base URL for the OATRX API
-  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'https://cloud.oatrx.ca/api/v1',
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
 
   // Static clinic ID as requested
-  CLINIC_ID: 4,
+  CLINIC_ID: 183,
 
   // API Endpoints - OTP operations and progress tracking
   ENDPOINTS: {

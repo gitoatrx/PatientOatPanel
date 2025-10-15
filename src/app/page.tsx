@@ -14,9 +14,6 @@ export default function HomePage() {
     router.push("/onboarding/patient/phone");
   };
 
-  // Use full clinic name
-  const clinicName = clinicInfo?.name || "Walk-in Clinic";
-
   // Show loading state while fetching clinic data
   if (isLoading) {
     return (
@@ -31,23 +28,19 @@ export default function HomePage() {
       <div className="max-w-2xl mx-auto px-6 py-16">
         {/* Header */}
         <div className="mb-12">
-          {clinicInfo?.logo ? (
+          {clinicInfo?.logo && (
             <div className="w-12 h-12 rounded-lg overflow-hidden mb-6">
               <Image
                 src={clinicInfo.logo}
-                alt={`${clinicName} logo`}
+                alt={`${clinicInfo.name} logo`}
                 width={48}
                 height={48}
                 className="w-full h-full object-contain"
               />
             </div>
-          ) : (
-            <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center mb-6">
-              <span className="text-white font-semibold text-lg">123</span>
-            </div>
           )}
           <h1 className="text-4xl font-semibold text-gray-900 mb-3">
-            {clinicName}
+            {clinicInfo?.name}
           </h1>
         </div>
 
@@ -74,18 +67,10 @@ export default function HomePage() {
           <div className="space-y-4 text-sm text-gray-600">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <p>
-                <strong>Location:</strong> {
-                  clinicInfo 
-                    ? `${clinicInfo.address}, ${clinicInfo.city}, ${clinicInfo.province}`
-                    : "123 Main Street, Vancouver, BC"
-                }
+                <strong>Location:</strong> {`${clinicInfo?.address}, ${clinicInfo?.city}, ${clinicInfo?.province}`}
               </p>
               <a
-                href={
-                  clinicInfo 
-                    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${clinicInfo.address}, ${clinicInfo.city}, ${clinicInfo.province}`)}`
-                    : "https://www.google.com/maps/search/?api=1&query=123+Main+Street,+Vancouver,+BC"
-                }
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${clinicInfo?.address}, ${clinicInfo?.city}, ${clinicInfo?.province}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:underline text-sm font-medium self-start sm:self-auto"
@@ -93,7 +78,7 @@ export default function HomePage() {
                 Get Directions
               </a>
             </div>
-            <p><strong>Phone:</strong> {clinicInfo?.phone || "(604) 123-4567"}</p>
+            <p><strong>Phone:</strong> {clinicInfo?.phone}</p>
           </div>
         </div>
       </div>
