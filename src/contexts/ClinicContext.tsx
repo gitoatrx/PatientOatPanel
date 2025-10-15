@@ -101,41 +101,9 @@ export function ClinicProvider({ children }: ClinicProviderProps) {
           saveCacheToStorage(response.clinic);
         } else {
           setError('Failed to fetch clinic information');
-          // Set fallback clinic info
-          const fallbackInfo: ClinicInfo = {
-            id: 4,
-            name: '123 Walkin Clinic',
-            email: 'info@123walkinclinic.com',
-            phone: '604-755-4408',
-            address: '2777 Gladwin Road #108',
-            city: 'Abbotsford',
-            province: 'BC',
-            postal_code: 'V2T 4V1',
-            country: 'Canada',
-            logo: 'https://cloud.oatrx.ca/storage/clinic_logos/123-walkin-clinic-abbotsford-logo.jpg',
-          };
-          clinicInfoCache = fallbackInfo;
-          setClinicInfo(fallbackInfo);
-          saveCacheToStorage(fallbackInfo);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch clinic information');
-        // Set fallback clinic info
-        const fallbackInfo: ClinicInfo = {
-          id: 4,
-          name: '123 Walkin Clinic',
-          email: 'info@123walkinclinic.com',
-          phone: '604-755-4408',
-          address: '2777 Gladwin Road #108',
-          city: 'Abbotsford',
-          province: 'BC',
-          postal_code: 'V2T 4V1',
-          country: 'Canada',
-          logo: 'https://cloud.oatrx.ca/storage/clinic_logos/123-walkin-clinic-abbotsford-logo.jpg',
-        };
-        clinicInfoCache = fallbackInfo;
-        setClinicInfo(fallbackInfo);
-        saveCacheToStorage(fallbackInfo);
       } finally {
         setIsLoading(false);
         isFetching = false;
