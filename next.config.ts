@@ -5,10 +5,15 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'cloud.oatrx.ca',
+        hostname: 'cloud.3oatrx.ca',
         port: '',
         pathname: '/storage/**',
-      },
+      },{
+        protocol: 'https',
+        hostname: 'oatrx.ca',
+        port: '',
+        pathname: '/storage/**',
+      }
     ],
   },
 };
