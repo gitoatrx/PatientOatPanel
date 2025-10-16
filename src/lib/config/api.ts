@@ -1,10 +1,23 @@
+// Helper function to get required clinic ID
+const getRequiredClinicId = (): number => {
+  const clinicId = process.env.NEXT_PUBLIC_CLINIC_ID;
+  if (!clinicId) {
+    throw new Error('NEXT_PUBLIC_CLINIC_ID environment variable is required');
+  }
+  const parsed = parseInt(clinicId, 10);
+  if (isNaN(parsed)) {
+    throw new Error('NEXT_PUBLIC_CLINIC_ID must be a valid number');
+  }
+  return parsed;
+};
+
 // API Configuration
 export const API_CONFIG = {
   // Base URL for the OATRX API
   BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
 
   // Static clinic ID as requested
-  CLINIC_ID: process.env.NEXT_PUBLIC_CLINIC_ID,
+  CLINIC_ID: getRequiredClinicId(),
 
   // API Endpoints - OTP operations and progress tracking
   ENDPOINTS: {
