@@ -4,7 +4,7 @@ export const API_CONFIG = {
   BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
 
   // Static clinic ID as requested
-  CLINIC_ID: 183,
+  CLINIC_ID: process.env.NEXT_PUBLIC_CLINIC_ID,
 
   // API Endpoints - OTP operations and progress tracking
   ENDPOINTS: {
