@@ -57,6 +57,8 @@ export const API_CONFIG = {
     VIDEO_EVENTS_PATIENT: '/clinic/appointments',
     // Appointment state snapshot endpoint
     APPOINTMENT_STATE_PATIENT: '/clinic/appointments',
+    // Reschedule appointment endpoint
+    RESCHEDULE_APPOINTMENT: '/clinic/appointments',
     // Payment session endpoint
     PAYMENT_SESSION: '/clinic/payment/session',
   },
@@ -172,4 +174,11 @@ export const getAppointmentStatePatientUrl = (appointmentId: string, token: stri
   const safeAppointmentId = encodeURIComponent(appointmentId);
   const safeToken = encodeURIComponent(token);
   return `${API_CONFIG.ENDPOINTS.APPOINTMENT_STATE_PATIENT}/${safeAppointmentId}/states/patient?token=${safeToken}`;
+};
+
+// Helper function for reschedule appointment endpoint
+export const getRescheduleAppointmentUrl = (clinicId: string, token: string): string => {
+  const safeClinicId = encodeURIComponent(clinicId);
+  const safeToken = encodeURIComponent(token);
+  return `${API_CONFIG.ENDPOINTS.RESCHEDULE_APPOINTMENT}/${safeClinicId}/reschedule/${safeToken}`;
 };

@@ -791,6 +791,43 @@ export interface AppointmentStateResponse {
   data: AppointmentStateData;
 }
 
+// Reschedule Appointment Types
+export interface RescheduleAppointmentData {
+  appointment: {
+    id: number;
+    clinic_id: number;
+    scheduled_for: string;
+    status: string;
+    follow_up_token: string;
+    visit_type_is_video_call: boolean;
+  };
+  patient: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+  };
+  clinic: {
+    id: number;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+  };
+  doctor: {
+    id: number;
+    first_name: string;
+    last_name: string;
+  };
+}
+
+export interface RescheduleAppointmentResponse {
+  success: boolean;
+  message: string;
+  data: RescheduleAppointmentData;
+}
+
 // Error Types for Different Scenarios
 export const API_ERROR_TYPES = {
   VALIDATION: 'validation',

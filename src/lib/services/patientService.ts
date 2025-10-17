@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient';
-import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, FulfillmentResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse, ConfirmAppointmentResponse, PaymentSessionResponse, OnboardingReturningPatientDecision } from '@/lib/types/api';
-import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl } from '@/lib/config/api';
+import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, FulfillmentResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse, ConfirmAppointmentResponse, PaymentSessionResponse, OnboardingReturningPatientDecision, RescheduleAppointmentResponse } from '@/lib/types/api';
+import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl, getRescheduleAppointmentUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
 
@@ -1057,6 +1057,58 @@ export const patientService = {
               first_name: '',
               last_name: '',
             },
+          },
+        },
+      };
+    }
+  },
+
+  // Get Reschedule Appointment Details API
+  async getRescheduleAppointmentDetails(clinicId: string, token: string): Promise<RescheduleAppointmentResponse> {
+    try {
+      const url = getRescheduleAppointmentUrl(clinicId, token);
+      const response = await apiClient.get<RescheduleAppointmentResponse>(
+        url,
+        {
+          showLoading: true,
+          showErrorToast: true,
+          showSuccessToast: false,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch reschedule appointment details',
+        data: {
+          appointment: {
+            id: 0,
+            clinic_id: parseInt(clinicId) || 0,
+            scheduled_for: '',
+            status: 'unknown',
+            follow_up_token: token,
+            visit_type_is_video_call: false,
+          },
+          patient: {
+            id: 0,
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+          },
+          clinic: {
+            id: parseInt(clinicId) || 0,
+            name: 'Clinic',
+            email: '',
+            phone: '',
+            address: '',
+          },
+          doctor: {
+            id: 0,
+            first_name: '',
+            last_name: '',
           },
         },
       };
