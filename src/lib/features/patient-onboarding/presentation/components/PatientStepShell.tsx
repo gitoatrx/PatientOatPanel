@@ -214,7 +214,7 @@ export function PatientStepShell({
           {title && (
             <div className="space-y-1">
               <div>
-                <h1 className="text-xl sm:text-2xl font-semibold leading-tight">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-semibold leading-tight">
                   {title}
                 </h1>
                 {description && (
@@ -264,7 +264,7 @@ export function PatientStepShell({
       {/* Fixed footer at the bottom of the viewport (no animation) - only show if there are buttons */}
       {(onNext || skipButton || footerExtra) && (
         <div
-          className={`fixed bottom-0 left-0 right-0 ${contentMaxWidthClass} mx-auto px-5 bg-background`}
+          className={`fixed bottom-0 left-0 right-0 ${contentMaxWidthClass} mx-auto px-5 bg-background border-t-0`}
         >
           <div
             className={`${contentMaxWidthClass} container mx-auto px-4 py-4 space-y-3`}

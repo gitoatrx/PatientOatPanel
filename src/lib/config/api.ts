@@ -59,6 +59,7 @@ export const API_CONFIG = {
     APPOINTMENT_STATE_PATIENT: '/clinic/appointments',
     // Reschedule appointment endpoint
     RESCHEDULE_APPOINTMENT: '/clinic/appointments',
+    RESCHEDULE_APPOINTMENT_POST: '/clinic/appointments',
     // Payment session endpoint
     PAYMENT_SESSION: '/clinic/payment/session',
   },
@@ -181,4 +182,11 @@ export const getRescheduleAppointmentUrl = (clinicId: string, token: string): st
   const safeClinicId = encodeURIComponent(clinicId);
   const safeToken = encodeURIComponent(token);
   return `${API_CONFIG.ENDPOINTS.RESCHEDULE_APPOINTMENT}/${safeClinicId}/reschedule/${safeToken}`;
+};
+
+// Helper function for reschedule appointment POST endpoint
+export const getRescheduleAppointmentPostUrl = (clinicId: string, token: string): string => {
+  const safeClinicId = encodeURIComponent(clinicId);
+  const safeToken = encodeURIComponent(token);
+  return `${API_CONFIG.ENDPOINTS.RESCHEDULE_APPOINTMENT_POST}/${safeClinicId}/reschedule/${safeToken}`;
 };

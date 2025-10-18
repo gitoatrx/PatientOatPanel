@@ -72,7 +72,7 @@ export default function TestReschedulePage() {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Test Routes:</h3>
             <div className="space-y-3">
-              <Link href={`/reschedule-appointment/4/8ec0c1fa-c217-4807-b69b-6083d42ea23e`}>
+              <Link href={`/reschedule/4/8ec0c1fa-c217-4807-b69b-6083d42ea23e`}>
                 <Button className="w-full flex items-center justify-center gap-2">
                   <Calendar className="w-4 h-4" />
                   Reschedule Appointment (Real API Token)
@@ -80,7 +80,7 @@ export default function TestReschedulePage() {
                 </Button>
               </Link>
 
-              <Link href={`/reschedule-appointment/4/test-token-123`}>
+              <Link href={`/reschedule/4/test-token-123`}>
                 <Button variant="outline" className="w-full flex items-center justify-center gap-2">
                   <Calendar className="w-4 h-4" />
                   Reschedule Appointment (Test Token)
@@ -94,10 +94,10 @@ export default function TestReschedulePage() {
             <h3 className="text-lg font-semibold">Route Structure:</h3>
             <div className="bg-blue-50 p-4 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>New Route:</strong> <code>/reschedule-appointment/[clinicId]/[followuptoken]</code>
+                <strong>New Route:</strong> <code>/reschedule/[clinicId]/[followuptoken]</code>
               </p>
               <p className="text-sm text-blue-600 mt-2">
-                Example: <code>/reschedule-appointment/4/14840:test-token-123</code>
+                Example: <code>/reschedule/4/8ec0c1fa-c217-4807-b69b-6083d42ea23e</code>
               </p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient';
 import { ApiResponse, OtpVerificationResponse, OnboardingProgressResponse, HealthCardResponse, PhoneUpdateResponse, AddressResponse, PersonalInfoStep1Response, PersonalInfoStep2Response, PersonalInfoStep3Response, PersonalInfoStep4Response, VisitType, VisitTypesListResponse, VisitTypeResponse, EmergencyContactResponse, FulfillmentResponse, HealthConcernsListResponse, Provider, ProvidersListResponse, ProviderSelectionRequest, ProviderSelectionResponse, AvailableSlotsResponse, AvailableTimeSlotsResponse, FollowupQuestion, AppointmentStateResponse, ClinicInfoResponse, ConfirmAppointmentResponse, PaymentSessionResponse, OnboardingReturningPatientDecision, RescheduleAppointmentResponse } from '@/lib/types/api';
-import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl, getRescheduleAppointmentUrl } from '@/lib/config/api';
+import { API_CONFIG, getFollowupQuestionsUrl, getFollowupAnswersUrl, getAppointmentStatePatientUrl, getRescheduleAppointmentUrl, getRescheduleAppointmentPostUrl } from '@/lib/config/api';
 
 export type PatientRole = "patient";
 
@@ -1090,6 +1090,10 @@ export const patientService = {
             status: 'unknown',
             follow_up_token: token,
             visit_type_is_video_call: false,
+            visit_type_name: '',
+            visit_type_duration: 0,
+            formatted_date: '',
+            time: '',
           },
           patient: {
             id: 0,
@@ -1101,6 +1105,68 @@ export const patientService = {
           clinic: {
             id: parseInt(clinicId) || 0,
             name: 'Clinic',
+            email: '',
+            phone: '',
+            address: '',
+          },
+          doctor: {
+            id: 0,
+            first_name: '',
+            last_name: '',
+          },
+        },
+      };
+    }
+  },
+
+  // Reschedule Appointment API
+  async rescheduleAppointment(clinicId: string, token: string, doctorId: string, date: string, time: string): Promise<RescheduleAppointmentResponse> {
+    try {
+      const url = getRescheduleAppointmentPostUrl(clinicId, token);
+      const payload = {
+        doctor_id: parseInt(doctorId),
+        date: date,
+        time: time
+      };
+      const response = await apiClient.post<RescheduleAppointmentResponse>(
+        url,
+        payload,
+        {
+          showLoading: true,
+          showErrorToast: true,
+          showSuccessToast: true,
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to reschedule appointment',
+        data: {
+          appointment: {
+            id: 0,
+            clinic_id: parseInt(clinicId) || 0,
+            scheduled_for: '',
+            status: 'unknown',
+            follow_up_token: token,
+            visit_type_is_video_call: false,
+            visit_type_name: '',
+            visit_type_duration: 0,
+            formatted_date: '',
+            time: '',
+          },
+          patient: {
+            id: 0,
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+          },
+          clinic: {
+            id: parseInt(clinicId) || 0,
+            name: '',
             email: '',
             phone: '',
             address: '',

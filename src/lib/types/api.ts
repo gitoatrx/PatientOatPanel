@@ -799,7 +799,11 @@ export interface RescheduleAppointmentData {
     scheduled_for: string;
     status: string;
     follow_up_token: string;
+    visit_type_name: string;
+    visit_type_duration: number;
     visit_type_is_video_call: boolean;
+    formatted_date: string;
+    time: string;
   };
   patient: {
     id: number;

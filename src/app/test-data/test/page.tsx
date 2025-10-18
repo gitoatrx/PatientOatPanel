@@ -227,7 +227,7 @@ export default function RescheduleAppointmentPage() {
                   <h2 className="text-xl font-bold text-gray-900 mb-1">
                     {appointmentData.visit_type_duration} Min Meeting
                   </h2>
-                  <p className="text-gray-600 text-sm">Short & sweet! Let's get to the point.</p>
+                  <p className="text-gray-600 text-sm">Short &amp; sweet! Let&apos;s get to the point.</p>
                 </div>
 
                 <div className="space-y-3">
