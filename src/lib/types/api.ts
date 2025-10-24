@@ -741,6 +741,7 @@ export interface AppointmentStateData {
   waiting_since: string | null;
   is_with_doctor: boolean;
   with_doctor_since: string | null;
+  is_on_call: boolean;
   is_completed: boolean;
   completed_since: string | null;
   scheduled_for: string;

@@ -966,6 +966,7 @@ export const patientService = {
           waiting_since: null,
           is_with_doctor: false,
           with_doctor_since: null,
+          is_on_call: false,
           is_completed: false,
           completed_since: null,
           scheduled_for: '',
