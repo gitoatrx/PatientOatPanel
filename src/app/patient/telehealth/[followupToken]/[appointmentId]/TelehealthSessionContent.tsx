@@ -456,10 +456,45 @@ export function TelehealthSessionContent({
         appointmentId,
         clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
-          console.log('🚀 Ably: Received doctor/MOA connect event:', JSON.stringify(event, null, 2));
+          console.log('🚀 Ably: Received event:', JSON.stringify(event, null, 2));
           console.log('🚀 Ably: Event type:', event.event);
           console.log('🚀 Ably: Event metadata:', event.metadata);
           console.log('🚀 Ably: Event context:', event.context);
+
+          // Handle video session ended event
+          if (event.event === 'video_session_ended') {
+            console.log('🔚 Ably: Video session ended - closing entire session');
+            console.log('🔚 Session ended by:', event.context.actor.type);
+            console.log('🔚 Actor ID:', event.context.actor.id);
+            
+            // Disconnect from the ongoing call
+            if (telehealth.isConnected) {
+              console.log('🔚 Ably: Leaving ongoing call...');
+              await telehealth.leave();
+            }
+            
+            // Disconnect from Ably service
+            if (ablyService) {
+              console.log('🔌 Ably: Disconnecting from Ably service...');
+              await ablyService.disconnect();
+              setAblyService(null);
+            }
+            
+            // Close the entire session - redirect to confirmation page or home
+            console.log('🔚 Ably: Closing entire session - redirecting...');
+            
+            // You can customize this redirect based on your app's flow
+            // Option 1: Redirect to appointment confirmation
+            window.location.href = `/onboarding/patient/confirmation?appointmentId=${appointmentId}`;
+            
+            // Option 2: Redirect to home page
+            // window.location.href = '/';
+            
+            // Option 3: Show a modal and then redirect
+            // setShowSessionEndedModal(true);
+            
+            return;
+          }
 
           // Automatically start the session when doctor or MOA connects
           if (event.event === 'connect') {

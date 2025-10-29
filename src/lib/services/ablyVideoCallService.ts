@@ -1,7 +1,7 @@
 import * as Ably from 'ably';
 
 export interface AblyConnectEvent {
-  event: 'connect' | 'moa-calling';
+  event: 'connect' | 'moa-calling' | 'video_session_ended';
   metadata: unknown[];
   context: {
     actor: {
@@ -44,7 +44,7 @@ export class AblyVideoCallService {
         throw new Error('NEXT_PUBLIC_ABLY_LISTEN_KEY is not configured');
       }
 
-      console.log('🔌 Ably: Using key:', ablyKey.substring(0, 10) + '...');
+      // console.log('🔌 Ably: Using key:', ablyKey.substring(0, 10) + '...');
 
       // Create Ably client
       const ably = new Ably.Realtime({
@@ -63,7 +63,7 @@ export class AblyVideoCallService {
 
         ably.connection.on('connected', () => {
           clearTimeout(timeout);
-          console.log('✅ Ably: Connected successfully');
+          // console.log('✅ Ably: Connected successfully');
 
           this.isConnected = true;
           this.connectionError = null;
@@ -83,13 +83,13 @@ export class AblyVideoCallService {
       // Subscribe to doctor connect events on appointment channel
       const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'clinic-video-call';
       const appointmentChannelName = `${channelPrefix}.${this.options.appointmentId}`;
-      console.log('📡 Ably: Subscribing to appointment channel:', appointmentChannelName);
+      // console.log('📡 Ably: Subscribing to appointment channel:', appointmentChannelName);
       const appointmentChannel = ably.channels.get(appointmentChannelName);
       this.appointmentChannel = appointmentChannel;
 
       // Subscribe to connect events on appointment channel
       appointmentChannel.subscribe('connect', (message) => {
-        console.log('📡 Ably: Received connect event on appointment channel:', message);
+        // console.log('📡 Ably: Received connect event on appointment channel:', message);
 
         try {
           const event: AblyConnectEvent = {
@@ -113,16 +113,45 @@ export class AblyVideoCallService {
         }
       });
 
+      // Subscribe to video_session_ended events on appointment channel
+      appointmentChannel.subscribe('video_session_ended', (message) => {
+        // console.log('📡 Ably: Received video_session_ended event on appointment channel:', message);
+
+        try {
+          const event: AblyConnectEvent = {
+            event: 'video_session_ended',
+            metadata: message.data.metadata || [],
+            context: {
+              actor: {
+                id: message.data.context?.actor?.id || 'system',
+                name: message.data.context?.actor?.type === 'doctor' ? 'Doctor' : 'System',
+                role: message.data.context?.actor?.type || 'system',
+                type: message.data.context?.actor?.type,
+                clinic_id: message.data.context?.clinic_id,
+              },
+              appointmentId: this.options.appointmentId,
+              timestamp: message.data.context?.published_at || new Date().toISOString(),
+            },
+          };
+
+          // console.log('🔚 Ably: Video session ended - triggering disconnect');
+          this.options.onDoctorConnect(event);
+        } catch (error) {
+          // console.error('❌ Ably: Error processing video_session_ended event:', error);
+          this.options.onError(error instanceof Error ? error : new Error('Unknown error processing video_session_ended event'));
+        }
+      });
+
       // Subscribe to MOA calling events on clinic channel (if clinicId is provided)
       if (this.options.clinicId) {
         const clinicChannelName = `${channelPrefix}.clinic.${this.options.clinicId}`;
-        console.log('📡 Ably: Subscribing to clinic channel:', clinicChannelName);
+        // console.log('📡 Ably: Subscribing to clinic channel:', clinicChannelName);
         const clinicChannel = ably.channels.get(clinicChannelName);
         this.clinicChannel = clinicChannel;
 
         // Subscribe to moa-calling events on clinic channel
         clinicChannel.subscribe('moa-calling', (message) => {
-          console.log('📡 Ably: Received moa-calling event on clinic channel:', message);
+          // console.log('📡 Ably: Received moa-calling event on clinic channel:', message);
 
           try {
             const event: AblyConnectEvent = {
@@ -151,16 +180,16 @@ export class AblyVideoCallService {
 
       // Also listen for any other events on both channels for debugging
       appointmentChannel.subscribe((message) => {
-        console.log('📡 Ably: Appointment channel message (all events):', message);
-        console.log('📡 Ably: Message name:', message.name);
-        console.log('📡 Ably: Message data:', message.data);
+        // console.log('📡 Ably: Appointment channel message (all events):', message);
+        // console.log('📡 Ably: Message name:', message.name);
+        // console.log('📡 Ably: Message data:', message.data);
       });
 
       if (this.clinicChannel) {
         this.clinicChannel.subscribe((message) => {
-          console.log('📡 Ably: Clinic channel message (all events):', message);
-          console.log('📡 Ably: Message name:', message.name);
-          console.log('📡 Ably: Message data:', message.data);
+          // console.log('📡 Ably: Clinic channel message (all events):', message);
+          // console.log('📡 Ably: Message name:', message.name);
+          // console.log('📡 Ably: Message data:', message.data);
         });
       }
 
