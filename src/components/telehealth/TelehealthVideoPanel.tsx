@@ -82,11 +82,14 @@ const normalizedVideos = new WeakMap<HTMLVideoElement, {
   listeners: Array<{ element: EventTarget; event: string; handler: EventListener }>;
 }>();
 
+// Throttled function type with cancel method
+type ThrottledFunction = (() => void) & { cancel: () => void };
+
 // Throttled checkVideoState to prevent excessive calls
-const throttle = (fn: () => void, delay: number) => {
+const throttle = (fn: () => void, delay: number): ThrottledFunction => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastExecTime = 0;
-  const throttled = () => {
+  const throttled = (() => {
     const currentTime = Date.now();
     const timeSinceLastExec = currentTime - lastExecTime;
     
@@ -101,10 +104,10 @@ const throttle = (fn: () => void, delay: number) => {
         timeoutId = null;
       }, delay - timeSinceLastExec);
     }
-  };
+  }) as ThrottledFunction;
   
   // Add cleanup method
-  (throttled as any).cancel = () => {
+  throttled.cancel = () => {
     if (timeoutId) {
       clearTimeout(timeoutId);
       timeoutId = null;
@@ -275,8 +278,8 @@ const normalizeVideoElements = (
         avatar.appendChild(cameraOffText);
         wrapper.appendChild(avatar);
         
-        // Store participant name in avatar for later updates
-        (avatar as any).participantName = participantName;
+        // Store participant name in dataset for later updates
+        avatar.dataset.participantName = participantName;
         
         // Initially hide the avatar - it will be shown by checkVideoState if needed
         avatar.style.display = 'none';
@@ -534,14 +537,15 @@ export function TelehealthVideoPanel({
       setLocalIsPictureInPicture(true);
       if (setPendingPiPRequest) setPendingPiPRequest(false);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('PiP error:', err);
       if (setPendingPiPRequest) setPendingPiPRequest(false);
       
       // Handle specific errors
-      if (err.name === 'InvalidStateError') {
+      const error = err as Error & { name?: string };
+      if (error.name === 'InvalidStateError') {
         console.warn('PiP: Video not ready or already in PiP');
-      } else if (err.name === 'NotAllowedError') {
+      } else if (error.name === 'NotAllowedError') {
         console.warn('PiP: User denied PiP permission');
       }
     }
