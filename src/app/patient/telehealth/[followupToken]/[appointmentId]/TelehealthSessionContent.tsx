@@ -51,10 +51,10 @@ export function TelehealthSessionContent({
   const [pendingJoin, setPendingJoin] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [autoStartFailed, setAutoStartFailed] = useState(false);
-  
+
   // Picture-in-Picture state (now managed by the hook)
   const [pipPreferenceEnabled, setPipPreferenceEnabled] = useState(false);
-  
+
   // Waiting room state
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [doctorConnected, setDoctorConnected] = useState(false);
@@ -67,15 +67,15 @@ export function TelehealthSessionContent({
 
   // Chat API integration (background persistence only)
   const chatApi = useChatApi(appointmentId, followupToken);
-  
+
   // State for previous chat messages (API) and loading status
   const [previousMessages, setPreviousMessages] = useState<TelehealthChatMessage[]>([]);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
-  
+
   // Appointment state - always fetch client-side
   const [appointmentState, setAppointmentState] = useState<AppointmentStateData | null>(null);
   const [appointmentStateLoaded, setAppointmentStateLoaded] = useState(false);
-  
+
   // Debug logging
   React.useEffect(() => {
     console.log("🔍 Client-side: Current appointment state:", appointmentState);
@@ -85,7 +85,7 @@ export function TelehealthSessionContent({
       console.log("🔍 Client-side: Appointment time:", appointmentState.scheduled_for);
       console.log("🔍 Client-side: is_with_doctor:", appointmentState.is_with_doctor);
       console.log("🔍 Client-side: is_waiting:", appointmentState.is_waiting);
-      
+
       // Determine which button will show
       let buttonText = "Join Waiting Room";
       if (appointmentState.is_with_doctor) {
@@ -103,7 +103,7 @@ export function TelehealthSessionContent({
       console.log("🔄 Client-side: Fetching appointment state...");
       console.log("🔄 Client-side: appointmentId:", appointmentId);
       console.log("🔄 Client-side: followupToken:", followupToken);
-      
+
       patientService.getAppointmentState(appointmentId, followupToken)
         .then(response => {
           console.log("📡 Client-side: Full API response:", JSON.stringify(response, null, 2));
@@ -113,7 +113,7 @@ export function TelehealthSessionContent({
             console.log("📡 Client-side: is_waiting:", response.data.is_waiting);
             console.log("📡 Client-side: status:", response.data.status);
             console.log("📡 Client-side: doctor info:", response.data.doctor);
-            
+
             setAppointmentState(response.data);
             console.log("✅ Client-side: Successfully fetched appointment state");
           } else {
@@ -130,19 +130,21 @@ export function TelehealthSessionContent({
     }
   }, [appointmentStateLoaded, appointmentId, followupToken]);
 
-  // Auto-start session when doctor is ready
+  // Auto-start session when doctor is ready and on call
   React.useEffect(() => {
     console.log("🔍 Auto-start check:", {
       is_with_doctor: appointmentState?.is_with_doctor,
+      is_on_call: appointmentState?.is_on_call,
       appointmentStateLoaded,
       showPreJoin,
       autoStartFailed,
       appointmentState: appointmentState
     });
-    
-    if (appointmentState?.is_with_doctor && appointmentStateLoaded && showPreJoin && !autoStartFailed) {
-      console.log("🚀 Auto-starting session - doctor is ready!");
+
+    if (appointmentState?.is_with_doctor && appointmentState?.is_on_call && appointmentStateLoaded && showPreJoin && !autoStartFailed) {
+      console.log("🚀 Auto-starting session - doctor is ready and on call!");
       console.log("🚀 Auto-start: appointmentState.is_with_doctor =", appointmentState.is_with_doctor);
+      console.log("🚀 Auto-start: appointmentState.is_on_call =", appointmentState.is_on_call);
       // Small delay to ensure UI is ready
       setTimeout(() => {
         try {
@@ -154,8 +156,8 @@ export function TelehealthSessionContent({
         }
       }, 1000);
     }
-  }, [appointmentState?.is_with_doctor, appointmentStateLoaded, showPreJoin, autoStartFailed]);
-  
+  }, [appointmentState?.is_with_doctor, appointmentState?.is_on_call, appointmentStateLoaded, showPreJoin, autoStartFailed]);
+
   // Waiting room service
   const waitingRoomService = useWaitingRoomService(appointmentId);
   const videoEventsService = useVideoEventsService(appointmentId);
@@ -208,7 +210,7 @@ export function TelehealthSessionContent({
   }, []);
 
   // Note: All PiP functions are now handled directly by the hook
-  
+
 
   // Listen for PiP events (now handled by the hook)
 
@@ -224,7 +226,7 @@ export function TelehealthSessionContent({
           artist: providerName,
           album: 'Video Call',
         });
-      } catch {}
+      } catch { }
     }
   }, [telehealth.isConnected, providerName, sessionTitle]);
 
@@ -232,18 +234,18 @@ export function TelehealthSessionContent({
   const uiMessages: TelehealthChatMessage[] = useMemo(() => {
     // Start with previous messages from API (chat history)
     const allMessages = [...previousMessages];
-    
+
     // Add Vonage messages (real-time) - avoid duplicates
     telehealth.chatMessages.forEach(vonageMsg => {
       // Check if this Vonage message already exists in allMessages
       // Use more strict deduplication: same content + same author + within 10 seconds
-      const exists = allMessages.some(existingMsg => 
-        existingMsg.content === vonageMsg.content && 
+      const exists = allMessages.some(existingMsg =>
+        existingMsg.content === vonageMsg.content &&
         existingMsg.author === vonageMsg.author &&
         existingMsg.isOwn === vonageMsg.isOwn &&
         Math.abs(new Date(existingMsg.authoredAt).getTime() - new Date(vonageMsg.timestamp).getTime()) < 10000
       );
-      
+
       if (!exists) {
         allMessages.push({
           id: vonageMsg.id,
@@ -254,9 +256,9 @@ export function TelehealthSessionContent({
         });
       }
     });
-    
+
     // Sort by timestamp to maintain chronological order
-    return allMessages.sort((a, b) => 
+    return allMessages.sort((a, b) =>
       new Date(a.authoredAt).getTime() - new Date(b.authoredAt).getTime()
     );
   }, [previousMessages, telehealth.chatMessages]);
@@ -268,7 +270,7 @@ export function TelehealthSessionContent({
   useEffect(() => {
     const userMessages = telehealth.chatMessages.filter(msg => msg.isOwn);
     const lastUserMessage = userMessages[userMessages.length - 1];
-    
+
     if (lastUserMessage) {
       // Save user's message to API in background (don't block UI)
       setTimeout(async () => {
@@ -285,7 +287,7 @@ export function TelehealthSessionContent({
   // Load previous chat messages ONCE when session starts (for chat history)
   useEffect(() => {
     if (appointmentId && followupToken && telehealth.isConnected && !messagesLoaded) {
-      
+
       chatApi.getMessages()
         .then(messages => {
           // Convert API messages to UI format
@@ -318,7 +320,7 @@ export function TelehealthSessionContent({
   useEffect(() => {
     const handleTabSwitch = async () => {
       if (!telehealth.isConnected || document.pictureInPictureElement) return;
-      
+
       // Show PiP nudge on tab switch
       telehealth.setPendingPiPRequest(true);
     };
@@ -362,7 +364,7 @@ export function TelehealthSessionContent({
       if (!mounted) return;
       setCameraPerm(cam);
       setMicPerm(mic);
-      
+
       // Restore PiP preference from localStorage
       const storedPipPreference = localStorage.getItem('pip-preference-enabled');
       if (storedPipPreference === 'true') {
@@ -378,8 +380,8 @@ export function TelehealthSessionContent({
 
   // Show permission modal when there's a permission error
   const isPermissionError = telehealth.error?.includes('camera and microphone') ||
-                           telehealth.error?.includes('Permission') ||
-                           telehealth.error?.includes('NotAllowedError');
+    telehealth.error?.includes('Permission') ||
+    telehealth.error?.includes('NotAllowedError');
 
   React.useEffect(() => {
     if (isPermissionError) setShowPermissionModal(true);
@@ -428,14 +430,14 @@ export function TelehealthSessionContent({
       // 1. Request camera and microphone permissions
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       stream.getTracks().forEach(t => t.stop());
-          setCameraPerm('granted');
-          setMicPerm('granted');
-      
+      setCameraPerm('granted');
+      setMicPerm('granted');
+
       // Note: PiP permission will be requested after session starts
-      
+
       // 2. Mark patient as waiting in the waiting room via API
       const waitingResponse = await waitingRoomService.markPatientAsWaiting(followupToken);
-      
+
       // 2.5. Trigger video event for patient waiting
       if (waitingResponse.success && waitingResponse.data) {
         try {
@@ -448,7 +450,7 @@ export function TelehealthSessionContent({
           // Don't fail the entire flow if video event fails
         }
       }
-      
+
       // 3. Start listening for doctor connect events via Ably
       const newAblyService = new AblyVideoCallService({
         appointmentId,
@@ -458,7 +460,7 @@ export function TelehealthSessionContent({
           console.log('🚀 Ably: Event type:', event.event);
           console.log('🚀 Ably: Event metadata:', event.metadata);
           console.log('🚀 Ably: Event context:', event.context);
-          
+
           // Automatically start the session when doctor or MOA connects
           if (event.event === 'connect') {
             console.log('👨‍⚕️ Doctor connected - starting session');
@@ -471,14 +473,14 @@ export function TelehealthSessionContent({
             console.log('👩‍💼 MOA type:', event.context.actor.type);
             console.log('👩‍💼 Clinic ID:', event.context.actor.clinic_id);
           }
-          
+
           // Disconnect from Ably since we're joining the session
           if (ablyService) {
             console.log('🔌 Ably: Disconnecting from Ably service...');
             await ablyService.disconnect();
             setAblyService(null);
           }
-          
+
           // Join the Vonage session directly
           console.log('🚀 Ably: Setting pending join and exiting waiting room...');
           setPendingJoin(true);
@@ -489,17 +491,17 @@ export function TelehealthSessionContent({
           console.error('❌ Ably: Error in video call service:', error);
         }
       });
-      
+
       await newAblyService.connect();
       setAblyService(newAblyService);
-      
+
       // 4. Enter waiting room state
       setIsInWaitingRoom(true);
       setShowPreJoin(false);
-      
+
     } catch (error) {
       if (error instanceof Error && error.message.includes('Permission denied')) {
-          setShowPermissionModal(true);
+        setShowPermissionModal(true);
       } else {
         // Handle API errors or other issues
         // You might want to show an error message to the user here
@@ -517,25 +519,25 @@ export function TelehealthSessionContent({
     }
 
     try {
-      
+
       // Request camera and microphone permissions
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       stream.getTracks().forEach(t => t.stop());
       setCameraPerm('granted');
       setMicPerm('granted');
-      
+
       // Note: PiP permission will be requested after session starts
-      
+
       // Skip waiting room and API calls - go directly to session
       setShowPreJoin(false);
       setPendingJoin(true);
       setIsInWaitingRoom(false);
       setDoctorConnected(false);
-      
-      
+
+
     } catch (error) {
       if (error instanceof Error && error.message.includes('Permission denied')) {
-      setShowPermissionModal(true);
+        setShowPermissionModal(true);
       }
     }
   };
@@ -569,9 +571,9 @@ export function TelehealthSessionContent({
 
     const doctorName = appointmentState?.doctor?.full_name;
     const appointmentTime = appointmentState?.scheduled_for ? formatAppointmentTime(appointmentState.scheduled_for) : null;
-    const isDoctorReady = appointmentState?.is_with_doctor;
+    const isDoctorReady = appointmentState?.is_with_doctor && appointmentState?.is_on_call;
     const isWaiting = appointmentState?.is_waiting;
-    
+
     console.log('🎨 PreJoin UI State:', {
       doctorName,
       appointmentTime,
@@ -679,7 +681,7 @@ export function TelehealthSessionContent({
                   {cameraPerm === 'granted' ? 'Ready' : 'Permission needed'}
                 </span>
               </div>
-              
+
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
                   {micPerm === 'granted' ? (
@@ -744,7 +746,7 @@ export function TelehealthSessionContent({
                     )}
                   </Button>
                 ) : null}
-                
+
                 {/* Development mode button */}
                 {process.env.NODE_ENV === 'development' && (
                   <Button
@@ -778,7 +780,7 @@ export function TelehealthSessionContent({
 
   const WaitingRoom = () => {
     const doctorName = appointmentState?.doctor?.full_name;
-    
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="w-full max-w-lg bg-white rounded-lg shadow-sm border border-gray-200 p-8">
@@ -926,13 +928,13 @@ export function TelehealthSessionContent({
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
                   onTogglePictureInPicture={() => {
-                    
+
                     // Enable follow speaker mode
                     telehealth.enablePiPFollowSpeaker();
-                    
+
                     // Find the best video element for PiP
                     let targetVideo = null;
-                    
+
                     // First try to find active speaker's video
                     if (telehealth.activeSpeakerId) {
                       const speakerVideo = document.querySelector(`[data-connection-id="${telehealth.activeSpeakerId}"] video`) as HTMLVideoElement;
@@ -940,21 +942,21 @@ export function TelehealthSessionContent({
                         targetVideo = speakerVideo;
                       }
                     }
-                    
+
                     // Fallback to local video
                     if (!targetVideo) {
                       targetVideo = document.querySelector('#vonage-local-container video') as HTMLVideoElement;
                       if (targetVideo) {
                       }
                     }
-                    
+
                     // Final fallback to any video
                     if (!targetVideo) {
                       targetVideo = document.querySelector('video') as HTMLVideoElement;
                       if (targetVideo) {
                       }
                     }
-                    
+
                     if (targetVideo) {
                       try {
                         targetVideo.requestPictureInPicture();
@@ -973,13 +975,13 @@ export function TelehealthSessionContent({
               <div className="absolute bottom-4 left-4 right-4">
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
                   <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    <span>{telehealth.error}</span>
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <span>{telehealth.error}</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => telehealth.clearError()}
                       className="text-red-500 hover:text-red-700 ml-2 p-1 rounded-full hover:bg-red-100 transition-colors"
                       aria-label="Dismiss error"
