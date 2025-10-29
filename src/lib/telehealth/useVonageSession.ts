@@ -110,6 +110,7 @@ interface UseVonageSessionResult {
   toggleCamera: () => Promise<void>;
   switchCamera: () => void;
   switchMicrophone: () => void;
+  openDeviceSettings: () => void;
   isConnected: boolean;
   isBusy: boolean;
   isMicMuted: boolean;
@@ -1669,26 +1670,37 @@ export function useVonageSession({
 
   const toggleMic = useCallback(async () => {
     const publisher = publisherRef.current;
-    if (!publisher) return;
-    const nextMuted = !isMicMuted;
-    publisher.publishAudio(!nextMuted);
-    setIsMicMuted(nextMuted);
-    setIsAudioEnabled(!nextMuted);
+    if (!publisher) {
+      console.warn('toggleMic: No publisher available');
+      return;
+    }
     
-    // Dispatch mic status update event for local participant
-    const event = new CustomEvent('micStatusUpdate', {
-      detail: { 
-        connectionId: sessionRef.current?.connection?.connectionId,
-        isMuted: nextMuted 
-      }
-    });
-    document.dispatchEvent(event);
+    const nextMuted = !isMicMuted;
+    console.log('toggleMic: Toggling microphone to', nextMuted ? 'muted' : 'unmuted');
+    
+    try {
+      publisher.publishAudio(!nextMuted);
+      setIsMicMuted(nextMuted);
+      setIsAudioEnabled(!nextMuted);
+      
+      // Dispatch mic status update event for local participant
+      const event = new CustomEvent('micStatusUpdate', {
+        detail: { 
+          connectionId: sessionRef.current?.connection?.connectionId,
+          isMuted: nextMuted 
+        }
+      });
+      document.dispatchEvent(event);
+      
+      console.log('toggleMic: Successfully toggled microphone');
+    } catch (error) {
+      console.error('toggleMic: Error toggling microphone:', error);
+    }
   }, [isMicMuted]);
 
   const toggleCamera = useCallback(async () => {
     const publisher = publisherRef.current;
     if (!publisher) {
-
       return;
     }
     
@@ -1725,6 +1737,21 @@ export function useVonageSession({
           }
         }
       }, 200);
+    } else {
+      // Camera is being turned OFF - ensure proper cleanup
+      setTimeout(() => {
+        const localEl = localContainerRef.current;
+        if (localEl) {
+          const videoElement = localEl.querySelector('video') as HTMLVideoElement;
+          if (videoElement && videoElement.srcObject instanceof MediaStream) {
+            // Disable video tracks to ensure proper state detection
+            const videoTracks = videoElement.srcObject.getVideoTracks();
+            videoTracks.forEach(track => {
+              track.enabled = false;
+            });
+          }
+        }
+      }, 100);
     }
 
     // Update participant state
@@ -2421,6 +2448,14 @@ export function useVonageSession({
     }
   }, [error]);
 
+  // Settings function to open device settings
+  const openDeviceSettings = useCallback(() => {
+    console.log('openDeviceSettings: Opening device settings...');
+    // This function can be used to trigger device settings UI
+    // For now, it's a placeholder that can be extended
+    // In the future, this could open a modal with device selection options
+  }, []);
+
   return useMemo(
     () => ({
       join,
@@ -2430,6 +2465,7 @@ export function useVonageSession({
       switchCamera,
       switchMicrophone,
       selectMicrophone,
+      openDeviceSettings,
       isConnected,
       isBusy,
       isMicMuted,

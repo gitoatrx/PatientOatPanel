@@ -111,7 +111,20 @@ const normalizeVideoElements = (
       // Always ensure avatar placeholder exists for this wrapper
       const participantName = opts?.names?.[index] || `Participant ${index + 1}`;
       const avatarPlaceholder = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
+      const cameraOffOverlay = wrapper.querySelector('.camera-off-overlay') as HTMLElement;
       
+      if (!cameraOffOverlay) {
+        // A full-bleed black overlay we can toggle to fully cover any SDK UI when camera is off
+        const overlay = document.createElement('div');
+        overlay.className = 'camera-off-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.inset = '0';
+        overlay.style.backgroundColor = '#000000';
+        overlay.style.zIndex = '9'; // Below the avatar (zIndex 10), above the video element
+        overlay.style.display = 'none';
+        wrapper.appendChild(overlay);
+      }
+
       if (!avatarPlaceholder) {
         const avatar = document.createElement('div');
         avatar.className = 'avatar-placeholder';
@@ -179,23 +192,35 @@ const normalizeVideoElements = (
       // Check if video is actually playing and show/hide avatar accordingly
       const checkVideoState = () => {
         const avatar = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
+        const overlay = wrapper.querySelector('.camera-off-overlay') as HTMLElement;
         if (avatar) {
           // Check if THIS specific video has a valid srcObject and is playing
-          const hasValidVideo = video.srcObject && 
-            video.srcObject instanceof MediaStream && 
-            video.srcObject.getVideoTracks().length > 0 &&
-            video.srcObject.getVideoTracks()[0].enabled &&
-            !video.paused &&
-            video.readyState >= 2 && // HAVE_CURRENT_DATA
-            video.videoWidth > 0 && video.videoHeight > 0; // Ensure video has dimensions
+          let hasValidVideo = false;
+          
+          if (video.srcObject && video.srcObject instanceof MediaStream) {
+            const videoTracks = video.srcObject.getVideoTracks();
+            
+            // Check if there are video tracks and they are enabled
+            if (videoTracks.length > 0) {
+              const videoTrack = videoTracks[0];
+              hasValidVideo = videoTrack.enabled && 
+                !videoTrack.muted &&
+                videoTrack.readyState === 'live' &&
+                !video.paused &&
+                video.readyState >= 2 && // HAVE_CURRENT_DATA
+                video.videoWidth > 0 && video.videoHeight > 0; // Ensure video has dimensions
+            }
+          }
           
           if (hasValidVideo) {
             // Video is active - hide avatar and restore normal background
             avatar.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
             wrapper.style.backgroundColor = '#111827'; // Restore original background
           } else {
             // Video is not active - show avatar with black background
             avatar.style.display = 'flex';
+            if (overlay) overlay.style.display = 'block';
             wrapper.style.backgroundColor = '#000000'; // Black background
           }
         }
@@ -213,6 +238,14 @@ const normalizeVideoElements = (
       if (video.srcObject instanceof MediaStream) {
         video.srcObject.addEventListener('removetrack', checkVideoState);
         video.srcObject.addEventListener('addtrack', checkVideoState);
+        
+        // Listen to individual track state changes
+        const videoTracks = video.srcObject.getVideoTracks();
+        videoTracks.forEach(track => {
+          track.addEventListener('ended', checkVideoState);
+          track.addEventListener('mute', checkVideoState);
+          track.addEventListener('unmute', checkVideoState);
+        });
       }
       
       // Fallback: check again after a short delay to ensure avatar is created
@@ -708,13 +741,13 @@ export function TelehealthVideoPanel({
       : (isFullscreen ? "h-36 w-48 sm:h-40 sm:w-56" : "h-28 w-40 sm:h-32 sm:w-44"),
   );
   const overlayControlsClasses = cn(
-    "pointer-events-none absolute inset-x-0 flex justify-center",
+    "pointer-events-none absolute inset-x-0 flex justify-center z-50",
     // Better positioning on mobile
     isMobileOrTablet ? "bottom-3" : "bottom-5",
     isFullscreen && "bottom-10",
   );
   const fullscreenToggleClasses = cn(
-    "pointer-events-none absolute flex gap-2",
+    "pointer-events-none absolute flex gap-2 z-50",
     // Better positioning on mobile
     isMobileOrTablet ? "top-3 right-3" : "top-12 right-3 sm:top-14",
     isFullscreen && "top-6 right-6",
@@ -825,7 +858,7 @@ export function TelehealthVideoPanel({
         </div>
 
         {overlayControls ? (
-          <div className={overlayControlsClasses}>
+          <div className={overlayControlsClasses} style={{ visibility: 'visible', opacity: 1 }}>
             <div className="pointer-events-auto rounded-full border-white/20 
              px-3 py-3">{overlayControls}</div>
           </div>
