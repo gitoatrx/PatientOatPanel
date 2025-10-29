@@ -890,7 +890,7 @@ export function TelehealthSessionContent({
               sessionTitle={sessionTitle}
               providerName={providerName}
               participants={telehealth.participants}
-              localParticipantName="You"
+              localParticipantName={appointmentState?.patient?.full_name || "You"}
               statusMessage={telehealth.statusMessage}
               onRemoteContainerReady={handleRemoteContainerReady}
               onLocalContainerReady={handleLocalContainerReady}

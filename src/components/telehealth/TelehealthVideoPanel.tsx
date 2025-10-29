@@ -76,6 +76,44 @@ const ensurePictureInPictureReady = (video: HTMLVideoElement) => {
 
 };
 
+// Track normalized videos and event listeners to prevent duplicates
+const normalizedVideos = new WeakMap<HTMLVideoElement, {
+  checkVideoState: () => void;
+  listeners: Array<{ element: EventTarget; event: string; handler: EventListener }>;
+}>();
+
+// Throttled checkVideoState to prevent excessive calls
+const throttle = (fn: () => void, delay: number) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastExecTime = 0;
+  const throttled = () => {
+    const currentTime = Date.now();
+    const timeSinceLastExec = currentTime - lastExecTime;
+    
+    if (timeSinceLastExec > delay) {
+      fn();
+      lastExecTime = currentTime;
+    } else {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        fn();
+        lastExecTime = Date.now();
+        timeoutId = null;
+      }, delay - timeSinceLastExec);
+    }
+  };
+  
+  // Add cleanup method
+  (throttled as any).cancel = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+  
+  return throttled;
+};
+
 const normalizeVideoElements = (
   container: HTMLDivElement | null,
   opts?: { strength?: TileStrength; names?: string[] }
@@ -92,24 +130,49 @@ const normalizeVideoElements = (
     video.style.objectFit = isTiled ? "cover" : "contain";
     video.style.borderRadius = "0";
     const wrapper = video.parentElement as HTMLElement | null;
-    if (wrapper) {
-      wrapper.style.display = "flex";
-      wrapper.style.alignItems = "center";
-      wrapper.style.justifyContent = "center";
-      wrapper.style.backgroundColor = "#111827";
-      wrapper.style.minHeight = "0";
-      wrapper.style.width = "100%";
-      wrapper.style.height = "100%";
-      wrapper.style.maxWidth = "100%";
-      wrapper.style.maxHeight = "100%";
-      wrapper.style.aspectRatio = isTiled ? "16 / 9" : "";
-      wrapper.style.borderRadius = isTiled ? "12px" : "8px";
-      wrapper.style.overflow = "hidden";
-      wrapper.style.boxShadow = isTiled ? "0 6px 24px rgba(0,0,0,0.25)" : "0 4px 16px rgba(0,0,0,0.2)";
-      wrapper.style.position = "relative";
+    
+    if (!wrapper) return;
+    
+    // Skip if already normalized (except for name updates or when forced)
+    const existing = normalizedVideos.get(video);
+    const hasNameUpdate = opts?.names?.[index] && opts.names[index] !== wrapper.dataset.participantName;
+    
+    if (existing && !hasNameUpdate) {
+      // Already normalized, just update state if needed
+      existing.checkVideoState();
+      return;
+    }
+    
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.justifyContent = "center";
+    wrapper.style.backgroundColor = "#111827";
+    wrapper.style.minHeight = "0";
+    wrapper.style.width = "100%";
+    wrapper.style.height = "100%";
+    wrapper.style.maxWidth = "100%";
+    wrapper.style.maxHeight = "100%";
+    wrapper.style.aspectRatio = isTiled ? "16 / 9" : "";
+    wrapper.style.borderRadius = isTiled ? "12px" : "8px";
+    wrapper.style.overflow = "hidden";
+    wrapper.style.boxShadow = isTiled ? "0 6px 24px rgba(0,0,0,0.25)" : "0 4px 16px rgba(0,0,0,0.2)";
+    wrapper.style.position = "relative";
 
       // Always ensure avatar placeholder exists for this wrapper
-      const participantName = opts?.names?.[index] || `Participant ${index + 1}`;
+      // Get participant name from wrapper dataset, fallback to options or default
+      const participantNameFromWrapper = wrapper.dataset.participantName;
+      const participantName = participantNameFromWrapper || opts?.names?.[index] || `Participant ${index + 1}`;
+      
+      // Extract initials from name (first letter of each word, max 2 letters)
+      const getInitials = (name: string) => {
+        const words = name.trim().split(/\s+/);
+        if (words.length >= 2) {
+          return (words[0][0] + words[1][0]).toUpperCase();
+        }
+        return name.substring(0, 2).toUpperCase();
+      };
+      const initials = getInitials(participantName);
+      
       const avatarPlaceholder = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
       const cameraOffOverlay = wrapper.querySelector('.camera-off-overlay') as HTMLElement;
       
@@ -139,7 +202,7 @@ const normalizeVideoElements = (
         avatar.style.gap = '8px';
         avatar.style.pointerEvents = 'none';
         
-        // Create avatar circle with User icon
+        // Create avatar circle with initials or User icon
         const avatarCircle = document.createElement('div');
         avatarCircle.style.width = isTiled ? '64px' : '48px';
         avatarCircle.style.height = isTiled ? '64px' : '48px';
@@ -150,106 +213,177 @@ const normalizeVideoElements = (
         avatarCircle.style.justifyContent = 'center';
         avatarCircle.style.color = 'white';
         avatarCircle.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        avatarCircle.style.fontWeight = '600';
+        avatarCircle.style.fontSize = isTiled ? '20px' : '16px';
+        avatarCircle.style.letterSpacing = '0.5px';
         
-        // Create User icon SVG
-        const userIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        userIcon.setAttribute('width', isTiled ? '32' : '24');
-        userIcon.setAttribute('height', isTiled ? '32' : '24');
-        userIcon.setAttribute('viewBox', '0 0 24 24');
-        userIcon.setAttribute('fill', 'none');
-        userIcon.setAttribute('stroke', 'currentColor');
-        userIcon.setAttribute('stroke-width', '2');
-        userIcon.setAttribute('stroke-linecap', 'round');
-        userIcon.setAttribute('stroke-linejoin', 'round');
+        // Use initials if we have a real participant name, otherwise User icon
+        // Check if name is more than just "Participant" followed by numbers
+        const hasRealName = participantNameFromWrapper && 
+          !participantNameFromWrapper.match(/^Participant\s+[a-f0-9]{4}$/i);
         
-        const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path1.setAttribute('d', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2');
-        userIcon.appendChild(path1);
+        if (hasRealName) {
+          avatarCircle.textContent = initials;
+        } else {
+          // Create User icon SVG as fallback
+          const userIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          userIcon.setAttribute('width', isTiled ? '32' : '24');
+          userIcon.setAttribute('height', isTiled ? '32' : '24');
+          userIcon.setAttribute('viewBox', '0 0 24 24');
+          userIcon.setAttribute('fill', 'none');
+          userIcon.setAttribute('stroke', 'currentColor');
+          userIcon.setAttribute('stroke-width', '2');
+          userIcon.setAttribute('stroke-linecap', 'round');
+          userIcon.setAttribute('stroke-linejoin', 'round');
+          
+          const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path1.setAttribute('d', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2');
+          userIcon.appendChild(path1);
+          
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', '12');
+          circle.setAttribute('cy', '7');
+          circle.setAttribute('r', '4');
+          userIcon.appendChild(circle);
+          
+          avatarCircle.appendChild(userIcon);
+        }
         
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', '12');
-        circle.setAttribute('cy', '7');
-        circle.setAttribute('r', '4');
-        userIcon.appendChild(circle);
+        // Create participant name text (truncate if too long)
+        const participantNameText = document.createElement('span');
+        participantNameText.className = 'participant-name-text';
+        participantNameText.style.color = '#e2e8f0';
+        participantNameText.style.fontSize = isTiled ? '13px' : '12px';
+        participantNameText.style.fontWeight = '500';
+        participantNameText.style.textAlign = 'center';
+        participantNameText.style.maxWidth = '120px';
+        participantNameText.style.overflow = 'hidden';
+        participantNameText.style.textOverflow = 'ellipsis';
+        participantNameText.style.whiteSpace = 'nowrap';
+        participantNameText.textContent = participantName;
         
-        avatarCircle.appendChild(userIcon);
-        
-        // Create camera off text
+        // Create camera off indicator text
         const cameraOffText = document.createElement('span');
-        cameraOffText.style.color = '#e2e8f0';
-        cameraOffText.style.fontSize = '12px';
-        cameraOffText.style.fontWeight = '500';
+        cameraOffText.className = 'camera-off-text';
+        cameraOffText.style.color = '#94a3b8';
+        cameraOffText.style.fontSize = isTiled ? '11px' : '10px';
+        cameraOffText.style.fontWeight = '400';
         cameraOffText.textContent = 'Camera off';
         
         avatar.appendChild(avatarCircle);
+        avatar.appendChild(participantNameText);
         avatar.appendChild(cameraOffText);
         wrapper.appendChild(avatar);
         
+        // Store participant name in avatar for later updates
+        (avatar as any).participantName = participantName;
+        
         // Initially hide the avatar - it will be shown by checkVideoState if needed
         avatar.style.display = 'none';
+      } else {
+        // Update existing avatar with participant name if available
+        const nameText = avatarPlaceholder.querySelector('.participant-name-text') as HTMLElement;
+        if (nameText && participantNameFromWrapper) {
+          nameText.textContent = participantName;
+        }
+        // Update initials in circle if it exists
+        const avatarCircle = avatarPlaceholder.querySelector('div') as HTMLElement;
+        if (avatarCircle && participantNameFromWrapper) {
+          const hasRealName = !participantNameFromWrapper.match(/^Participant\s+[a-f0-9]{4}$/i);
+          // Clear existing content and add initials if we have a real name
+          if (hasRealName && avatarCircle.querySelector('svg')) {
+            avatarCircle.innerHTML = '';
+            avatarCircle.textContent = getInitials(participantName);
+          }
+        }
       }
 
       // Check if video is actually playing and show/hide avatar accordingly
-      const checkVideoState = () => {
+      const checkVideoStateInner = () => {
         const avatar = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
         const overlay = wrapper.querySelector('.camera-off-overlay') as HTMLElement;
-        if (avatar) {
-          // Check if THIS specific video has a valid srcObject and is playing
-          let hasValidVideo = false;
+        if (!avatar) return;
+        
+        // Check if THIS specific video has a valid srcObject and is playing
+        let hasValidVideo = false;
+        
+        if (video.srcObject && video.srcObject instanceof MediaStream) {
+          const videoTracks = video.srcObject.getVideoTracks();
           
-          if (video.srcObject && video.srcObject instanceof MediaStream) {
-            const videoTracks = video.srcObject.getVideoTracks();
-            
-            // Check if there are video tracks and they are enabled
-            if (videoTracks.length > 0) {
-              const videoTrack = videoTracks[0];
-              hasValidVideo = videoTrack.enabled && 
-                !videoTrack.muted &&
-                videoTrack.readyState === 'live' &&
-                !video.paused &&
-                video.readyState >= 2 && // HAVE_CURRENT_DATA
-                video.videoWidth > 0 && video.videoHeight > 0; // Ensure video has dimensions
-            }
+          // Check if there are video tracks and they are enabled
+          if (videoTracks.length > 0) {
+            const videoTrack = videoTracks[0];
+            hasValidVideo = videoTrack.enabled && 
+              !videoTrack.muted &&
+              videoTrack.readyState === 'live' &&
+              !video.paused &&
+              video.readyState >= 2 && // HAVE_CURRENT_DATA
+              video.videoWidth > 0 && video.videoHeight > 0; // Ensure video has dimensions
           }
-          
-          if (hasValidVideo) {
-            // Video is active - hide avatar and restore normal background
-            avatar.style.display = 'none';
-            if (overlay) overlay.style.display = 'none';
-            wrapper.style.backgroundColor = '#111827'; // Restore original background
-          } else {
-            // Video is not active - show avatar with black background
-            avatar.style.display = 'flex';
-            if (overlay) overlay.style.display = 'block';
-            wrapper.style.backgroundColor = '#000000'; // Black background
-          }
+        }
+        
+        if (hasValidVideo) {
+          // Video is active - hide avatar and restore normal background
+          avatar.style.display = 'none';
+          if (overlay) overlay.style.display = 'none';
+          wrapper.style.backgroundColor = '#111827'; // Restore original background
+        } else {
+          // Video is not active - show avatar with black background
+          avatar.style.display = 'flex';
+          if (overlay) overlay.style.display = 'block';
+          wrapper.style.backgroundColor = '#000000'; // Black background
         }
       };
 
-      // Check initially and on video events
+      // Throttle checkVideoState - timeupdate fires multiple times per second
+      const checkVideoState = throttle(checkVideoStateInner, 200);
+
+      // Clean up existing listeners if video was already normalized
+      if (existing) {
+        existing.listeners.forEach(({ element, event, handler }) => {
+          element.removeEventListener(event, handler);
+        });
+        normalizedVideos.delete(video);
+      }
+
+      // Store listeners for cleanup
+      const listeners: Array<{ element: EventTarget; event: string; handler: EventListener }> = [];
+
+      // Check initially
       checkVideoState();
-      video.addEventListener('loadeddata', checkVideoState);
-      video.addEventListener('canplay', checkVideoState);
-      video.addEventListener('pause', checkVideoState);
-      video.addEventListener('play', checkVideoState);
-      video.addEventListener('timeupdate', checkVideoState); // Capture frames periodically
+      
+      // Add event listeners (non-frequent events)
+      const addListener = (element: EventTarget, event: string, handler: EventListener) => {
+        element.addEventListener(event, handler);
+        listeners.push({ element, event, handler });
+      };
+
+      addListener(video, 'loadeddata', checkVideoState);
+      addListener(video, 'canplay', checkVideoState);
+      addListener(video, 'pause', checkVideoState);
+      addListener(video, 'play', checkVideoState);
+      // Throttle timeupdate which fires very frequently
+      addListener(video, 'timeupdate', checkVideoState);
       
       // Also listen to track changes
       if (video.srcObject instanceof MediaStream) {
-        video.srcObject.addEventListener('removetrack', checkVideoState);
-        video.srcObject.addEventListener('addtrack', checkVideoState);
+        addListener(video.srcObject, 'removetrack', checkVideoState);
+        addListener(video.srcObject, 'addtrack', checkVideoState);
         
         // Listen to individual track state changes
         const videoTracks = video.srcObject.getVideoTracks();
         videoTracks.forEach(track => {
-          track.addEventListener('ended', checkVideoState);
-          track.addEventListener('mute', checkVideoState);
-          track.addEventListener('unmute', checkVideoState);
+          addListener(track, 'ended', checkVideoState);
+          addListener(track, 'mute', checkVideoState);
+          addListener(track, 'unmute', checkVideoState);
         });
       }
       
       // Fallback: check again after a short delay to ensure avatar is created
       setTimeout(checkVideoState, 500);
+
+      // Store the checkVideoState function and listeners for cleanup
+      normalizedVideos.set(video, { checkVideoState, listeners });
 
       if (!wrapper.querySelector('.tile-signal-badge')) {
         const badge = document.createElement('div');
@@ -302,7 +436,6 @@ const normalizeVideoElements = (
         nameEl.style.pointerEvents = 'none';
         wrapper.appendChild(nameEl);
       }
-    }
   });
 };
 
@@ -345,139 +478,90 @@ export function TelehealthVideoPanel({
   // Simple PiP state
   const [localIsPictureInPicture, setLocalIsPictureInPicture] = useState(false);
 
-  // Simple follow-speaker effect
-  useEffect(() => {
-    if (!pipFollowsSpeaker || !activeSpeakerId) return;
-    
-    // If PiP is active and active speaker changes, swap the video
-    if (document.pictureInPictureElement) {
-      const speakerVideo = document.querySelector(`[data-connection-id="${activeSpeakerId}"] video`) as HTMLVideoElement;
-      if (speakerVideo && speakerVideo.srcObject) {
-        // Get the current PiP video element
-        const pipVideo = document.pictureInPictureElement as HTMLVideoElement;
-        if (pipVideo && pipVideo.srcObject !== speakerVideo.srcObject) {
-
-          pipVideo.srcObject = speakerVideo.srcObject as MediaStream;
-        }
-      }
-    }
-  }, [pipFollowsSpeaker, activeSpeakerId]);
-
-  // PiP control functions - COMMENTED OUT FOR SIMPLICITY
-  /*
-  const handleCurrentViewPiP = useCallback(() => {
-    const v = pipRef.current;
-
-    if (!v) {
-
-      return;
-    }
-
-    // Check browser support first
-
-    // ensure stream: remote -> fallback local (SYNCHRONOUS only)
-    if (!v.srcObject) {
-
-      const el = getVideoElementById?.(activeSpeakerId ?? '') as HTMLVideoElement | null;
-      if (el?.srcObject) {
-        v.srcObject = el.srcObject as MediaStream;
-
-      }
-      if (!v.srcObject) {
-        const localEl = localRef.current?.querySelector('video') as HTMLVideoElement | null;
-        if (localEl?.srcObject) {
-          v.srcObject = localEl.srcObject as MediaStream;
-
-        } else {
-
-          return;
-        }
-      }
-    } else {
-
-    }
-
-    // make the element "ready" (SYNCHRONOUS only)
-    v.muted = true;            // avoid autoplay block
-    v.playsInline = true;
-    v.autoplay = true;
-
-    // Check if video is ready for PiP
-    if (v.readyState < 2) {
-
-    }
-
-    // Request PiP IMMEDIATELY - no awaits before this!
-    try {
-
-      const win = (v as any).requestPictureInPicture();
-
-      // Use ref to track state without triggering re-render
-      pipStateRef.current = true;
-      
-      // Update state in next tick to avoid render issues
-      setTimeout(() => {
-        setLocalIsPictureInPicture(true);
-      }, 0);
-      
-    } catch (err: any) {
-
-      pipStateRef.current = false;
-    }
-  }, [getVideoElementById, activeSpeakerId]);
-
-  // Set up autopictureinpicture for the hidden PiP video
-  useEffect(() => {
-    if (pipRef.current) {
-
-      pipRef.current.setAttribute('autopictureinpicture', '');
-      // If supported, also set runtime flag:
-      (pipRef.current as any).autoPictureInPicture = true;
-
-    } else {
-
-    }
-  }, []);
-
-  // Handle PiP toggle
+  // Handle PiP toggle - request PiP for a video element
   const handleTogglePictureInPicture = useCallback(async () => {
     try {
+      // Check if PiP is already active
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
         setLocalIsPictureInPicture(false);
+        if (setPendingPiPRequest) setPendingPiPRequest(false);
         return;
       }
-      
-      // Default to Follow Speaker mode
-      if (enablePiPFollowSpeaker) {
+
+      // Enable follow speaker if available
+      if (enablePiPFollowSpeaker && activeSpeakerId) {
         enablePiPFollowSpeaker();
-        await handleCurrentViewPiP();
       }
-    } catch (err) {
 
+      // Find the best video element to use for PiP
+      let targetVideo: HTMLVideoElement | null = null;
+
+      // Priority: active speaker > first remote video > local video
+      if (activeSpeakerId && getVideoElementById) {
+        targetVideo = getVideoElementById(activeSpeakerId);
+      }
+
+      if (!targetVideo && remoteRef.current) {
+        const remoteVideo = remoteRef.current.querySelector('video') as HTMLVideoElement;
+        if (remoteVideo && remoteVideo.srcObject) {
+          targetVideo = remoteVideo;
+        }
+      }
+
+      if (!targetVideo && localRef.current) {
+        const localVideo = localRef.current.querySelector('video') as HTMLVideoElement;
+        if (localVideo && localVideo.srcObject) {
+          targetVideo = localVideo;
+        }
+      }
+
+      if (!targetVideo) {
+        console.warn('No video element available for PiP');
+        return;
+      }
+
+      // Ensure video is ready for PiP
+      ensurePictureInPictureReady(targetVideo);
+
+      // Ensure video is playing
+      if (targetVideo.paused) {
+        await targetVideo.play();
+      }
+
+      // Request Picture-in-Picture
+      await targetVideo.requestPictureInPicture();
+      setLocalIsPictureInPicture(true);
+      if (setPendingPiPRequest) setPendingPiPRequest(false);
+
+    } catch (err: any) {
+      console.error('PiP error:', err);
+      if (setPendingPiPRequest) setPendingPiPRequest(false);
+      
+      // Handle specific errors
+      if (err.name === 'InvalidStateError') {
+        console.warn('PiP: Video not ready or already in PiP');
+      } else if (err.name === 'NotAllowedError') {
+        console.warn('PiP: User denied PiP permission');
+      }
     }
-  }, [enablePiPFollowSpeaker, handleCurrentViewPiP]);
+  }, [activeSpeakerId, getVideoElementById, enablePiPFollowSpeaker, setPendingPiPRequest]);
 
-  // Note: Registration system removed - PiP is now handled directly by parent
-
-  // Swap PiP video stream when active speaker changes
+  // Swap PiP video stream when active speaker changes (if follow speaker is enabled)
   useEffect(() => {
-    if (!pipFollowsSpeaker || !localIsPictureInPicture || !activeSpeakerId || !getVideoElementById) return;
+    if (!pipFollowsSpeaker || !isPictureInPicture || !activeSpeakerId || !getVideoElementById) return;
     
-    // Get the video element for the active speaker using the registry
     const activeSpeakerVideo = getVideoElementById(activeSpeakerId);
+    const currentPiPVideo = document.pictureInPictureElement as HTMLVideoElement;
     
-    if (activeSpeakerVideo && pipRef.current && activeSpeakerVideo.srcObject) {
+    if (activeSpeakerVideo && currentPiPVideo && activeSpeakerVideo.srcObject) {
       // Swap the stream without leaving PiP
-      if (pipRef.current.srcObject !== activeSpeakerVideo.srcObject) {
-        pipRef.current.srcObject = activeSpeakerVideo.srcObject as MediaStream;
-
-        // Ensure it's playing
-        pipRef.current.play().catch(() => {});
+      if (currentPiPVideo.srcObject !== activeSpeakerVideo.srcObject) {
+        currentPiPVideo.srcObject = activeSpeakerVideo.srcObject as MediaStream;
+        currentPiPVideo.play().catch(() => {});
       }
     }
-  }, [pipFollowsSpeaker, localIsPictureInPicture, activeSpeakerId, getVideoElementById]);
-  */
+  }, [pipFollowsSpeaker, isPictureInPicture, activeSpeakerId, getVideoElementById]);
 
   // Listen for PiP events
   useEffect(() => {
@@ -527,23 +611,39 @@ export function TelehealthVideoPanel({
     const remoteElement = remoteRef.current;
     if (!remoteElement) return;
 
+    // Derive remote names from participants
+    const remoteNamesList = participants
+      .filter(p => !p.isLocal)
+      .map(p => `Participant ${p.connectionId.slice(-4)}`);
+
+    let timeoutId: NodeJS.Timeout | null = null;
+
     const update = () => {
       const videos = remoteElement.querySelectorAll("video");
       const hasVideo = videos.length > 0;
       setRemoteHasVideo(hasVideo);
       setRemoteTileCount(videos.length);
       if (hasVideo) {
-        normalizeVideoElements(remoteElement, { strength: signalStrength, names: remoteNames });
+        normalizeVideoElements(remoteElement, { strength: signalStrength, names: remoteNamesList });
       }
     };
 
-    update();
+    // Debounced update to avoid excessive calls
+    const debouncedUpdate = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(update, 100);
+    };
 
-    const observer = new MutationObserver(update);
+    update(); // Initial update immediately
+
+    const observer = new MutationObserver(debouncedUpdate);
     observer.observe(remoteElement, { childList: true, subtree: true });
 
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [signalStrength, participants]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -559,26 +659,60 @@ export function TelehealthVideoPanel({
     };
   }, []);
 
+  // Set participant name in dataset whenever it changes
   useEffect(() => {
     const localElement = localRef.current;
     if (!localElement) return;
+
+    const participantName = localParticipantName || "You";
+    localElement.dataset.participantName = participantName;
+    // Also set on parent wrapper if it exists
+    const videoWrapper = localElement.parentElement;
+    if (videoWrapper) {
+      videoWrapper.dataset.participantName = participantName;
+    }
+    // Set on the container element itself
+    const container = localElement.closest('[id*="container"], [class*="container"]');
+    if (container) {
+      (container as HTMLElement).dataset.participantName = participantName;
+    }
+  }, [localParticipantName]);
+
+  // Observe local element changes and normalize video elements
+  useEffect(() => {
+    const localElement = localRef.current;
+    if (!localElement) return;
+
+    const participantName = localParticipantName || "You";
+    const strength = signalStrength || 'good';
+
+    let timeoutId: NodeJS.Timeout | null = null;
 
     const update = () => {
       const hasVideo = localElement.querySelector("video") !== null;
       setLocalHasVideo(hasVideo);
       if (hasVideo) {
-        // Do not add name badge here; we already render "You" label below
-        normalizeVideoElements(localElement, { strength: signalStrength });
+        // Pass local participant name to normalizeVideoElements so avatar shows correct name
+        normalizeVideoElements(localElement, { strength, names: [participantName] });
       }
     };
 
-    update();
+    // Debounced update to avoid excessive calls
+    const debouncedUpdate = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(update, 100);
+    };
 
-    const observer = new MutationObserver(update);
+    update(); // Initial update immediately
+
+    const observer = new MutationObserver(debouncedUpdate);
     observer.observe(localElement, { childList: true, subtree: true });
 
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [localParticipantName, signalStrength]);
 
   // Note: Participant video registration is now handled by the hook
   // when streams are created/destroyed, so we don't need to do it here
@@ -753,9 +887,23 @@ export function TelehealthVideoPanel({
     isFullscreen && "top-6 right-6",
   );
 
+  // Note: normalizeVideoElements is now called via MutationObserver to avoid duplicate work
+  // Only normalize when dependencies actually change (signal strength, names)
   useEffect(() => {
-    normalizeVideoElements(remoteRef.current, { strength: signalStrength, names: remoteNames });
-  }, [remoteParticipantCount, isFullscreen, signalStrength, remoteNames.join('|')]);
+    const remoteElement = remoteRef.current;
+    if (!remoteElement) return;
+    
+    // Derive remote names from participants
+    const remoteNamesList = participants
+      .filter(p => !p.isLocal)
+      .map(p => `Participant ${p.connectionId.slice(-4)}`);
+    
+    // Only update if there are videos already present
+    const videos = remoteElement.querySelectorAll("video");
+    if (videos.length > 0) {
+      normalizeVideoElements(remoteElement, { strength: signalStrength, names: remoteNamesList });
+    }
+  }, [signalStrength, participants]);
 
   return (
     <div ref={panelRef} className={cn(panelClasses, "h-full")}>
@@ -823,11 +971,18 @@ export function TelehealthVideoPanel({
             />
             {!localHasVideo ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
-                {/* Profile Avatar */}
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
-                  <User className="w-6 h-6" />
+                {/* Profile Avatar with Initials */}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+                  {localParticipantName && localParticipantName !== "You" ? (() => {
+                    const words = localParticipantName.trim().split(/\s+/);
+                    const initials = words.length >= 2 
+                      ? (words[0][0] + words[1][0]).toUpperCase()
+                      : localParticipantName.substring(0, 2).toUpperCase();
+                    return <span className="text-base">{initials}</span>;
+                  })() : <User className="w-6 h-6" />}
                 </div>
-                <span className="text-xs text-slate-200">Camera off</span>
+                <span className="text-xs text-slate-200 font-medium">{localParticipantName}</span>
+                <span className="text-xs text-slate-400">Camera off</span>
               </div>
             ) : null}
 
