@@ -1391,6 +1391,56 @@ export function useVonageSession({
         publisher.on('videoDimensionsChanged', (event: any) => {
 
         });
+
+        // Listen for stream property changes (when camera is toggled)
+        publisher.on('streamPropertyChanged', (event: any) => {
+          if (event.changedProperty === 'videoActive' || event.changedProperty === 'hasVideo') {
+            const hasVideo = event.stream?.hasVideo ?? event.newValue ?? false;
+            setIsCameraOff(!hasVideo);
+            setIsVideoEnabled(hasVideo);
+            
+            // Update participant state
+            const session = sessionRef.current;
+            if (session?.connection?.connectionId) {
+              setParticipants((prev) => {
+                return prev.map((participant) => 
+                  participant.isLocal && participant.connectionId === session.connection?.connectionId
+                    ? { ...participant, hasVideo }
+                    : participant
+                );
+              });
+            }
+
+            // When camera is turned back on, ensure video element updates
+            if (hasVideo) {
+              setTimeout(() => {
+                const currentPublisher = publisherRef.current;
+                const localEl = localContainerRef.current;
+                if (localEl && currentPublisher) {
+                  const videoElement = localEl.querySelector('video') as HTMLVideoElement;
+                  if (videoElement) {
+                    // Try to get the stream from the publisher's internal video element
+                    const publisherElement = (currentPublisher as any).element;
+                    if (publisherElement) {
+                      const publisherVideo = publisherElement.querySelector('video') as HTMLVideoElement;
+                      if (publisherVideo && publisherVideo.srcObject) {
+                        // Update the local video element's srcObject if it's different
+                        if (videoElement.srcObject !== publisherVideo.srcObject) {
+                          videoElement.srcObject = publisherVideo.srcObject as MediaStream;
+                        }
+                      }
+                    }
+                    
+                    // Ensure video plays
+                    videoElement.play().catch((err) => {
+                      console.warn('Video play error after property change:', err);
+                    });
+                  }
+                }
+              }, 100);
+            }
+          }
+        });
       }
 
       publisherRef.current = publisher;
@@ -1647,6 +1697,47 @@ export function useVonageSession({
     publisher.publishVideo(!nextOff);
     setIsCameraOff(nextOff);
     setIsVideoEnabled(!nextOff);
+
+    // When turning camera back on, ensure the video element updates properly
+    if (!nextOff) {
+      // Camera is being turned ON - wait a bit for the publisher to update
+      setTimeout(() => {
+        const localEl = localContainerRef.current;
+        if (localEl) {
+          const videoElement = localEl.querySelector('video') as HTMLVideoElement;
+          if (videoElement) {
+            // Get the stream from the publisher's internal video element
+            const publisherElement = (publisher as any).element;
+            if (publisherElement) {
+              const publisherVideo = publisherElement.querySelector('video') as HTMLVideoElement;
+              if (publisherVideo && publisherVideo.srcObject) {
+                // Update the local video element's srcObject if it's different
+                if (videoElement.srcObject !== publisherVideo.srcObject) {
+                  videoElement.srcObject = publisherVideo.srcObject as MediaStream;
+                }
+              }
+            }
+            
+            // Ensure video plays
+            videoElement.play().catch((err) => {
+              console.warn('Video play error after camera toggle:', err);
+            });
+          }
+        }
+      }, 200);
+    }
+
+    // Update participant state
+    const session = sessionRef.current;
+    if (session?.connection?.connectionId) {
+      setParticipants((prev) => {
+        return prev.map((participant) => 
+          participant.isLocal && participant.connectionId === session.connection?.connectionId
+            ? { ...participant, hasVideo: !nextOff }
+            : participant
+        );
+      });
+    }
 
   }, [isCameraOff]);
 

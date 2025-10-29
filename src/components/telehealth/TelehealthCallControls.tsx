@@ -159,7 +159,7 @@ export function TelehealthCallControls({
         className={cn(
           "flex items-center gap-2",
           isOverlay
-            ? "justify-center bg-black/40 backdrop-blur-md rounded-xl px-3 py-2"
+            ? "justify-center bg-black/40 rounded-xl px-3 py-2"
             : "justify-center sm:justify-start rounded-3xl bg-white p-4 shadow-sm flex-wrap gap-3",
         )}
       >
@@ -353,9 +353,6 @@ export function TelehealthCallControls({
             {pendingPiPRequest && !isPictureInPicture && (
               <div className="absolute -top-1 -right-1 h-3 w-3 bg-orange-500 rounded-full animate-ping" />
             )}
-            {/* <span className="ml-2 hidden sm:inline">
-              {isPictureInPicture ? 'Exit PiP' : 'PiP'}
-            </span> */}
           </Button>
         )}
 
