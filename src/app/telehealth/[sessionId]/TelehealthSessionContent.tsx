@@ -132,7 +132,7 @@ export function TelehealthSessionContent({
                       onLeave={telehealth.leave}
                       onToggleMic={telehealth.toggleMic}
                       onToggleCamera={telehealth.toggleCamera}
-                      onOpenDeviceSettings={telehealth.switchCamera}
+                      onOpenDeviceSettings={telehealth.openDeviceSettings}
                     />
                   }
                 />

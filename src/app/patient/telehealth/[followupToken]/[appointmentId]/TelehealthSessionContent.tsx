@@ -890,7 +890,7 @@ export function TelehealthSessionContent({
               sessionTitle={sessionTitle}
               providerName={providerName}
               participants={telehealth.participants}
-              localParticipantName="You"
+              localParticipantName={appointmentState?.patient?.full_name || "You"}
               statusMessage={telehealth.statusMessage}
               onRemoteContainerReady={handleRemoteContainerReady}
               onLocalContainerReady={handleLocalContainerReady}
@@ -917,7 +917,7 @@ export function TelehealthSessionContent({
                   onLeave={telehealth.leave}
                   onToggleMic={telehealth.toggleMic}
                   onToggleCamera={telehealth.toggleCamera}
-                  onOpenDeviceSettings={telehealth.switchCamera}
+                  onOpenDeviceSettings={telehealth.openDeviceSettings}
                   onSwitchMicrophone={telehealth.switchMicrophone}
                   signalStrength={telehealth.signalStrength}
                   audioLevel={telehealth.audioLevel}
