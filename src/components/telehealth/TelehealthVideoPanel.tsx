@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical, X } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, X, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
@@ -107,6 +107,116 @@ const normalizeVideoElements = (
       wrapper.style.overflow = "hidden";
       wrapper.style.boxShadow = isTiled ? "0 6px 24px rgba(0,0,0,0.25)" : "0 4px 16px rgba(0,0,0,0.2)";
       wrapper.style.position = "relative";
+
+      // Always ensure avatar placeholder exists for this wrapper
+      const participantName = opts?.names?.[index] || `Participant ${index + 1}`;
+      const avatarPlaceholder = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
+      
+      if (!avatarPlaceholder) {
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar-placeholder';
+        avatar.style.position = 'absolute';
+        avatar.style.top = '50%';
+        avatar.style.left = '50%';
+        avatar.style.transform = 'translate(-50%, -50%)';
+        avatar.style.zIndex = '10';
+        avatar.style.display = 'flex';
+        avatar.style.flexDirection = 'column';
+        avatar.style.alignItems = 'center';
+        avatar.style.gap = '8px';
+        avatar.style.pointerEvents = 'none';
+        
+        // Create avatar circle with User icon
+        const avatarCircle = document.createElement('div');
+        avatarCircle.style.width = isTiled ? '64px' : '48px';
+        avatarCircle.style.height = isTiled ? '64px' : '48px';
+        avatarCircle.style.borderRadius = '50%';
+        avatarCircle.style.background = 'linear-gradient(135deg, #3b82f6, #8b5cf6)';
+        avatarCircle.style.display = 'flex';
+        avatarCircle.style.alignItems = 'center';
+        avatarCircle.style.justifyContent = 'center';
+        avatarCircle.style.color = 'white';
+        avatarCircle.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        
+        // Create User icon SVG
+        const userIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        userIcon.setAttribute('width', isTiled ? '32' : '24');
+        userIcon.setAttribute('height', isTiled ? '32' : '24');
+        userIcon.setAttribute('viewBox', '0 0 24 24');
+        userIcon.setAttribute('fill', 'none');
+        userIcon.setAttribute('stroke', 'currentColor');
+        userIcon.setAttribute('stroke-width', '2');
+        userIcon.setAttribute('stroke-linecap', 'round');
+        userIcon.setAttribute('stroke-linejoin', 'round');
+        
+        const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path1.setAttribute('d', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2');
+        userIcon.appendChild(path1);
+        
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', '12');
+        circle.setAttribute('cy', '7');
+        circle.setAttribute('r', '4');
+        userIcon.appendChild(circle);
+        
+        avatarCircle.appendChild(userIcon);
+        
+        // Create camera off text
+        const cameraOffText = document.createElement('span');
+        cameraOffText.style.color = '#e2e8f0';
+        cameraOffText.style.fontSize = '12px';
+        cameraOffText.style.fontWeight = '500';
+        cameraOffText.textContent = 'Camera off';
+        
+        avatar.appendChild(avatarCircle);
+        avatar.appendChild(cameraOffText);
+        wrapper.appendChild(avatar);
+        
+        // Initially hide the avatar - it will be shown by checkVideoState if needed
+        avatar.style.display = 'none';
+      }
+
+      // Check if video is actually playing and show/hide avatar accordingly
+      const checkVideoState = () => {
+        const avatar = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
+        if (avatar) {
+          // Check if THIS specific video has a valid srcObject and is playing
+          const hasValidVideo = video.srcObject && 
+            video.srcObject instanceof MediaStream && 
+            video.srcObject.getVideoTracks().length > 0 &&
+            video.srcObject.getVideoTracks()[0].enabled &&
+            !video.paused &&
+            video.readyState >= 2 && // HAVE_CURRENT_DATA
+            video.videoWidth > 0 && video.videoHeight > 0; // Ensure video has dimensions
+          
+          if (hasValidVideo) {
+            // Video is active - hide avatar and restore normal background
+            avatar.style.display = 'none';
+            wrapper.style.backgroundColor = '#111827'; // Restore original background
+          } else {
+            // Video is not active - show avatar with black background
+            avatar.style.display = 'flex';
+            wrapper.style.backgroundColor = '#000000'; // Black background
+          }
+        }
+      };
+
+      // Check initially and on video events
+      checkVideoState();
+      video.addEventListener('loadeddata', checkVideoState);
+      video.addEventListener('canplay', checkVideoState);
+      video.addEventListener('pause', checkVideoState);
+      video.addEventListener('play', checkVideoState);
+      video.addEventListener('timeupdate', checkVideoState); // Capture frames periodically
+      
+      // Also listen to track changes
+      if (video.srcObject instanceof MediaStream) {
+        video.srcObject.addEventListener('removetrack', checkVideoState);
+        video.srcObject.addEventListener('addtrack', checkVideoState);
+      }
+      
+      // Fallback: check again after a short delay to ensure avatar is created
+      setTimeout(checkVideoState, 500);
 
       if (!wrapper.querySelector('.tile-signal-badge')) {
         const badge = document.createElement('div');
@@ -679,8 +789,12 @@ export function TelehealthVideoPanel({
               aria-label="Your video preview"
             />
             {!localHasVideo ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center text-xs text-slate-100">
-                <span>Your camera preview will appear here.</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
+                {/* Profile Avatar */}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
+                  <User className="w-6 h-6" />
+                </div>
+                <span className="text-xs text-slate-200">Camera off</span>
               </div>
             ) : null}
 
