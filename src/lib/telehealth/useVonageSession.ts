@@ -110,6 +110,7 @@ interface UseVonageSessionResult {
   toggleCamera: () => Promise<void>;
   switchCamera: () => void;
   switchMicrophone: () => void;
+  openDeviceSettings: () => void;
   isConnected: boolean;
   isBusy: boolean;
   isMicMuted: boolean;
@@ -455,6 +456,11 @@ export function useVonageSession({
 
   }, []);
 
+  // Getter function for video elements by connection ID
+  const getVideoElementById = useCallback((connectionId: string): HTMLVideoElement | null => {
+    return participantVideoMap.current.get(connectionId) || null;
+  }, []);
+
   // PiP toggle function
   const togglePictureInPicture = useCallback(async () => {
     try {
@@ -465,22 +471,76 @@ export function useVonageSession({
         return;
       }
       
-      // This will be handled by the video panel component
+      // Find the best video element to use for PiP
+      let targetVideo: HTMLVideoElement | null = null;
 
-    } catch (err) {
+      // Priority: active speaker > first remote video > local video
+      if (activeSpeakerId) {
+        targetVideo = getVideoElementById(activeSpeakerId);
+      }
 
+      if (!targetVideo && remoteContainerRef.current) {
+        const remoteVideo = remoteContainerRef.current.querySelector('video') as HTMLVideoElement;
+        if (remoteVideo && remoteVideo.srcObject) {
+          targetVideo = remoteVideo;
+        }
+      }
+
+      if (!targetVideo && localContainerRef.current) {
+        const localVideo = localContainerRef.current.querySelector('video') as HTMLVideoElement;
+        if (localVideo && localVideo.srcObject) {
+          targetVideo = localVideo;
+        }
+      }
+
+      if (!targetVideo) {
+        console.warn('No video element available for PiP');
+        setPendingPiPRequest(false);
+        return;
+      }
+
+      // Enable PiP support on the video
+      enablePiPSupportOnVideo(targetVideo);
+
+      // Ensure video is playing
+      if (targetVideo.paused) {
+        await targetVideo.play();
+      }
+
+      // Request Picture-in-Picture
+      await targetVideo.requestPictureInPicture();
+      setIsPictureInPicture(true);
+      setPendingPiPRequest(false);
+
+      // Enable follow speaker if available
+      if (activeSpeakerId) {
+        enablePiPFollowSpeaker();
+      }
+
+    } catch (err: any) {
+      console.error('PiP error:', err);
+      setPendingPiPRequest(false);
+      setIsPictureInPicture(false);
+      
+      // Handle specific errors
+      if (err.name === 'InvalidStateError') {
+        console.warn('PiP: Video not ready or already in PiP');
+      } else if (err.name === 'NotAllowedError') {
+        console.warn('PiP: User denied PiP permission');
+      }
     }
-  }, []);
-
-  // Getter function for video elements by connection ID
-  const getVideoElementById = useCallback((connectionId: string): HTMLVideoElement | null => {
-    return participantVideoMap.current.get(connectionId) || null;
-  }, []);
+  }, [activeSpeakerId, getVideoElementById, enablePiPFollowSpeaker]);
 
   // Listen for PiP events
   useEffect(() => {
-    const handleEnterPiP = () => setIsPictureInPicture(true);
-    const handleLeavePiP = () => setIsPictureInPicture(false);
+    const handleEnterPiP = () => {
+      setIsPictureInPicture(true);
+      setPendingPiPRequest(false);
+    };
+    const handleLeavePiP = () => {
+      setIsPictureInPicture(false);
+      setPipFollowsSpeaker(false);
+    };
 
     document.addEventListener('enterpictureinpicture', handleEnterPiP);
     document.addEventListener('leavepictureinpicture', handleLeavePiP);
@@ -490,6 +550,22 @@ export function useVonageSession({
       document.removeEventListener('leavepictureinpicture', handleLeavePiP);
     };
   }, []);
+
+  // Swap PiP video when active speaker changes (if follow speaker is enabled)
+  useEffect(() => {
+    if (!pipFollowsSpeaker || !isPictureInPicture || !activeSpeakerId) return;
+    
+    const activeSpeakerVideo = getVideoElementById(activeSpeakerId);
+    const currentPiPVideo = document.pictureInPictureElement as HTMLVideoElement;
+    
+    if (activeSpeakerVideo && currentPiPVideo && activeSpeakerVideo.srcObject) {
+      // Swap the stream without leaving PiP
+      if (currentPiPVideo.srcObject !== activeSpeakerVideo.srcObject) {
+        currentPiPVideo.srcObject = activeSpeakerVideo.srcObject as MediaStream;
+        currentPiPVideo.play().catch(() => {});
+      }
+    }
+  }, [pipFollowsSpeaker, isPictureInPicture, activeSpeakerId, getVideoElementById]);
 
   // Active speaker detection from audio level events
   useEffect(() => {
@@ -1669,26 +1745,37 @@ export function useVonageSession({
 
   const toggleMic = useCallback(async () => {
     const publisher = publisherRef.current;
-    if (!publisher) return;
-    const nextMuted = !isMicMuted;
-    publisher.publishAudio(!nextMuted);
-    setIsMicMuted(nextMuted);
-    setIsAudioEnabled(!nextMuted);
+    if (!publisher) {
+      console.warn('toggleMic: No publisher available');
+      return;
+    }
     
-    // Dispatch mic status update event for local participant
-    const event = new CustomEvent('micStatusUpdate', {
-      detail: { 
-        connectionId: sessionRef.current?.connection?.connectionId,
-        isMuted: nextMuted 
-      }
-    });
-    document.dispatchEvent(event);
+    const nextMuted = !isMicMuted;
+    console.log('toggleMic: Toggling microphone to', nextMuted ? 'muted' : 'unmuted');
+    
+    try {
+      publisher.publishAudio(!nextMuted);
+      setIsMicMuted(nextMuted);
+      setIsAudioEnabled(!nextMuted);
+      
+      // Dispatch mic status update event for local participant
+      const event = new CustomEvent('micStatusUpdate', {
+        detail: { 
+          connectionId: sessionRef.current?.connection?.connectionId,
+          isMuted: nextMuted 
+        }
+      });
+      document.dispatchEvent(event);
+      
+      console.log('toggleMic: Successfully toggled microphone');
+    } catch (error) {
+      console.error('toggleMic: Error toggling microphone:', error);
+    }
   }, [isMicMuted]);
 
   const toggleCamera = useCallback(async () => {
     const publisher = publisherRef.current;
     if (!publisher) {
-
       return;
     }
     
@@ -1725,6 +1812,21 @@ export function useVonageSession({
           }
         }
       }, 200);
+    } else {
+      // Camera is being turned OFF - ensure proper cleanup
+      setTimeout(() => {
+        const localEl = localContainerRef.current;
+        if (localEl) {
+          const videoElement = localEl.querySelector('video') as HTMLVideoElement;
+          if (videoElement && videoElement.srcObject instanceof MediaStream) {
+            // Disable video tracks to ensure proper state detection
+            const videoTracks = videoElement.srcObject.getVideoTracks();
+            videoTracks.forEach(track => {
+              track.enabled = false;
+            });
+          }
+        }
+      }, 100);
     }
 
     // Update participant state
@@ -2421,6 +2523,14 @@ export function useVonageSession({
     }
   }, [error]);
 
+  // Settings function to open device settings
+  const openDeviceSettings = useCallback(() => {
+    console.log('openDeviceSettings: Opening device settings...');
+    // This function can be used to trigger device settings UI
+    // For now, it's a placeholder that can be extended
+    // In the future, this could open a modal with device selection options
+  }, []);
+
   return useMemo(
     () => ({
       join,
@@ -2430,6 +2540,7 @@ export function useVonageSession({
       switchCamera,
       switchMicrophone,
       selectMicrophone,
+      openDeviceSettings,
       isConnected,
       isBusy,
       isMicMuted,
