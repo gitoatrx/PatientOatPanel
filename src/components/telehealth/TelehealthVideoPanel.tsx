@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical, X, User } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, X, User, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
@@ -26,6 +26,7 @@ interface TelehealthVideoPanelProps {
   participantAudioLevels?: Map<string, number>;
   getVideoElementById?: (connectionId: string) => HTMLVideoElement | null;
   registerPiPToggle?: (fn: () => void) => void;
+  callMode?: 'audio' | 'video' | null;
 }
 
 type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
@@ -464,6 +465,7 @@ export function TelehealthVideoPanel({
   participantAudioLevels,
   getVideoElementById,
   registerPiPToggle,
+  callMode = null,
 }: TelehealthVideoPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
@@ -607,9 +609,14 @@ export function TelehealthVideoPanel({
   }, [viewportWidth]);
 
   useEffect(() => {
-    onLocalContainerReady?.(localRef.current);
+    // In audio mode, don't pass local container to avoid duplicate avatars
+    if (callMode === 'audio') {
+      onLocalContainerReady?.(null);
+    } else {
+      onLocalContainerReady?.(localRef.current);
+    }
     return () => onLocalContainerReady?.(null);
-  }, [onLocalContainerReady]);
+  }, [onLocalContainerReady, callMode]);
 
   useEffect(() => {
     const remoteElement = remoteRef.current;
@@ -663,8 +670,10 @@ export function TelehealthVideoPanel({
     };
   }, []);
 
-  // Set participant name in dataset whenever it changes
+  // Set participant name in dataset whenever it changes (skip in audio mode to avoid duplicates)
   useEffect(() => {
+    if (callMode === 'audio') return; // Skip in audio mode - we show custom avatar instead
+    
     const localElement = localRef.current;
     if (!localElement) return;
 
@@ -680,10 +689,15 @@ export function TelehealthVideoPanel({
     if (container) {
       (container as HTMLElement).dataset.participantName = participantName;
     }
-  }, [localParticipantName]);
+  }, [localParticipantName, callMode]);
 
-  // Observe local element changes and normalize video elements
+  // Observe local element changes and normalize video elements (skip in audio mode)
   useEffect(() => {
+    if (callMode === 'audio') {
+      setLocalHasVideo(false); // In audio mode, no video
+      return; // Skip normalization in audio mode to avoid duplicate avatars
+    }
+    
     const localElement = localRef.current;
     if (!localElement) return;
 
@@ -716,7 +730,7 @@ export function TelehealthVideoPanel({
       if (timeoutId) clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [localParticipantName, signalStrength]);
+  }, [localParticipantName, signalStrength, callMode]);
 
   // Note: Participant video registration is now handled by the hook
   // when streams are created/destroyed, so we don't need to do it here
@@ -940,68 +954,108 @@ export function TelehealthVideoPanel({
         {!remoteHasVideo ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-slate-200">
             <div className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
-              Waiting for video
+              {callMode === 'audio' ? 'Waiting for audio' : 'Waiting for video'}
             </div>
             <p className="text-sm text-slate-200/80">
-              {statusMessage ?? `Video will appear automatically once ${providerFirstName}'s camera connects.`}
+              {statusMessage ?? (callMode === 'audio' 
+                ? `Audio will connect automatically once ${providerFirstName} joins.` 
+                : `Video will appear automatically once ${providerFirstName}'s camera connects.`)}
             </p>
           </div>
         ) : null}
 
-        <div 
-          className={cn(
-            "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
-            // Mobile: top-left positioning, Desktop: bottom-right positioning
-            hasUserPositioned ? "" : (isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")),
-            isDragging && "cursor-grabbing scale-105 transition-none"
-          )}
-          style={hasUserPositioned ? {
-            left: `${cameraPosition.x}px`,
-            top: `${cameraPosition.y}px`,
-            right: 'auto',
-            bottom: 'auto',
-          } : {}}
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleMouseDown}
-          onDoubleClick={resetCameraPosition}
-          title="Drag to move camera • Double-click to reset position"
-        >
-          <div className={cn(localPreviewClasses, "relative border border-gray-200 focus:border-primary focus:ring-0 focus:outline-none")}>
-            <div
-              ref={localRef}
-              id="vonage-local-container"
-              className="h-full w-full"
-              aria-label="Your video preview"
-            />
-            {!localHasVideo ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
+        {/* Local video preview - Show clean avatar when in audio mode */}
+        {callMode === 'audio' ? (
+          <div 
+            className={cn(
+              "absolute flex flex-col items-end gap-2 z-20",
+              // Mobile: top-left positioning, Desktop: bottom-right positioning
+              isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")
+            )}
+          >
+            <div className={cn(localPreviewClasses, "relative border border-white/20 bg-black flex items-center justify-center overflow-hidden")}>
+              {/* Clean avatar display - just avatar and name */}
+              <div className="flex flex-col items-center justify-center gap-1.5 px-2">
                 {/* Profile Avatar with Initials */}
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold flex-shrink-0">
                   {localParticipantName && localParticipantName !== "You" ? (() => {
                     const words = localParticipantName.trim().split(/\s+/);
                     const initials = words.length >= 2 
                       ? (words[0][0] + words[1][0]).toUpperCase()
                       : localParticipantName.substring(0, 2).toUpperCase();
-                    return <span className="text-base">{initials}</span>;
-                  })() : <User className="w-6 h-6" />}
+                    return <span className="text-lg">{initials}</span>;
+                  })() : <User className="w-7 h-7" />}
                 </div>
-                <span className="text-xs text-slate-200 font-medium">{localParticipantName}</span>
-                <span className="text-xs text-slate-400">Camera off</span>
+                <span className="text-[10px] text-slate-300 font-medium truncate max-w-[80px]">{localParticipantName || "You"}</span>
               </div>
-            ) : null}
-
-            {/* Drag handle */}
-            <div className="absolute top-1 right-1 pointer-events-none">
-              <GripVertical className="h-3 w-3 text-white/60" />
             </div>
-            {/* Reset indicator */}
-            {hasUserPositioned && (
-              <div className="absolute top-1 left-1 pointer-events-none">
-                <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" title="Custom position" />
-              </div>
-            )}
           </div>
-        </div>
+        ) : (
+          <div 
+            className={cn(
+              "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
+              // Mobile: top-left positioning, Desktop: bottom-right positioning
+              hasUserPositioned ? "" : (isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")),
+              isDragging && "cursor-grabbing scale-105 transition-none"
+            )}
+            style={hasUserPositioned ? {
+              left: `${cameraPosition.x}px`,
+              top: `${cameraPosition.y}px`,
+              right: 'auto',
+              bottom: 'auto',
+            } : {}}
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleMouseDown}
+            onDoubleClick={resetCameraPosition}
+            title="Drag to move camera • Double-click to reset position"
+          >
+            <div className={cn(localPreviewClasses, "relative border border-gray-200 focus:border-primary focus:ring-0 focus:outline-none")}>
+              <div
+                ref={localRef}
+                id="vonage-local-container"
+                className="h-full w-full"
+                aria-label="Your video preview"
+              />
+              {!localHasVideo ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
+                  {/* Profile Avatar with Initials */}
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+                    {localParticipantName && localParticipantName !== "You" ? (() => {
+                      const words = localParticipantName.trim().split(/\s+/);
+                      const initials = words.length >= 2 
+                        ? (words[0][0] + words[1][0]).toUpperCase()
+                        : localParticipantName.substring(0, 2).toUpperCase();
+                      return <span className="text-base">{initials}</span>;
+                    })() : <User className="w-6 h-6" />}
+                  </div>
+                  <span className="text-xs text-slate-200 font-medium">{localParticipantName}</span>
+                  <span className="text-xs text-slate-400">Camera off</span>
+                </div>
+              ) : null}
+
+              {/* Drag handle */}
+              <div className="absolute top-1 right-1 pointer-events-none">
+                <GripVertical className="h-3 w-3 text-white/60" />
+              </div>
+              {/* Reset indicator */}
+              {hasUserPositioned && (
+                <div className="absolute top-1 left-1 pointer-events-none">
+                  <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" title="Custom position" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Audio-only indicator when in audio mode */}
+        {callMode === 'audio' && (
+          <div className="absolute bottom-6 right-6 z-20">
+            <div className="rounded-full bg-black/60 px-4 py-2 flex items-center gap-2 text-white shadow-lg">
+              <Phone className="h-5 w-5" />
+              <span className="text-sm font-medium">Audio Call</span>
+            </div>
+          </div>
+        )}
 
         <div className={fullscreenToggleClasses}>
           {/* Fullscreen Button */}

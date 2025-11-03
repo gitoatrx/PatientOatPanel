@@ -13,7 +13,7 @@ import { useVonageSession } from "@/lib/telehealth/useVonageSession";
 import { useChatApi } from "@/lib/services/chatApiService";
 import { useWaitingRoomService } from "@/lib/services/waitingRoomService";
 import { useVideoEventsService } from "@/lib/services/videoEventsService";
-import { AblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
+import { AblyVideoCallService, type AblyConnectEvent, type CallModeEvent } from "@/lib/services/ablyVideoCallService";
 import { patientService } from "@/lib/services/patientService";
 import { AppointmentStateData } from "@/lib/types/api";
 import { API_CONFIG } from "@/lib/config/api";
@@ -59,6 +59,9 @@ export function TelehealthSessionContent({
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [doctorConnected, setDoctorConnected] = useState(false);
   const [ablyService, setAblyService] = useState<AblyVideoCallService | null>(null);
+
+  // Call mode state
+  const [callMode, setCallMode] = useState<'audio' | 'video' | null>(null);
 
   // Permission status tracking
   type PermState = "granted" | "denied" | "prompt" | "unsupported";
@@ -176,6 +179,7 @@ export function TelehealthSessionContent({
     participantName: " ",
     remoteContainer,
     localContainer,
+    callMode,
   });
 
 
@@ -461,6 +465,22 @@ export function TelehealthSessionContent({
           console.log('🚀 Ably: Event metadata:', event.metadata);
           console.log('🚀 Ably: Event context:', event.context);
 
+          // Extract and set call mode from event
+          if (event.call_type) {
+            console.log('📞 Ably: Setting call mode from moa-calling event:', event.call_type);
+            setCallMode(event.call_type);
+            // Update Vonage session with call mode
+            if (telehealth.setCallMode) {
+              telehealth.setCallMode(event.call_type);
+            }
+          } else if (event.call_mode) {
+            console.log('📞 Ably: Setting call mode from event:', event.call_mode);
+            setCallMode(event.call_mode);
+            if (telehealth.setCallMode) {
+              telehealth.setCallMode(event.call_mode);
+            }
+          }
+
           // Automatically start the session when doctor or MOA connects
           if (event.event === 'connect') {
             console.log('👨‍⚕️ Doctor connected - starting session');
@@ -486,6 +506,22 @@ export function TelehealthSessionContent({
           setPendingJoin(true);
           setIsInWaitingRoom(false);
           setDoctorConnected(false);
+        },
+        onCallModeChange: (event: CallModeEvent) => {
+          console.log('📞 Ably: Received call mode event:', event);
+          console.log('📞 Ably: Call mode:', event.call_mode);
+          console.log('📞 Ably: Previous mode:', event.previous_mode);
+          
+          // Update call mode state
+          setCallMode(event.call_mode);
+          
+          // Update Vonage session immediately
+          if (telehealth.setCallMode) {
+            telehealth.setCallMode(event.call_mode);
+            console.log('✅ Ably: Updated Vonage session call mode to:', event.call_mode);
+          } else {
+            console.warn('⚠️ Ably: setCallMode not available on telehealth hook');
+          }
         },
         onError: (error: Error) => {
           console.error('❌ Ably: Error in video call service:', error);
@@ -906,6 +942,7 @@ export function TelehealthSessionContent({
               activeSpeakerId={telehealth.activeSpeakerId}
               participantAudioLevels={new Map()}
               getVideoElementById={telehealth.getVideoElementById}
+              callMode={callMode}
               overlayControls={
                 <TelehealthCallControls
                   variant="overlay"
@@ -927,6 +964,7 @@ export function TelehealthSessionContent({
                   isChatOpen={isChatOpen}
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
+                  callMode={callMode}
                   onTogglePictureInPicture={() => {
 
                     // Enable follow speaker mode

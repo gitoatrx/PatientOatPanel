@@ -14,12 +14,25 @@ export interface AblyConnectEvent {
     appointmentId: string;
     timestamp: string;
   };
+  call_type?: 'video' | 'audio';
+  call_mode?: 'video' | 'audio';
+}
+
+export interface CallModeEvent {
+  event: 'CALL_MODE_SET' | 'CALL_MODE_CHANGED';
+  call_mode: 'video' | 'audio';
+  previous_mode?: 'video' | 'audio';
+  appointment_id: string;
+  patient_id?: string;
+  clinic_id?: number;
+  timestamp: string;
 }
 
 export interface AblyVideoCallServiceOptions {
   appointmentId: string;
   clinicId?: number;
   onDoctorConnect: (event: AblyConnectEvent) => void;
+  onCallModeChange?: (event: CallModeEvent) => void;
   onError: (error: Error) => void;
 }
 
@@ -113,6 +126,17 @@ export class AblyVideoCallService {
         }
       });
 
+      // Subscribe to CALL_MODE_SET and CALL_MODE_CHANGED events on appointment channel
+      appointmentChannel.subscribe('CALL_MODE_SET', (message) => {
+        console.log('📡 Ably: Received CALL_MODE_SET event on appointment channel:', message);
+        this.handleCallModeEvent(message, 'CALL_MODE_SET');
+      });
+
+      appointmentChannel.subscribe('CALL_MODE_CHANGED', (message) => {
+        console.log('📡 Ably: Received CALL_MODE_CHANGED event on appointment channel:', message);
+        this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
+      });
+
       // Subscribe to MOA calling events on clinic channel (if clinicId is provided)
       if (this.options.clinicId) {
         const clinicChannelName = `${channelPrefix}.clinic.${this.options.clinicId}`;
@@ -125,9 +149,16 @@ export class AblyVideoCallService {
           console.log('📡 Ably: Received moa-calling event on clinic channel:', message);
 
           try {
+            // Extract call_type from metadata
+            const metadata = message.data.metadata || [];
+            const call_type = (message.data.call_type || 
+              (Array.isArray(metadata) && typeof metadata[0] === 'object' && metadata[0] !== null 
+                ? (metadata[0] as any).call_type : undefined)) || 
+              (message.data.context?.call_type)) as 'video' | 'audio' | undefined;
+
             const event: AblyConnectEvent = {
               event: 'moa-calling',
-              metadata: message.data.metadata || [],
+              metadata: metadata,
               context: {
                 actor: {
                   id: message.data.context?.actor?.id || 'unknown',
@@ -139,6 +170,7 @@ export class AblyVideoCallService {
                 appointmentId: this.options.appointmentId,
                 timestamp: message.data.context?.published_at || new Date().toISOString(),
               },
+              call_type: call_type,
             };
 
             this.options.onDoctorConnect(event);
@@ -146,6 +178,17 @@ export class AblyVideoCallService {
             console.error('❌ Ably: Error processing moa-calling event:', error);
             this.options.onError(error instanceof Error ? error : new Error('Unknown error processing moa-calling event'));
           }
+        });
+
+        // Subscribe to CALL_MODE_SET and CALL_MODE_CHANGED events on clinic channel
+        clinicChannel.subscribe('CALL_MODE_SET', (message) => {
+          console.log('📡 Ably: Received CALL_MODE_SET event on clinic channel:', message);
+          this.handleCallModeEvent(message, 'CALL_MODE_SET');
+        });
+
+        clinicChannel.subscribe('CALL_MODE_CHANGED', (message) => {
+          console.log('📡 Ably: Received CALL_MODE_CHANGED event on clinic channel:', message);
+          this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
         });
       }
 
@@ -200,6 +243,45 @@ export class AblyVideoCallService {
       console.log('✅ Ably: Successfully disconnected');
     } catch (error) {
       console.error('❌ Ably: Error during disconnect:', error);
+    }
+  }
+
+  private handleCallModeEvent(message: Ably.Message, eventType: 'CALL_MODE_SET' | 'CALL_MODE_CHANGED'): void {
+    try {
+      const data = message.data || {};
+      // Check both top-level and metadata.call_mode (as shown in the payload images)
+      const call_mode = (data.call_mode || data.callMode || data.metadata?.call_mode || data.metadata?.callMode) as 'video' | 'audio';
+      const previous_mode = (data.previous_mode || data.previousMode || data.metadata?.previous_mode || data.metadata?.previousMode) as 'video' | 'audio' | undefined;
+      const appointment_id = data.appointment_id || data.appointmentId || data.metadata?.appointment_id || data.metadata?.appointmentId || this.options.appointmentId;
+      const patient_id = data.patient_id || data.patientId || data.metadata?.patient_id || data.metadata?.patientId;
+      const clinic_id = data.clinic_id || data.clinicId || data.metadata?.clinic_id || data.metadata?.clinicId || this.options.clinicId;
+      const timestamp = data.timestamp || data.metadata?.timestamp || new Date().toISOString();
+      
+      if (!call_mode || (call_mode !== 'video' && call_mode !== 'audio')) {
+        console.warn('⚠️ Ably: Invalid call_mode in event:', data);
+        return;
+      }
+
+      const event: CallModeEvent = {
+        event: eventType,
+        call_mode: call_mode,
+        previous_mode: previous_mode,
+        appointment_id: appointment_id,
+        patient_id: patient_id,
+        clinic_id: clinic_id,
+        timestamp: timestamp,
+      };
+
+      console.log('📞 Ably: Processed call mode event:', event);
+
+      if (this.options.onCallModeChange) {
+        this.options.onCallModeChange(event);
+      } else {
+        console.warn('⚠️ Ably: onCallModeChange callback not provided');
+      }
+    } catch (error) {
+      console.error('❌ Ably: Error processing call mode event:', error);
+      this.options.onError(error instanceof Error ? error : new Error('Unknown error processing call mode event'));
     }
   }
 
