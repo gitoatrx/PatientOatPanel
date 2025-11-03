@@ -703,8 +703,14 @@ export function useVonageSession({
     localContainerRef.current = localContainer;
   }, [localContainer]);
 
-  // Start camera preview when local container is ready
+  // Start camera preview when local container is ready (skip in audio mode)
   useEffect(() => {
+    // Don't start camera preview if in audio mode
+    if (callModeRef.current === 'audio') {
+      console.log('🎤 useVonageSession: Skipping camera preview - in audio mode');
+      return;
+    }
+
     const startCameraPreview = async () => {
 
       if (!localContainerRef.current) {
@@ -742,7 +748,7 @@ export function useVonageSession({
       }
     };
 
-    // Only start preview if we have a container
+    // Only start preview if we have a container and not in audio mode
     if (localContainerRef.current) {
       startCameraPreview();
     }
@@ -819,7 +825,9 @@ export function useVonageSession({
     isJoiningRef.current = true;
     setIsBusy(true);
     setError(undefined);
-    setStatusMessage("Preparing your camera and microphone...");
+    // Update status message based on call mode
+    const isAudioMode = callModeRef.current === 'audio';
+    setStatusMessage(isAudioMode ? "Preparing your microphone..." : "Preparing your camera and microphone...");
     setCallStatus(CALL_STATUSES.LOADING);
 
     try {
@@ -837,10 +845,18 @@ export function useVonageSession({
       }
 
       // Check if we already have a preview stream, if not create one
+      // In audio mode, only request audio (no video)
       let currentPreviewStream = previewStream;
       if (!currentPreviewStream) {
         try {
-          currentPreviewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          if (isAudioMode) {
+            // Audio mode - only request audio, no video
+            console.log('🎤 useVonageSession: Joining in audio mode - requesting audio only');
+            currentPreviewStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          } else {
+            // Video mode - request both video and audio
+            currentPreviewStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          }
           setPreviewStream(currentPreviewStream);
 
         } catch (mediaError) {
@@ -1419,11 +1435,24 @@ export function useVonageSession({
       };
 
       // Use the existing preview stream if available
-      if (currentPreviewStream) {
-        publisherOptions.videoSource = currentPreviewStream.getVideoTracks()[0];
-        publisherOptions.audioSource = currentPreviewStream.getAudioTracks()[0];
-
-      } else if (currentVideoDeviceRef.current) {
+      // Only set video source if we're not in audio mode
+      if (currentPreviewStream && !isAudioMode) {
+        const videoTracks = currentPreviewStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+          publisherOptions.videoSource = videoTracks[0];
+        }
+        const audioTracks = currentPreviewStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          publisherOptions.audioSource = audioTracks[0];
+        }
+      } else if (currentPreviewStream && isAudioMode) {
+        // Audio mode - only set audio source
+        const audioTracks = currentPreviewStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          publisherOptions.audioSource = audioTracks[0];
+        }
+      } else if (currentVideoDeviceRef.current && !isAudioMode) {
+        // Only set video source if not in audio mode
         publisherOptions.videoSource = currentVideoDeviceRef.current;
       }
 
@@ -2628,17 +2657,50 @@ export function useVonageSession({
         // Handle local video stream tracks - disable video
         const localEl = localContainerRef.current;
         if (localEl) {
-          const videoElement = localEl.querySelector('video') as HTMLVideoElement;
-          if (videoElement && videoElement.srcObject instanceof MediaStream) {
-            // Disable video tracks to stop local video stream
-            const videoTracks = videoElement.srcObject.getVideoTracks();
+          // Find all video elements in local container
+          const videoElements = localEl.querySelectorAll('video');
+          videoElements.forEach(videoElement => {
+            if (videoElement.srcObject instanceof MediaStream) {
+              // Stop all video tracks
+              const videoTracks = videoElement.srcObject.getVideoTracks();
+              videoTracks.forEach(track => {
+                track.stop(); // Stop the track completely
+                track.enabled = false;
+                console.log('🎤 useVonageSession: Stopped and disabled video track:', track.id);
+              });
+              
+              // Pause and clear the video element
+              videoElement.pause();
+              videoElement.srcObject = null;
+            }
+          });
+          
+          // Clear the local container completely
+          localEl.innerHTML = '';
+          console.log('🎤 useVonageSession: Cleared local container video');
+        }
+        
+        // Stop preview stream if it exists
+        if (previewStream) {
+          const videoTracks = previewStream.getVideoTracks();
+          videoTracks.forEach(track => {
+            track.stop();
+            console.log('🎤 useVonageSession: Stopped preview stream video track:', track.id);
+          });
+          setPreviewStream(null);
+        }
+        
+        // Also stop video tracks in publisher element if it exists
+        const publisherElement = (publisher as any).element;
+        if (publisherElement) {
+          const publisherVideo = publisherElement.querySelector('video') as HTMLVideoElement;
+          if (publisherVideo && publisherVideo.srcObject instanceof MediaStream) {
+            const videoTracks = publisherVideo.srcObject.getVideoTracks();
             videoTracks.forEach(track => {
+              track.stop();
               track.enabled = false;
-              console.log('🎤 useVonageSession: Disabled video track:', track.id);
+              console.log('🎤 useVonageSession: Stopped publisher video track:', track.id);
             });
-            
-            // Pause the video element
-            videoElement.pause();
           }
         }
         
@@ -2646,7 +2708,7 @@ export function useVonageSession({
         setIsCameraOff(true);
         setIsVideoEnabled(false);
         
-        console.log('✅ useVonageSession: Audio mode activated - camera is off');
+        console.log('✅ useVonageSession: Audio mode activated - camera is off and local video stopped');
       }
     } catch (error) {
       console.error('❌ useVonageSession: Error updating video publishing:', error);

@@ -137,6 +137,12 @@ export class AblyVideoCallService {
         this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
       });
 
+      // Subscribe to call_type_switched event on appointment channel
+      appointmentChannel.subscribe('call_type_switched', (message) => {
+        console.log('📡 Ably: Received call_type_switched event on appointment channel:', message);
+        this.handleCallTypeSwitchedEvent(message);
+      });
+
       // Subscribe to MOA calling events on clinic channel (if clinicId is provided)
       if (this.options.clinicId) {
         const clinicChannelName = `${channelPrefix}.clinic.${this.options.clinicId}`;
@@ -189,6 +195,12 @@ export class AblyVideoCallService {
         clinicChannel.subscribe('CALL_MODE_CHANGED', (message) => {
           console.log('📡 Ably: Received CALL_MODE_CHANGED event on clinic channel:', message);
           this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
+        });
+
+        // Subscribe to call_type_switched event on clinic channel
+        clinicChannel.subscribe('call_type_switched', (message) => {
+          console.log('📡 Ably: Received call_type_switched event on clinic channel:', message);
+          this.handleCallTypeSwitchedEvent(message);
         });
       }
 
@@ -282,6 +294,48 @@ export class AblyVideoCallService {
     } catch (error) {
       console.error('❌ Ably: Error processing call mode event:', error);
       this.options.onError(error instanceof Error ? error : new Error('Unknown error processing call mode event'));
+    }
+  }
+
+  private handleCallTypeSwitchedEvent(message: Ably.Message): void {
+    try {
+      const data = message.data || {};
+      // Extract on_call_type from metadata or top-level
+      const on_call_type = (data.on_call_type || data.metadata?.on_call_type) as 'video' | 'audio';
+      
+      if (!on_call_type || (on_call_type !== 'video' && on_call_type !== 'audio')) {
+        console.warn('⚠️ Ably: Invalid on_call_type in call_type_switched event:', data);
+        return;
+      }
+
+      // Extract other fields from metadata or top-level
+      const appointment_id = data.appointment_id || data.appointmentId || data.metadata?.appointment_id || data.metadata?.appointmentId || this.options.appointmentId;
+      const patient_id = data.patient_id || data.patientId || data.metadata?.patient_id || data.metadata?.patientId;
+      const clinic_id = data.clinic_id || data.clinicId || data.metadata?.clinic_id || data.metadata?.clinicId || this.options.clinicId;
+      const timestamp = new Date().toISOString();
+
+      // Convert to CallModeEvent format (treat as CALL_MODE_CHANGED since it's a switch)
+      const event: CallModeEvent = {
+        event: 'CALL_MODE_CHANGED',
+        call_mode: on_call_type,
+        previous_mode: undefined, // We don't have previous mode in this event
+        appointment_id: appointment_id,
+        patient_id: patient_id,
+        clinic_id: clinic_id,
+        timestamp: timestamp,
+      };
+
+      console.log('📞 Ably: Processed call_type_switched event:', event);
+      console.log('📞 Ably: on_call_type:', on_call_type);
+
+      if (this.options.onCallModeChange) {
+        this.options.onCallModeChange(event);
+      } else {
+        console.warn('⚠️ Ably: onCallModeChange callback not provided');
+      }
+    } catch (error) {
+      console.error('❌ Ably: Error processing call_type_switched event:', error);
+      this.options.onError(error instanceof Error ? error : new Error('Unknown error processing call_type_switched event'));
     }
   }
 
