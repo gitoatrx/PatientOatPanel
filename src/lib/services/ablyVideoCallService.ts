@@ -97,11 +97,11 @@ export class AblyVideoCallService {
       const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'clinic-video-call';
       const appointmentChannelName = `${channelPrefix}.${this.options.appointmentId}`;
       console.log('📡 Ably: Subscribing to appointment channel:', appointmentChannelName);
-      const appointmentChannel = ably.channels.get(appointmentChannelName);
-      this.appointmentChannel = appointmentChannel;
+      const channel = ably.channels.get(appointmentChannelName);
+      this.appointmentChannel = channel;
 
       // Subscribe to connect events on appointment channel
-      appointmentChannel.subscribe('connect', (message) => {
+      channel.subscribe('connect', (message) => {
         console.log('📡 Ably: Received connect event on appointment channel:', message);
 
         try {
@@ -127,18 +127,18 @@ export class AblyVideoCallService {
       });
 
       // Subscribe to CALL_MODE_SET and CALL_MODE_CHANGED events on appointment channel
-      appointmentChannel.subscribe('CALL_MODE_SET', (message) => {
+      channel.subscribe('CALL_MODE_SET', (message) => {
         console.log('📡 Ably: Received CALL_MODE_SET event on appointment channel:', message);
         this.handleCallModeEvent(message, 'CALL_MODE_SET');
       });
 
-      appointmentChannel.subscribe('CALL_MODE_CHANGED', (message) => {
+      channel.subscribe('CALL_MODE_CHANGED', (message) => {
         console.log('📡 Ably: Received CALL_MODE_CHANGED event on appointment channel:', message);
         this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
       });
 
       // Subscribe to call_type_switched event on appointment channel
-      appointmentChannel.subscribe('call_type_switched', (message) => {
+      channel.subscribe('call_type_switched', (message) => {
         console.log('📡 Ably: Received call_type_switched event on appointment channel:', message);
         this.handleCallTypeSwitchedEvent(message);
       });
@@ -157,10 +157,17 @@ export class AblyVideoCallService {
           try {
             // Extract call_type from metadata
             const metadata = message.data.metadata || [];
-            const call_type = (message.data.call_type || 
-              (Array.isArray(metadata) && typeof metadata[0] === 'object' && metadata[0] !== null 
-                ? (metadata[0] as any).call_type : undefined)) || 
-              (message.data.context?.call_type)) as 'video' | 'audio' | undefined;
+            let call_type: 'video' | 'audio' | undefined = undefined;
+            
+            // Try to get call_type from multiple sources
+            if (message.data.call_type) {
+              call_type = message.data.call_type as 'video' | 'audio';
+            } else if (Array.isArray(metadata) && typeof metadata[0] === 'object' && metadata[0] !== null) {
+              const firstMeta = metadata[0] as Record<string, unknown>;
+              call_type = firstMeta.call_type as 'video' | 'audio' | undefined;
+            } else if (message.data.context?.call_type) {
+              call_type = message.data.context.call_type as 'video' | 'audio';
+            }
 
             const event: AblyConnectEvent = {
               event: 'moa-calling',
@@ -205,10 +212,24 @@ export class AblyVideoCallService {
       }
 
       // Also listen for any other events on both channels for debugging
-      appointmentChannel.subscribe((message) => {
+      // Also handle call_type_switched events that might come through the wildcard subscription
+      channel.subscribe((message) => {
         console.log('📡 Ably: Appointment channel message (all events):', message);
         console.log('📡 Ably: Message name:', message.name);
         console.log('📡 Ably: Message data:', message.data);
+        
+        // Handle call_type_switched and CALL_MODE_CHANGED events that might come through wildcard subscription
+        // Check both message.name and message.data.type
+        const eventType = message.name || (message.data && typeof message.data === 'object' && 'type' in message.data ? message.data.type : null);
+        
+        if (eventType === 'call_type_switched') {
+          console.log('📡 Ably: Detected call_type_switched in wildcard subscription, handling...');
+          this.handleCallTypeSwitchedEvent(message);
+        } else if (eventType === 'CALL_MODE_CHANGED' || eventType === 'CALL_MODE_SET') {
+          // Handle CALL_MODE_CHANGED/CALL_MODE_SET events that might come through wildcard subscription
+          console.log('📡 Ably: Detected', eventType, 'in wildcard subscription, handling...');
+          this.handleCallModeEvent(message, eventType as 'CALL_MODE_SET' | 'CALL_MODE_CHANGED');
+        }
       });
 
       if (this.clinicChannel) {
@@ -216,6 +237,19 @@ export class AblyVideoCallService {
           console.log('📡 Ably: Clinic channel message (all events):', message);
           console.log('📡 Ably: Message name:', message.name);
           console.log('📡 Ably: Message data:', message.data);
+          
+          // Handle call_type_switched events that might come through wildcard subscription
+          // Check both message.name and message.data.type
+          const eventType = message.name || (message.data && typeof message.data === 'object' && 'type' in message.data ? message.data.type : null);
+          
+          if (eventType === 'call_type_switched') {
+            console.log('📡 Ably: Detected call_type_switched in wildcard subscription (clinic channel), handling...');
+            this.handleCallTypeSwitchedEvent(message);
+          } else if (eventType === 'CALL_MODE_CHANGED' || eventType === 'CALL_MODE_SET') {
+            // Handle CALL_MODE_CHANGED/CALL_MODE_SET events that might come through wildcard subscription
+            console.log('📡 Ably: Detected', eventType, 'in wildcard subscription (clinic channel), handling...');
+            this.handleCallModeEvent(message, eventType as 'CALL_MODE_SET' | 'CALL_MODE_CHANGED');
+          }
         });
       }
 
@@ -261,7 +295,11 @@ export class AblyVideoCallService {
   private handleCallModeEvent(message: Ably.Message, eventType: 'CALL_MODE_SET' | 'CALL_MODE_CHANGED'): void {
     try {
       const data = message.data || {};
+      console.log('📡 Ably: CALL_MODE event data:', JSON.stringify(data, null, 2));
+      console.log('📡 Ably: CALL_MODE event type:', eventType);
+      
       // Check both top-level and metadata.call_mode (as shown in the payload images)
+      // The payload structure shows: { type: "CALL_MODE_CHANGED", metadata: { call_mode: "audio", ... } }
       const call_mode = (data.call_mode || data.callMode || data.metadata?.call_mode || data.metadata?.callMode) as 'video' | 'audio';
       const previous_mode = (data.previous_mode || data.previousMode || data.metadata?.previous_mode || data.metadata?.previousMode) as 'video' | 'audio' | undefined;
       const appointment_id = data.appointment_id || data.appointmentId || data.metadata?.appointment_id || data.metadata?.appointmentId || this.options.appointmentId;
@@ -269,8 +307,15 @@ export class AblyVideoCallService {
       const clinic_id = data.clinic_id || data.clinicId || data.metadata?.clinic_id || data.metadata?.clinicId || this.options.clinicId;
       const timestamp = data.timestamp || data.metadata?.timestamp || new Date().toISOString();
       
+      console.log('📞 Ably: Extracted call_mode from CALL_MODE event:', call_mode);
+      console.log('📞 Ably: Extracted previous_mode from CALL_MODE event:', previous_mode);
+      
       if (!call_mode || (call_mode !== 'video' && call_mode !== 'audio')) {
-        console.warn('⚠️ Ably: Invalid call_mode in event:', data);
+        console.warn('⚠️ Ably: Invalid call_mode in event:', {
+          call_mode,
+          data,
+          metadata: data.metadata
+        });
         return;
       }
 
@@ -284,10 +329,13 @@ export class AblyVideoCallService {
         timestamp: timestamp,
       };
 
-      console.log('📞 Ably: Processed call mode event:', event);
+      console.log('📞 Ably: Processed CALL_MODE event:', event);
+      console.log('📞 Ably: Call mode to set:', call_mode);
+      console.log('📞 Ably: Previous mode:', previous_mode);
 
       if (this.options.onCallModeChange) {
         this.options.onCallModeChange(event);
+        console.log('✅ Ably: Called onCallModeChange callback with call_mode:', call_mode);
       } else {
         console.warn('⚠️ Ably: onCallModeChange callback not provided');
       }
@@ -300,11 +348,27 @@ export class AblyVideoCallService {
   private handleCallTypeSwitchedEvent(message: Ably.Message): void {
     try {
       const data = message.data || {};
-      // Extract on_call_type from metadata or top-level
-      const on_call_type = (data.on_call_type || data.metadata?.on_call_type) as 'video' | 'audio';
+      console.log('📡 Ably: call_type_switched event data:', JSON.stringify(data, null, 2));
+      console.log('📡 Ably: call_type_switched message name:', message.name);
+      
+      // Extract on_call_type from multiple possible locations in the payload
+      // Check: data.metadata.on_call_type, data.on_call_type, data.context.metadata.on_call_type
+      // Also handle the case where the payload has a 'type' field
+      const on_call_type = (
+        data.metadata?.on_call_type || 
+        data.on_call_type || 
+        data.context?.metadata?.on_call_type ||
+        (data.metadata && typeof data.metadata === 'object' && 'on_call_type' in data.metadata ? data.metadata.on_call_type : undefined)
+      ) as 'video' | 'audio' | undefined;
+      
+      console.log('📞 Ably: Extracted on_call_type from call_type_switched:', on_call_type);
       
       if (!on_call_type || (on_call_type !== 'video' && on_call_type !== 'audio')) {
-        console.warn('⚠️ Ably: Invalid on_call_type in call_type_switched event:', data);
+        console.warn('⚠️ Ably: Invalid on_call_type in call_type_switched event:', {
+          on_call_type,
+          data,
+          metadata: data.metadata
+        });
         return;
       }
 
@@ -312,7 +376,7 @@ export class AblyVideoCallService {
       const appointment_id = data.appointment_id || data.appointmentId || data.metadata?.appointment_id || data.metadata?.appointmentId || this.options.appointmentId;
       const patient_id = data.patient_id || data.patientId || data.metadata?.patient_id || data.metadata?.patientId;
       const clinic_id = data.clinic_id || data.clinicId || data.metadata?.clinic_id || data.metadata?.clinicId || this.options.clinicId;
-      const timestamp = new Date().toISOString();
+      const timestamp = data.published_at || data.timestamp || data.metadata?.timestamp || new Date().toISOString();
 
       // Convert to CallModeEvent format (treat as CALL_MODE_CHANGED since it's a switch)
       const event: CallModeEvent = {
@@ -327,9 +391,11 @@ export class AblyVideoCallService {
 
       console.log('📞 Ably: Processed call_type_switched event:', event);
       console.log('📞 Ably: on_call_type:', on_call_type);
+      console.log('📞 Ably: Call mode to set:', on_call_type);
 
       if (this.options.onCallModeChange) {
         this.options.onCallModeChange(event);
+        console.log('✅ Ably: Called onCallModeChange callback with call_mode:', on_call_type);
       } else {
         console.warn('⚠️ Ably: onCallModeChange callback not provided');
       }

@@ -404,6 +404,7 @@ export function useVonageSession({
   const publisherRef = useRef<VonagePublisher | null>(null);
   const remoteContainerRef = useRef<HTMLDivElement | null>(remoteContainer);
   const localContainerRef = useRef<HTMLDivElement | null>(localContainer);
+  const dummyContainerRef = useRef<HTMLDivElement | null>(null); // For audio-only mode
   const isJoiningRef = useRef(false);
   const videoDevicesRef = useRef<Array<{ deviceId?: string }>>([]);
   const currentVideoDeviceRef = useRef<string | null>(null);
@@ -703,6 +704,36 @@ export function useVonageSession({
     localContainerRef.current = localContainer;
   }, [localContainer]);
 
+  // Sync callMode prop to callModeRef when it changes
+  useEffect(() => {
+    if (initialCallMode !== undefined && initialCallMode !== callModeRef.current) {
+      console.log('📞 useVonageSession: Syncing callMode prop to ref:', initialCallMode);
+      callModeRef.current = initialCallMode;
+      
+      // If publisher exists and we're switching to audio, stop video immediately
+      if (initialCallMode === 'audio' && publisherRef.current) {
+        const publisher = publisherRef.current;
+        publisher.publishVideo(false);
+        
+        // Stop video tracks in publisher stream
+        const publisherStream = publisher.stream;
+        if (publisherStream) {
+          const videoTracks = (publisherStream as any).getVideoTracks?.() || [];
+          videoTracks.forEach((track: MediaStreamTrack) => {
+            track.stop();
+            track.enabled = false;
+            console.log('🎤 useVonageSession: Stopped video track from prop sync:', track.id);
+          });
+        }
+        
+        // Update state
+        setIsCameraOff(true);
+        setIsVideoEnabled(false);
+        console.log('🎤 useVonageSession: Stopped video publishing from prop sync');
+      }
+    }
+  }, [initialCallMode]);
+
   // Start camera preview when local container is ready (skip in audio mode)
   useEffect(() => {
     // Don't start camera preview if in audio mode
@@ -778,6 +809,17 @@ export function useVonageSession({
       }
       publisherRef.current = null;
 
+      // Clean up dummy container if it was created for audio mode
+      if (dummyContainerRef.current) {
+        try {
+          dummyContainerRef.current.remove();
+          dummyContainerRef.current = null;
+          console.log('🎤 useVonageSession: Removed dummy container');
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+
       // Stop preview stream if it exists
       if (previewStream) {
         previewStream.getTracks().forEach(track => track.stop());
@@ -816,8 +858,16 @@ export function useVonageSession({
 
     const remoteEl = remoteContainerRef.current;
     const localEl = localContainerRef.current;
+    const isAudioMode = callModeRef.current === 'audio';
 
-    if (!remoteEl || !localEl) {
+    // In audio mode, we don't need local container (it can be null)
+    // Only require remote container and local container for video mode
+    if (!remoteEl) {
+      setError("The video interface is not ready yet. Please wait a moment and try again.");
+      return;
+    }
+
+    if (!isAudioMode && !localEl) {
       setError("The video interface is not ready yet. Please wait a moment and try again.");
       return;
     }
@@ -826,7 +876,6 @@ export function useVonageSession({
     setIsBusy(true);
     setError(undefined);
     // Update status message based on call mode
-    const isAudioMode = callModeRef.current === 'audio';
     setStatusMessage(isAudioMode ? "Preparing your microphone..." : "Preparing your camera and microphone...");
     setCallStatus(CALL_STATUSES.LOADING);
 
@@ -990,6 +1039,7 @@ export function useVonageSession({
         }
 
         // In audio mode, skip subscribing to remote video streams - only subscribe to audio streams
+        // In video mode, subscribe to ALL streams (both video and audio-only) to show all participants
         const currentCallMode = callModeRef.current;
         if (currentCallMode === 'audio' && stream.hasVideo) {
           logInfo('skipping video stream subscription in audio mode', {
@@ -999,6 +1049,10 @@ export function useVonageSession({
           });
           return; // Don't subscribe to video streams when in audio mode
         }
+        
+        // In video mode, subscribe to all streams regardless of hasVideo
+        // This ensures both participants are visible even if one doesn't have video yet
+        // (audio-only streams will show avatar placeholder)
 
         logInfo('remote stream detected', {
           streamId,
@@ -1010,17 +1064,34 @@ export function useVonageSession({
         });
 
         const streamType: string = stream.videoType || (stream.hasVideo ? "camera" : "audio");
+        
+        // Check for existing stream by streamId first (most reliable)
+        const existingWrapper = remoteEl.querySelector<HTMLElement>(`[data-stream-id="${streamId}"]`);
+        if (existingWrapper) {
+          logWarn('remote stream already rendered with this streamId', { streamId, connectionId });
+          return;
+        }
+        
+        // Check for duplicate connection - but only remove if it's the same streamType
+        // This allows multiple streams from same connection (e.g., screen share + camera)
         const duplicateSelector = `[data-connection-id="${connectionId}"][data-stream-type="${streamType}"]`;
         const existingForConnection = remoteEl.querySelector<HTMLElement>(duplicateSelector);
         if (existingForConnection) {
-          logWarn('removing previous remote stream container', { connectionId, streamType });
-          existingForConnection.remove();
-        }
-
-        const existingWrapper = remoteEl.querySelector<HTMLElement>(`[data-stream-id="${streamId}"]`);
-        if (existingWrapper) {
-          logWarn('remote stream already rendered', { streamId });
-          return;
+          const existingStreamId = existingForConnection.dataset.streamId;
+          // Only remove if it's a different streamId (stream was replaced/updated)
+          if (existingStreamId && existingStreamId !== streamId) {
+            logWarn('removing previous remote stream container (replaced by new stream)', { 
+              connectionId, 
+              streamType,
+              oldStreamId: existingStreamId,
+              newStreamId: streamId
+            });
+            existingForConnection.remove();
+          } else {
+            // Same streamId, already rendered, skip
+            logWarn('stream already exists with same streamId', { streamId, connectionId });
+            return;
+          }
         }
 
         const wrapper = document.createElement("div");
@@ -1446,14 +1517,43 @@ export function useVonageSession({
           publisherOptions.audioSource = audioTracks[0];
         }
       } else if (currentPreviewStream && isAudioMode) {
-        // Audio mode - only set audio source
+        // Audio mode - only set audio source, explicitly exclude video
         const audioTracks = currentPreviewStream.getAudioTracks();
         if (audioTracks.length > 0) {
           publisherOptions.audioSource = audioTracks[0];
         }
-      } else if (currentVideoDeviceRef.current && !isAudioMode) {
-        // Only set video source if not in audio mode
-        publisherOptions.videoSource = currentVideoDeviceRef.current;
+        // Explicitly ensure no video source is set
+        delete publisherOptions.videoSource;
+        // Also stop any video tracks from the preview stream
+        const videoTracks = currentPreviewStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+          console.log('🎤 useVonageSession: Stopping video tracks from preview stream in audio mode');
+          videoTracks.forEach(track => {
+            track.stop();
+            track.enabled = false;
+          });
+        }
+      } else if (!isAudioMode) {
+        // Video mode - ensure we have a video source
+        if (currentVideoDeviceRef.current) {
+          publisherOptions.videoSource = currentVideoDeviceRef.current;
+          console.log('📹 useVonageSession: Using video device from ref:', currentVideoDeviceRef.current);
+        } else {
+          // No preview stream and no device ref - Vonage will request camera access
+          // But we should log this to help debug
+          console.warn('⚠️ useVonageSession: Video mode but no preview stream or video device ref - Vonage will request camera');
+          // Don't set videoSource - let Vonage handle it, but ensure publishVideo is true
+          console.log('📹 useVonageSession: Publisher will request camera access automatically');
+        }
+      } else if (isAudioMode) {
+        // Explicitly ensure no video source is set in audio mode
+        delete publisherOptions.videoSource;
+      }
+      
+      // In video mode, ensure publishVideo is true even if we don't have a videoSource yet
+      // (Vonage will request camera access when publisher is initialized)
+      if (!isAudioMode && !publisherOptions.videoSource) {
+        console.log('📹 useVonageSession: Video mode without videoSource - publisher will request camera on init');
       }
 
       let publisher: VonagePublisher | null = null;
@@ -1475,16 +1575,74 @@ export function useVonageSession({
       };
 
       // Clear the container before creating the publisher to avoid duplicate videos
-      if (localEl) {
+      // In audio mode, localEl can be null, so we'll create a dummy container if needed
+      let publisherContainer = localEl;
+      if (isAudioMode && !localEl) {
+        // Create a hidden dummy container for audio-only publisher
+        const dummyContainer = document.createElement('div');
+        dummyContainer.style.display = 'none';
+        dummyContainer.style.visibility = 'hidden';
+        dummyContainer.style.position = 'absolute';
+        dummyContainer.style.width = '1px';
+        dummyContainer.style.height = '1px';
+        dummyContainer.style.opacity = '0';
+        document.body.appendChild(dummyContainer);
+        dummyContainerRef.current = dummyContainer;
+        publisherContainer = dummyContainer;
+        console.log('🎤 useVonageSession: Created hidden container for audio-only publisher');
+      } else if (localEl) {
         localEl.innerHTML = '';
-
       }
 
-      publisher = OT.initPublisher(localEl, publisherOptions, handlePublisherError);
+      publisher = OT.initPublisher(publisherContainer, publisherOptions, handlePublisherError);
       if (!publisher || publisherErrorOccurred) {
 
         isJoiningRef.current = false;
         return;
+      }
+      
+      // In audio mode, explicitly ensure video is not being published
+      if (isAudioMode) {
+        try {
+          publisher.publishVideo(false);
+          console.log('🎤 useVonageSession: Explicitly disabled video publishing after publisher creation');
+          
+          // Also check if publisher has any video tracks and stop them
+          const publisherStream = publisher.stream;
+          if (publisherStream) {
+            const videoTracks = (publisherStream as any).getVideoTracks?.() || [];
+            if (videoTracks.length > 0) {
+              console.warn('⚠️ useVonageSession: Publisher has video tracks in audio mode, stopping them...');
+              videoTracks.forEach((track: MediaStreamTrack) => {
+                track.stop();
+                track.enabled = false;
+                console.log('🎤 useVonageSession: Stopped video track:', track.id);
+              });
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ useVonageSession: Could not disable video publishing:', error);
+        }
+      } else {
+        // Video mode - verify video publishing is enabled
+        try {
+          // Ensure publishVideo is true
+          publisher.publishVideo(true);
+          console.log('📹 useVonageSession: Verified/enabled video publishing after publisher creation');
+          
+          const publisherStream = publisher.stream;
+          if (publisherStream) {
+            const hasVideo = (publisherStream as any).hasVideo;
+            console.log('📹 useVonageSession: Publisher created in video mode, stream hasVideo:', hasVideo);
+            if (!hasVideo) {
+              console.warn('⚠️ useVonageSession: Publisher in video mode but stream has no video yet - may need camera access');
+            }
+          } else {
+            console.log('📹 useVonageSession: Publisher created in video mode, stream not yet available (will be set on publish)');
+          }
+        } catch (error) {
+          console.warn('⚠️ useVonageSession: Could not verify/enable video publishing:', error);
+        }
       }
 
       // Don't add participant info overlay to local container
@@ -1569,16 +1727,27 @@ export function useVonageSession({
 
       publisherRef.current = publisher;
       setIsMicMuted(false);
-      setIsCameraOff(false);
+      
+      // Set camera state based on call mode
+      if (isAudioMode) {
+        setIsCameraOff(true);
+        setIsVideoEnabled(false);
+        console.log('🎤 useVonageSession: Publisher created in audio mode - camera off');
+      } else {
+        setIsCameraOff(false);
+        setIsVideoEnabled(true);
+      }
 
-      // Register the local video element for PiP
-      setTimeout(() => {
-        const localVideoElement = localEl.querySelector('video') as HTMLVideoElement;
-        if (localVideoElement && session.connection?.connectionId) {
-          onParticipantVideoReady('local', localVideoElement);
+      // Register the local video element for PiP (only in video mode)
+      if (!isAudioMode && localEl) {
+        setTimeout(() => {
+          const localVideoElement = localEl.querySelector('video') as HTMLVideoElement;
+          if (localVideoElement && session.connection?.connectionId) {
+            onParticipantVideoReady('local', localVideoElement);
 
-        }
-      }, 100);
+          }
+        }, 100);
+      }
 
       // Keep preview stream as backup until we confirm publisher is working
       // We'll stop it after successful publish
@@ -1667,7 +1836,7 @@ export function useVonageSession({
             const localParticipant: Participant = {
               connectionId: localConnectionId,
               streamId: publisher.streamId, // Now we have the stream ID
-              hasVideo: !isCameraOff,
+              hasVideo: !isAudioMode && !isCameraOff, // In audio mode, hasVideo is always false
               hasAudio: !isMicMuted,
               isLocal: true
             };
@@ -1691,6 +1860,32 @@ export function useVonageSession({
             previewStream.getTracks().forEach(track => track.stop());
             setPreviewStream(null);
 
+          }
+          
+          // In audio mode, double-check that video is not being published
+          if (isAudioMode && publisher) {
+            // Verify publisher stream doesn't have video
+            const stream = publisher.stream;
+            if (stream && (stream as any).hasVideo) {
+              console.warn('⚠️ useVonageSession: Publisher stream has video in audio mode, stopping...');
+              publisher.publishVideo(false);
+              
+              // Stop all video tracks
+              const videoTracks = (stream as any).getVideoTracks?.() || [];
+              videoTracks.forEach((track: MediaStreamTrack) => {
+                track.stop();
+                track.enabled = false;
+                console.log('🎤 useVonageSession: Stopped video track after publish:', track.id);
+              });
+            }
+            
+            // Also ensure publishVideo is false
+            try {
+              publisher.publishVideo(false);
+              console.log('🎤 useVonageSession: Confirmed video publishing is disabled after publish');
+            } catch (e) {
+              console.warn('⚠️ useVonageSession: Could not disable video publishing:', e);
+            }
           }
 
           // Add a fallback check - if video doesn't appear in 3 seconds, restore preview
@@ -2582,11 +2777,25 @@ export function useVonageSession({
   // Set call mode and update video publishing
   const setCallMode = useCallback(async (mode: 'audio' | 'video') => {
     console.log('📞 useVonageSession: Setting call mode to:', mode);
+    console.log('📞 useVonageSession: Current call mode ref:', callModeRef.current);
     callModeRef.current = mode;
+    
+    // Update state IMMEDIATELY regardless of publisher availability
+    // This ensures UI updates right away (camera controls hidden)
+    if (mode === 'audio') {
+      setIsCameraOff(true);
+      setIsVideoEnabled(false);
+      console.log('🎤 useVonageSession: Audio mode - camera state set to OFF, video enabled set to FALSE');
+    } else {
+      setIsCameraOff(false);
+      setIsVideoEnabled(true);
+      console.log('📹 useVonageSession: Video mode - camera state set to ON, video enabled set to TRUE');
+    }
     
     const publisher = publisherRef.current;
     if (!publisher) {
-      console.warn('⚠️ useVonageSession: Publisher not available, cannot update video publishing');
+      console.log('📞 useVonageSession: Publisher not available yet, call mode will be applied when publisher is created');
+      console.log('📞 useVonageSession: Call mode state updated, UI should reflect audio/video mode');
       return;
     }
 
@@ -2595,20 +2804,158 @@ export function useVonageSession({
     
     try {
       if (shouldPublishVideo) {
-        // Switching to video mode - automatically turn on video
-        console.log('📹 useVonageSession: Switching to video mode - turning on camera');
+        // Switching to video mode - automatically turn on camera and publish video
+        console.log('📹 useVonageSession: Switching to video mode - turning on camera and publishing video');
         
-        // First, start publishing video (this will request camera access if needed)
-        publisher.publishVideo(true);
+        // First, check if publisher already has video stream
+        const publisherStream = publisher.stream;
+        const hasExistingVideo = publisherStream && (publisherStream as any).hasVideo;
         
-        // Handle local video stream tracks - ensure video is enabled
+        if (!hasExistingVideo) {
+          // Publisher doesn't have video, need to get camera access and set video source
+          console.log('📹 useVonageSession: Publisher doesn\'t have video stream, requesting camera access...');
+          try {
+            // Request camera permissions and get video stream - this turns on the camera
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const videoTracks = stream.getVideoTracks();
+            
+            if (videoTracks.length > 0) {
+              console.log('📹 useVonageSession: Camera access granted, got video stream with', videoTracks.length, 'track(s) - camera is ON');
+              
+              // Ensure all video tracks are enabled
+              videoTracks.forEach(track => {
+                track.enabled = true;
+                console.log('📹 useVonageSession: Enabled video track:', track.id);
+              });
+              
+              // Set the video source on the publisher if setVideoSource is available
+              // Note: setVideoSource expects a device ID string, not a MediaStreamTrack
+              if (publisher.setVideoSource && typeof publisher.setVideoSource === 'function') {
+                try {
+                  // Try to get device ID from the track
+                  const deviceId = videoTracks[0].getSettings().deviceId;
+                  if (deviceId) {
+                    await publisher.setVideoSource(deviceId);
+                    console.log('✅ useVonageSession: Set video source on publisher using device ID - camera is now on and connected');
+                    
+                    // Now enable video publishing - this starts publishing the local video stream
+                    publisher.publishVideo(true);
+                    console.log('✅ useVonageSession: Enabled video publishing - local video stream is now being published');
+                    
+                    // Verify that video is actually being published
+                    setTimeout(() => {
+                      const publishedStream = publisher.stream;
+                      if (publishedStream && (publishedStream as any).hasVideo) {
+                        console.log('✅ useVonageSession: Verified - local video stream is being published');
+                      } else {
+                        console.warn('⚠️ useVonageSession: Video stream may not be publishing yet');
+                      }
+                    }, 500);
+                  } else {
+                    // No device ID available, but still try to enable publishing
+                    console.warn('⚠️ useVonageSession: No device ID available, trying to enable video publishing directly');
+                    try {
+                      publisher.publishVideo(true);
+                      console.log('📹 useVonageSession: Enabled video publishing without device ID');
+                    } catch (e) {
+                      console.error('❌ useVonageSession: Could not enable video publishing:', e);
+                      videoTracks.forEach(track => track.stop());
+                    }
+                  }
+                } catch (setSourceError) {
+                  console.warn('⚠️ useVonageSession: Could not set video source:', setSourceError);
+                  // Still try to enable publishing - Vonage might handle it
+                  try {
+                    publisher.publishVideo(true);
+                    console.log('📹 useVonageSession: Attempted to enable video publishing after setVideoSource error');
+                  } catch (e) {
+                    console.error('❌ useVonageSession: Could not enable video publishing:', e);
+                    videoTracks.forEach(track => track.stop());
+                  }
+                }
+              } else {
+                // setVideoSource not available - try to enable publishing anyway
+                console.warn('⚠️ useVonageSession: setVideoSource not available, trying to enable video publishing directly');
+                try {
+                  publisher.publishVideo(true);
+                  console.log('📹 useVonageSession: Enabled video publishing (setVideoSource not available)');
+                  // Keep the stream tracks since we can't use them directly but publishing might work
+                  console.log('📹 useVonageSession: Keeping video stream tracks active');
+                } catch (e) {
+                  console.error('❌ useVonageSession: Could not enable video publishing:', e);
+                  videoTracks.forEach(track => track.stop());
+                }
+              }
+            } else {
+              console.error('❌ useVonageSession: No video tracks in stream');
+            }
+          } catch (permError) {
+            console.error('❌ useVonageSession: Error requesting camera permissions:', permError);
+            // Still try to enable video publishing in case publisher already has access
+            try {
+              publisher.publishVideo(true);
+              console.log('📹 useVonageSession: Attempted to enable video publishing despite permission error');
+            } catch (e) {
+              console.warn('⚠️ useVonageSession: Could not enable video publishing:', e);
+            }
+          }
+        } else {
+          // Publisher already has video stream - just enable publishing
+          console.log('📹 useVonageSession: Publisher already has video stream, enabling video publishing');
+          try {
+            // Ensure video tracks are enabled
+            const stream = publisher.stream;
+            if (stream) {
+              const videoTracks = (stream as any).getVideoTracks?.() || [];
+              videoTracks.forEach((track: MediaStreamTrack) => {
+                track.enabled = true;
+                console.log('📹 useVonageSession: Enabled existing video track:', track.id);
+              });
+            }
+            publisher.publishVideo(true);
+            console.log('✅ useVonageSession: Enabled video publishing - local video stream is now being published (stream already exists)');
+          } catch (publishError) {
+            console.error('❌ useVonageSession: Error enabling video publishing:', publishError);
+          }
+        }
+        
+        // Restore local container visibility if it was hidden
+        // First restore the ref if it was set to null
+        if (!localContainerRef.current && localContainer) {
+          localContainerRef.current = localContainer;
+        }
+        
+        // If publisher was using dummy container (audio mode), we need to move it to real container
+        // Note: Vonage SDK doesn't support moving publisher between containers, so we'll rely on
+        // the publisher being recreated or the video appearing in the local container
         const localEl = localContainerRef.current;
+        
+        // If we have a dummy container from audio mode, clean it up
+        if (dummyContainerRef.current) {
+          try {
+            const dummyContainer = dummyContainerRef.current;
+            // Don't remove it yet - let the publisher handle it
+            // We'll clean it up after the publisher is updated
+            console.log('📹 useVonageSession: Dummy container exists from audio mode, will be cleaned up');
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+        }
         if (localEl) {
-          const videoElement = localEl.querySelector('video') as HTMLVideoElement;
+          // Refresh local container - clear and show it
+          localEl.innerHTML = ''; // Clear any existing content
+          localEl.style.display = '';
+          localEl.style.visibility = '';
+          localEl.style.opacity = '1';
+          localEl.style.width = '100%';
+          localEl.style.height = '100%';
+          
+          console.log('📹 useVonageSession: Refreshed and restored local container visibility');
+          
           const publisherElement = (publisher as any).element;
           
-          // Wait a bit for publisher to initialize video stream
-          setTimeout(() => {
+          // Wait for publisher to initialize video stream and refresh container
+          const refreshContainer = () => {
             if (publisherElement) {
               const publisherVideo = publisherElement.querySelector('video') as HTMLVideoElement;
               if (publisherVideo && publisherVideo.srcObject instanceof MediaStream) {
@@ -2622,39 +2969,122 @@ export function useVonageSession({
                   console.log('📹 useVonageSession: Enabled video track:', track.id);
                 });
                 
-                // Update local video element with publisher's stream
-                if (videoElement) {
-                  videoElement.srcObject = stream;
-                  videoElement.play().catch((err) => {
-                    console.warn('Video play error after switching to video mode:', err);
-                  });
+                // Check if publisher video element is already in local container
+                const existingVideo = localEl.querySelector('video');
+                if (!existingVideo || existingVideo.srcObject !== stream) {
+                  // If publisher's video element is not in local container, add it
+                  // Or if it's a different stream, update it
+                  if (publisherVideo.parentElement !== localEl) {
+                    // Publisher video is in a different container, clone or move it
+                    const newVideo = publisherVideo.cloneNode(true) as HTMLVideoElement;
+                    newVideo.srcObject = stream;
+                    localEl.appendChild(newVideo);
+                    console.log('📹 useVonageSession: Added video element to local container');
+                  } else {
+                    // Video element is already in local container, just ensure it's updated
+                    if (existingVideo) {
+                      existingVideo.srcObject = stream;
+                      console.log('📹 useVonageSession: Updated existing video element in local container');
+                    }
+                  }
+                  
+                  // Ensure video plays
+                  const videoToPlay = localEl.querySelector('video') as HTMLVideoElement;
+                  if (videoToPlay) {
+                    videoToPlay.play().catch((err) => {
+                      console.warn('Video play error after switching to video mode:', err);
+                    });
+                  }
                 }
+                
+                console.log('✅ useVonageSession: Local container refreshed with video stream');
+              } else {
+                console.log('📹 useVonageSession: Publisher video element not ready yet, will retry...');
+                // Retry after a short delay
+                setTimeout(refreshContainer, 200);
               }
+            } else {
+              console.log('📹 useVonageSession: Publisher element not found, will retry...');
+              setTimeout(refreshContainer, 200);
             }
-            
-            // Also ensure any existing video tracks are enabled
-            if (videoElement && videoElement.srcObject instanceof MediaStream) {
-              const videoTracks = videoElement.srcObject.getVideoTracks();
-              videoTracks.forEach(track => {
-                track.enabled = true;
-              });
-            }
-          }, 300);
+          };
+          
+          // Start refreshing immediately and also after a delay
+          refreshContainer();
+          setTimeout(refreshContainer, 300);
+          setTimeout(refreshContainer, 600);
+        } else {
+          console.warn('⚠️ useVonageSession: Local container not available for video mode');
+          // Try to restore it from the prop
+          if (localContainer) {
+            localContainerRef.current = localContainer;
+            console.log('📹 useVonageSession: Restored local container from prop');
+          }
         }
         
         // Update state to reflect video is on
         setIsCameraOff(false);
         setIsVideoEnabled(true);
         
+        // Update local participant's hasVideo property
+        const session = sessionRef.current;
+        if (session?.connection?.connectionId) {
+          setParticipants((prev) => {
+            return prev.map((participant) => 
+              participant.isLocal && participant.connectionId === session.connection?.connectionId
+                ? { ...participant, hasVideo: true }
+                : participant
+            );
+          });
+          console.log('📹 useVonageSession: Updated local participant hasVideo to true');
+        }
+        
         console.log('✅ useVonageSession: Video mode activated - camera should be on');
       } else {
-        // Switching to audio mode - disable video stream
-        console.log('🎤 useVonageSession: Switching to audio mode - turning off camera');
+        // Switching to audio mode - disable video stream completely
+        console.log('🎤 useVonageSession: Switching to audio mode - turning off camera and stopping video stream');
         
-        // Stop publishing video
-        publisher.publishVideo(false);
+        // First, stop publishing video at the publisher level - this stops the local video stream from being published
+        try {
+          publisher.publishVideo(false);
+          console.log('🎤 useVonageSession: Called publishVideo(false) - video publishing stopped, local video stream no longer published');
+        } catch (error) {
+          console.warn('⚠️ useVonageSession: Error stopping video publishing:', error);
+        }
         
-        // Handle local video stream tracks - disable video
+        // Get the publisher's stream and stop all video tracks at the source - this turns off the camera
+        const publisherStream = publisher.stream;
+        if (publisherStream) {
+          const videoTracks = (publisherStream as any).getVideoTracks?.() || [];
+          if (videoTracks.length > 0) {
+            console.log('🎤 useVonageSession: Found', videoTracks.length, 'video track(s) to stop - turning off camera');
+            videoTracks.forEach((track: MediaStreamTrack) => {
+              track.stop(); // Completely stop the track (this stops the camera device)
+              track.enabled = false; // Disable it
+              console.log('🎤 useVonageSession: Stopped publisher stream video track (camera turned off):', track.id);
+            });
+            console.log('✅ useVonageSession: Camera turned off - all video tracks stopped');
+          } else {
+            console.log('🎤 useVonageSession: No video tracks found in publisher stream');
+          }
+        } else {
+          console.log('🎤 useVonageSession: Publisher stream not available');
+        }
+        
+        // Also check if publisher has a stream property with video tracks
+        if ((publisher as any).getVideoSource) {
+          try {
+            const videoSource = (publisher as any).getVideoSource();
+            if (videoSource && typeof videoSource.stop === 'function') {
+              videoSource.stop();
+              console.log('🎤 useVonageSession: Stopped video source');
+            }
+          } catch (e) {
+            // Ignore errors if method doesn't exist
+          }
+        }
+        
+        // Handle local video stream tracks - disable video and hide container
         const localEl = localContainerRef.current;
         if (localEl) {
           // Find all video elements in local container
@@ -2677,7 +3107,16 @@ export function useVonageSession({
           
           // Clear the local container completely
           localEl.innerHTML = '';
-          console.log('🎤 useVonageSession: Cleared local container video');
+          
+          // Hide the local container visually
+          localEl.style.display = 'none';
+          localEl.style.visibility = 'hidden';
+          localEl.style.opacity = '0';
+          
+          // Also set localContainerRef to null to notify parent components
+          localContainerRef.current = null;
+          
+          console.log('🎤 useVonageSession: Cleared and hidden local container video');
         }
         
         // Stop preview stream if it exists
@@ -2701,19 +3140,48 @@ export function useVonageSession({
               track.enabled = false;
               console.log('🎤 useVonageSession: Stopped publisher video track:', track.id);
             });
+            // Clear the video element's srcObject to ensure no video is displayed
+            publisherVideo.srcObject = null;
           }
         }
+        
+        // Double-check: verify publisher stream no longer has video
+        setTimeout(() => {
+          const stream = publisher.stream;
+          if (stream && (stream as any).hasVideo) {
+            console.warn('⚠️ useVonageSession: Publisher stream still has video after switching to audio mode');
+            // Force stop video tracks again
+            const videoTracks = (stream as any).getVideoTracks?.() || [];
+            videoTracks.forEach((track: MediaStreamTrack) => {
+              track.stop();
+              track.enabled = false;
+            });
+          }
+        }, 100);
         
         // Update state to reflect video is off
         setIsCameraOff(true);
         setIsVideoEnabled(false);
         
-        console.log('✅ useVonageSession: Audio mode activated - camera is off and local video stopped');
+        // Update local participant's hasVideo property to false
+        const session = sessionRef.current;
+        if (session?.connection?.connectionId) {
+          setParticipants((prev) => {
+            return prev.map((participant) => 
+              participant.isLocal && participant.connectionId === session.connection?.connectionId
+                ? { ...participant, hasVideo: false }
+                : participant
+            );
+          });
+          console.log('🎤 useVonageSession: Updated local participant hasVideo to false');
+        }
+        
+        console.log('✅ useVonageSession: Audio mode activated - camera is off and video stream completely stopped');
       }
     } catch (error) {
       console.error('❌ useVonageSession: Error updating video publishing:', error);
     }
-  }, []);
+  }, [localContainer, previewStream]);
 
   return useMemo(
     () => ({

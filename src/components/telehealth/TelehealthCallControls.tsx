@@ -375,7 +375,7 @@ export function TelehealthCallControls({
         )}
 
         {/* Optional switch camera icon (panel view retains it) - Hidden in audio mode */}
-        {!isOverlay && callMode !== 'audio' && (
+        {!isOverlay && callMode !== 'audio' && videoDevices.length > 0 && (
           <Button
             type="button"
             variant="outline"
