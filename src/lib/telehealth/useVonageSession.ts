@@ -2660,90 +2660,106 @@ export function useVonageSession({
   const checkExistingStreams = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
-
       return;
     }
 
     const existingStreams = Array.isArray(session.streams) ? session.streams : [];
-
     const currentConnectionId = session.connection?.connectionId;
+    const currentCallMode = callModeRef.current;
 
     existingStreams.forEach((stream: any, index: number) => {
       const isOwn = stream.connection?.connectionId === currentConnectionId;
 
       if (!isOwn) {
+        // In audio mode, skip subscribing to remote video streams - only subscribe to audio streams
+        // In video mode, subscribe to ALL streams (both video and audio-only)
+        if (currentCallMode === 'audio' && stream.hasVideo) {
+          console.log('📡 useVonageSession: Skipping video stream subscription in audio mode:', {
+            streamId: stream.streamId,
+            connectionId: stream.connection?.connectionId,
+          });
+          return; // Don't subscribe to video streams when in audio mode
+        }
+
+        // Check if stream is already subscribed (avoid duplicate subscriptions)
+        const remoteEl = remoteContainerRef.current;
+        if (!remoteEl) {
+          return; // No remote container available
+        }
+        
+        const streamId = stream.streamId;
+        const existingWrapper = remoteEl.querySelector(`[data-stream-id="${streamId}"]`);
+        if (existingWrapper) {
+          console.log('📡 useVonageSession: Stream already subscribed, skipping:', streamId);
+          return; // Already subscribed, skip
+        }
 
         // Manually trigger subscription to existing stream
-        const remoteEl = remoteContainerRef.current;
-        if (remoteEl) {
-          const streamId = stream.streamId;
-          const connectionId = stream.connection?.connectionId;
-          
-          // Create wrapper element
-          const wrapper = document.createElement("div");
-          wrapper.dataset.streamId = streamId;
-          wrapper.dataset.connectionId = connectionId;
-          wrapper.dataset.streamType = stream.hasVideo ? "camera" : "audio";
-          wrapper.dataset.participantName = `Participant ${connectionId.slice(-4)}`; // Use last 4 chars of connection ID
-          wrapper.style.width = "100%";
-          wrapper.style.height = "100%";
-          wrapper.style.backgroundColor = "#1e293b";
-          wrapper.style.border = "1px solid #374151";
-          wrapper.style.cursor = "pointer";
-          wrapper.style.position = "relative";
-          
-          // Add loading message
-          const loadingMessage = document.createElement("div");
-          loadingMessage.style.color = "white";
-          loadingMessage.style.padding = "10px";
-          loadingMessage.style.textAlign = "center";
-          loadingMessage.style.position = "absolute";
-          loadingMessage.style.top = "50%";
-          loadingMessage.style.left = "50%";
-          loadingMessage.style.transform = "translate(-50%, -50%)";
-          loadingMessage.style.zIndex = "5";
-          loadingMessage.textContent = "Loading...";
-          
-          wrapper.appendChild(loadingMessage);
-          
-          // Add participant info overlay
-          addParticipantInfoOverlay(wrapper, `Participant ${connectionId.slice(-4)}`, 'remote', connectionId);
-          
-          // Add click handler for focus functionality
-          wrapper.addEventListener('click', () => {
-
-            // This will be handled by the video panel component
-            const event = new CustomEvent('participantClick', {
-              detail: { connectionId, streamId, participantName: wrapper.dataset.participantName }
-            });
-            document.dispatchEvent(event);
+        const connectionId = stream.connection?.connectionId;
+        
+        // Create wrapper element
+        const wrapper = document.createElement("div");
+        wrapper.dataset.streamId = streamId;
+        wrapper.dataset.connectionId = connectionId;
+        wrapper.dataset.streamType = stream.hasVideo ? "camera" : "audio";
+        wrapper.dataset.participantName = `Participant ${connectionId.slice(-4)}`; // Use last 4 chars of connection ID
+        wrapper.style.width = "100%";
+        wrapper.style.height = "100%";
+        wrapper.style.backgroundColor = "#1e293b";
+        wrapper.style.border = "1px solid #374151";
+        wrapper.style.cursor = "pointer";
+        wrapper.style.position = "relative";
+        
+        // Add loading message
+        const loadingMessage = document.createElement("div");
+        loadingMessage.style.color = "white";
+        loadingMessage.style.padding = "10px";
+        loadingMessage.style.textAlign = "center";
+        loadingMessage.style.position = "absolute";
+        loadingMessage.style.top = "50%";
+        loadingMessage.style.left = "50%";
+        loadingMessage.style.transform = "translate(-50%, -50%)";
+        loadingMessage.style.zIndex = "5";
+        loadingMessage.textContent = "Loading...";
+        
+        wrapper.appendChild(loadingMessage);
+        
+        // Add participant info overlay
+        addParticipantInfoOverlay(wrapper, `Participant ${connectionId.slice(-4)}`, 'remote', connectionId);
+        
+        // Add click handler for focus functionality
+        wrapper.addEventListener('click', () => {
+          // This will be handled by the video panel component
+          const event = new CustomEvent('participantClick', {
+            detail: { connectionId, streamId, participantName: wrapper.dataset.participantName }
           });
-          
-          remoteEl.appendChild(wrapper);
-          
-          // Subscribe to the stream
-          session.subscribe(stream, wrapper, { 
-            insertMode: "append", 
-            width: "100%", 
-            height: "100%",
-            // Disable default Vonage UI controls for subscribers
-            showControls: false,
-            controls: false,
-            style: {
-              buttonDisplayMode: "off",
-              nameDisplayMode: "off",
-              audioLevelDisplayMode: "off",
-              archiveStatusDisplayMode: "off",
-              backgroundImageURI: "off"
-            }
-          }, (error?: Error) => {
-            if (error) {
-              console.error('❌ Manual subscription failed:', error);
-            } else {
-
-            }
-          });
-        }
+          document.dispatchEvent(event);
+        });
+        
+        remoteEl.appendChild(wrapper);
+        
+        // Subscribe to the stream
+        session.subscribe(stream, wrapper, { 
+          insertMode: "append", 
+          width: "100%", 
+          height: "100%",
+          // Disable default Vonage UI controls for subscribers
+          showControls: false,
+          controls: false,
+          style: {
+            buttonDisplayMode: "off",
+            nameDisplayMode: "off",
+            audioLevelDisplayMode: "off",
+            archiveStatusDisplayMode: "off",
+            backgroundImageURI: "off"
+          }
+        }, (error?: Error) => {
+          if (error) {
+            console.error('❌ Manual subscription failed:', error);
+          } else {
+            console.log('✅ useVonageSession: Successfully subscribed to existing stream:', streamId);
+          }
+        });
       }
     });
   }, []);
@@ -2903,6 +2919,13 @@ export function useVonageSession({
             // Update state after successful publishing
             setIsCameraOff(false);
             setIsVideoEnabled(true);
+            
+            // CRITICAL: After enabling video publishing, subscribe to any existing remote streams
+            // that were skipped while in audio mode
+            console.log('📡 useVonageSession: Video publishing enabled - checking for existing streams to subscribe');
+            setTimeout(() => {
+              checkExistingStreams();
+            }, 1000); // Wait a bit for publisher to be ready
           } catch (publishError) {
             console.error('❌ useVonageSession: Error enabling video publishing:', publishError);
             setIsCameraOff(true);
@@ -2913,6 +2936,10 @@ export function useVonageSession({
                 publisher.publishVideo(true);
                 setIsCameraOff(false);
                 setIsVideoEnabled(true);
+                // Check for existing streams after retry
+                setTimeout(() => {
+                  checkExistingStreams();
+                }, 1000);
               } catch (retryError) {
                 console.error('❌ useVonageSession: Retry also failed:', retryError);
                 setIsCameraOff(true);
@@ -3065,6 +3092,13 @@ export function useVonageSession({
         
         // State will be updated after camera is confirmed on (handled above)
         
+        // CRITICAL: After switching to video mode, subscribe to any existing remote streams
+        // that were skipped while in audio mode
+        console.log('📡 useVonageSession: Switching to video mode - checking for existing streams to subscribe');
+        setTimeout(() => {
+          checkExistingStreams();
+        }, 1000); // Wait a bit for publisher to be ready
+        
         // Update local participant's hasVideo property
         const session = sessionRef.current;
         if (session?.connection?.connectionId) {
@@ -3094,9 +3128,9 @@ export function useVonageSession({
         }
         
         // Also check publisher element for video tracks
-        const publisherElement = (publisher as any).element;
-        if (publisherElement) {
-          const publisherVideo = publisherElement.querySelector('video') as HTMLVideoElement;
+        const publisherEl = (publisher as any).element;
+        if (publisherEl) {
+          const publisherVideo = publisherEl.querySelector('video') as HTMLVideoElement;
           if (publisherVideo && publisherVideo.srcObject instanceof MediaStream) {
             const videoTracks = publisherVideo.srcObject.getVideoTracks();
             videoTracks.forEach(track => {
@@ -3156,6 +3190,8 @@ export function useVonageSession({
               videoElement.pause();
               videoElement.srcObject = null;
             }
+            // Force remove the video element from DOM
+            videoElement.remove();
           });
           
           // Clear the local container completely
@@ -3168,7 +3204,27 @@ export function useVonageSession({
           
           // Also set localContainerRef to null to notify parent components
           localContainerRef.current = null;
-          
+        }
+        
+        // CRITICAL: Also remove video from publisher element itself (Vonage SDK might create it)
+        const publisherElement = (publisher as any).element;
+        if (publisherElement) {
+          const publisherVideos = publisherElement.querySelectorAll('video');
+          publisherVideos.forEach((videoElement: HTMLVideoElement) => {
+            if (videoElement.srcObject instanceof MediaStream) {
+              const videoTracks = videoElement.srcObject.getVideoTracks();
+              videoTracks.forEach(track => {
+                track.stop();
+                track.enabled = false;
+              });
+              videoElement.pause();
+              videoElement.srcObject = null;
+            }
+            // Hide the video element (don't remove as it might be managed by SDK)
+            videoElement.style.display = 'none';
+            videoElement.style.visibility = 'hidden';
+            videoElement.style.opacity = '0';
+          });
         }
         
         // Stop preview stream if it exists

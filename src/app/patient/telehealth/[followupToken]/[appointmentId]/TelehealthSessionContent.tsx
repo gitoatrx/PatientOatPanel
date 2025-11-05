@@ -352,11 +352,34 @@ export function TelehealthSessionContent({
     }
   }, [appointmentId, followupToken, chatApi, telehealth.isConnected, messagesLoaded]);
 
-  // Verify Ably connection is still active during call (only if issues detected)
+  // Keep Ably connection alive and monitor during active calls
   useEffect(() => {
     if (telehealth.isConnected && ablyService) {
-      // Check connection once, and only reattach if needed
+      console.log('📡 Ably: Starting connection monitoring during active call');
+      console.log('📡 Ably: Ably service state:', ablyService ? 'EXISTS' : 'NULL');
+      
+      // Verify connection immediately
       ablyService.verifyConnection();
+      
+      // Test subscription status
+      ablyService.testSubscription();
+      
+      // Start periodic monitoring every 10 seconds during the call
+      const stopMonitoring = ablyService.startConnectionMonitoring(10000);
+      
+      // Also verify when connection state might change
+      const checkInterval = setInterval(() => {
+        if (ablyService) {
+          ablyService.verifyConnection();
+          ablyService.testSubscription(); // Test subscription status
+        }
+      }, 10000); // Check every 10 seconds
+      
+      return () => {
+        stopMonitoring();
+        clearInterval(checkInterval);
+        console.log('📡 Ably: Stopped connection monitoring');
+      };
     }
   }, [telehealth.isConnected, ablyService]);
 

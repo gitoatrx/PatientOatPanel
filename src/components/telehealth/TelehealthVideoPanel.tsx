@@ -744,7 +744,27 @@ export function TelehealthVideoPanel({
     let timeoutId: NodeJS.Timeout | null = null;
 
     const update = () => {
-      const hasVideo = localElement.querySelector("video") !== null;
+      const videoElement = localElement.querySelector("video") as HTMLVideoElement | null;
+      let hasVideo = false;
+      
+      if (videoElement) {
+        // Check if video actually has active video tracks
+        if (videoElement.srcObject && videoElement.srcObject instanceof MediaStream) {
+          const videoTracks = videoElement.srcObject.getVideoTracks();
+          // Video is considered active only if there are video tracks that are enabled and live
+          hasVideo = videoTracks.length > 0 && 
+            videoTracks.some(track => 
+              track.enabled && 
+              !track.muted && 
+              track.readyState === 'live'
+            ) &&
+            !videoElement.paused &&
+            videoElement.readyState >= 2 &&
+            videoElement.videoWidth > 0 &&
+            videoElement.videoHeight > 0;
+        }
+      }
+      
       setLocalHasVideo(hasVideo);
       if (hasVideo) {
         // Remove badges before normalizing
@@ -755,6 +775,21 @@ export function TelehealthVideoPanel({
         // Pass local participant name to normalizeVideoElements so avatar shows correct name
         // Skip overlays for local container
         normalizeVideoElements(localElement, { strength, names: [participantName], skipOverlays: true });
+      } else {
+        // If no active video, ensure container is cleared and avatar is shown
+        const existingVideos = localElement.querySelectorAll('video');
+        existingVideos.forEach(video => {
+          // Remove video elements that don't have active tracks
+          if (video.srcObject && video.srcObject instanceof MediaStream) {
+            const tracks = video.srcObject.getVideoTracks();
+            const hasActiveTracks = tracks.length > 0 && tracks.some(t => t.enabled && t.readyState === 'live');
+            if (!hasActiveTracks) {
+              video.remove();
+            }
+          } else {
+            video.remove();
+          }
+        });
       }
     };
 

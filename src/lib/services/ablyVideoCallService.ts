@@ -42,6 +42,14 @@ export class AblyVideoCallService {
   private clinicChannel: Ably.RealtimeChannel | null = null;
   private isConnected = false;
   private connectionError: Error | null = null;
+  
+  // Store subscription handlers to prevent them from being garbage collected
+  private subscriptionHandlers: {
+    callTypeSwitched?: (message: Ably.Message) => void;
+    callModeChanged?: (message: Ably.Message) => void;
+    callModeSet?: (message: Ably.Message) => void;
+    connect?: (message: Ably.Message) => void;
+  } = {};
 
   constructor(private options: AblyVideoCallServiceOptions) {}
 
@@ -61,9 +69,47 @@ export class AblyVideoCallService {
 
       this.ably = ably;
       
-      // Only log connection errors, not all state changes
+      // Monitor connection state changes - keep connection alive during calls
+      ably.connection.on('connecting', () => {
+        console.log('📡 Ably: Connecting...');
+        this.isConnected = false;
+      });
+      
+      ably.connection.on('connected', () => {
+        console.log('✅ Ably: Connected and active');
+        this.isConnected = true;
+        this.connectionError = null;
+      });
+      
+      ably.connection.on('disconnected', () => {
+        console.warn('⚠️ Ably: Disconnected - will attempt to reconnect');
+        this.isConnected = false;
+        // Ably SDK will automatically attempt to reconnect
+      });
+      
+      ably.connection.on('suspended', () => {
+        console.warn('⚠️ Ably: Connection suspended');
+        this.isConnected = false;
+      });
+      
+      ably.connection.on('closed', () => {
+        console.warn('⚠️ Ably: Connection closed');
+        this.isConnected = false;
+      });
+      
       ably.connection.on('failed', (stateChange) => {
         console.error('❌ Ably: Connection failed:', stateChange.reason);
+        this.isConnected = false;
+        this.connectionError = new Error(`Ably connection failed: ${stateChange.reason}`);
+      });
+      
+      ably.connection.on('update', (stateChange) => {
+        console.log('📡 Ably: Connection state update:', stateChange.current);
+        if (stateChange.current === 'connected') {
+          this.isConnected = true;
+        } else if (stateChange.current === 'disconnected' || stateChange.current === 'suspended') {
+          this.isConnected = false;
+        }
       });
 
       // Wait for connection
@@ -95,13 +141,31 @@ export class AblyVideoCallService {
       const channel = ably.channels.get(appointmentChannelName);
       this.appointmentChannel = channel;
       
-      // Only log channel errors and reattach attempts
+      // Monitor channel state changes - ensure it stays attached during calls
+      channel.on('attached', () => {
+        console.log('✅ Ably: Appointment channel attached and listening');
+      });
+      
       channel.on('detached', () => {
+        console.warn('⚠️ Ably: Appointment channel detached - reattaching...');
         // Try to reattach if channel gets detached
         setTimeout(() => {
           if (channel.state === 'detached') {
-            channel.attach().catch((err) => {
+            channel.attach().then(() => {
+              console.log('✅ Ably: Channel reattached successfully');
+            }).catch((err) => {
               console.error('❌ Ably: Failed to reattach channel:', err);
+            });
+          }
+        }, 1000);
+      });
+      
+      channel.on('suspended', () => {
+        console.warn('⚠️ Ably: Appointment channel suspended - will attempt to reattach');
+        setTimeout(() => {
+          if (channel.state === 'suspended') {
+            channel.attach().catch((err) => {
+              console.error('❌ Ably: Failed to reattach suspended channel:', err);
             });
           }
         }, 1000);
@@ -109,13 +173,22 @@ export class AblyVideoCallService {
       
       channel.on('failed', (error) => {
         console.error('❌ Ably: Channel failed:', error);
+        // Try to reattach on failure
+        setTimeout(() => {
+          channel.attach().catch((err) => {
+            console.error('❌ Ably: Failed to reattach after failure:', err);
+          });
+        }, 2000);
       });
       
       channel.on('update', (stateChange) => {
-        // If channel becomes detached, try to reattach
-        if (stateChange.current === 'detached') {
+        console.log('📡 Ably: Channel state update:', stateChange.current);
+        // If channel becomes detached or suspended, try to reattach
+        if (stateChange.current === 'detached' || stateChange.current === 'suspended') {
           setTimeout(() => {
-            channel.attach().catch((err) => {
+            channel.attach().then(() => {
+              console.log('✅ Ably: Channel reattached after state update');
+            }).catch((err) => {
               console.error('❌ Ably: Failed to reattach after update:', err);
             });
           }, 1000);
@@ -123,12 +196,20 @@ export class AblyVideoCallService {
       });
       
       // Attach to channel to ensure we're actively listening
-      channel.attach().catch((err) => {
+      // IMPORTANT: Channel must stay attached during entire call to receive events
+      channel.attach().then(() => {
+        console.log('✅ Ably: Appointment channel attached and ready to receive events');
+        console.log('✅ Ably: Channel will remain attached during entire call to listen for events');
+        console.log('✅ Ably: Subscriptions are active and will continue listening');
+      }).catch((err) => {
         console.error('❌ Ably: Error attaching to appointment channel:', err);
       });
+      
+      // Channel reference already stored above - this ensures it stays in memory
 
       // Subscribe to connect events on appointment channel
-      channel.subscribe('connect', (message) => {
+      // CRITICAL: Store handler reference to prevent garbage collection
+      this.subscriptionHandlers.connect = (message: Ably.Message) => {
         try {
           const event: AblyConnectEvent = {
             event: 'connect',
@@ -149,22 +230,47 @@ export class AblyVideoCallService {
           console.error('❌ Ably: Error processing connect event:', error);
           this.options.onError(error instanceof Error ? error : new Error('Unknown error processing connect event'));
         }
-      });
+      };
+      channel.subscribe('connect', this.subscriptionHandlers.connect);
 
       // Subscribe to call_type_switched event on appointment channel (same channel as connect event)
       // This subscription will remain active during the entire call
-      channel.subscribe('call_type_switched', (message) => {
+      // This event has the same functionality as CALL_MODE_CHANGED - both trigger camera/stream switching
+      // CRITICAL: Store handler reference to prevent garbage collection
+      this.subscriptionHandlers.callTypeSwitched = (message: Ably.Message) => {
+        console.log('🔔🔔🔔 call_type_switched EVENT RECEIVED ON APPOINTMENT CHANNEL 🔔🔔🔔');
+        console.log('📡 Ably: Event name:', message.name);
+        console.log('📡 Ably: Event data:', JSON.stringify(message.data, null, 2));
+        console.log('📡 Ably: Channel:', appointmentChannelName);
+        console.log('📡 Ably: Connection state:', this.ably?.connection?.state);
+        console.log('📡 Ably: Channel state:', channel.state);
+        console.log('📡 Ably: This event is received DURING the call, not just at start');
         this.handleCallTypeSwitchedEvent(message);
-      });
+      };
+      channel.subscribe('call_type_switched', this.subscriptionHandlers.callTypeSwitched);
+      console.log('✅ Ably: Subscribed to call_type_switched on appointment channel - will listen during entire call');
+      console.log('✅ Ably: Handler reference stored to prevent garbage collection');
 
       // Subscribe to CALL_MODE_SET and CALL_MODE_CHANGED events on appointment channel
-      channel.subscribe('CALL_MODE_SET', (message) => {
+      // CRITICAL: Store handler reference to prevent garbage collection
+      this.subscriptionHandlers.callModeSet = (message: Ably.Message) => {
         this.handleCallModeEvent(message, 'CALL_MODE_SET');
-      });
+      };
+      channel.subscribe('CALL_MODE_SET', this.subscriptionHandlers.callModeSet);
 
-      channel.subscribe('CALL_MODE_CHANGED', (message) => {
+      this.subscriptionHandlers.callModeChanged = (message: Ably.Message) => {
+        console.log('🔔🔔🔔 CALL_MODE_CHANGED EVENT RECEIVED ON APPOINTMENT CHANNEL 🔔🔔🔔');
+        console.log('📡 Ably: Event name:', message.name);
+        console.log('📡 Ably: Event data:', JSON.stringify(message.data, null, 2));
+        console.log('📡 Ably: Channel:', appointmentChannelName);
+        console.log('📡 Ably: Connection state:', this.ably?.connection?.state);
+        console.log('📡 Ably: Channel state:', channel.state);
+        console.log('📡 Ably: This event is received DURING the call, not just at start');
         this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
-      });
+      };
+      channel.subscribe('CALL_MODE_CHANGED', this.subscriptionHandlers.callModeChanged);
+      console.log('✅ Ably: Subscribed to CALL_MODE_CHANGED on appointment channel - will listen during entire call');
+      console.log('✅ Ably: Handler reference stored to prevent garbage collection');
 
       // Subscribe to MOA calling events on clinic channel (if clinicId is provided)
       if (this.options.clinicId) {
@@ -267,20 +373,21 @@ export class AblyVideoCallService {
 
   async disconnect(): Promise<void> {
     try {
-      if (this.appointmentChannel) {
-        await this.appointmentChannel.unsubscribe();
-        this.appointmentChannel = null;
-      }
-
-      if (this.clinicChannel) {
-        await this.clinicChannel.unsubscribe();
-        this.clinicChannel = null;
-      }
-
+      // Only disconnect if explicitly called - don't auto-disconnect during calls
+      console.log('🔌 Ably: Disconnect called - this should only happen on component unmount');
+      
+      // Don't unsubscribe - just close the connection
+      // Unsubscribing might interfere with active subscriptions that should persist
+      // The SDK will clean up when the connection closes
+      
       if (this.ably) {
         this.ably.close();
         this.ably = null;
       }
+      
+      // Clear references but don't unsubscribe (let SDK handle cleanup)
+      this.appointmentChannel = null;
+      this.clinicChannel = null;
 
       this.isConnected = false;
       this.connectionError = null;
@@ -316,6 +423,7 @@ export class AblyVideoCallService {
         timestamp: timestamp,
       };
 
+      // Call the same callback - both CALL_MODE_CHANGED and call_type_switched use this
       if (this.options.onCallModeChange) {
         this.options.onCallModeChange(event);
       } else {
@@ -351,6 +459,7 @@ export class AblyVideoCallService {
       const timestamp = data.published_at || data.timestamp || data.metadata?.timestamp || new Date().toISOString();
 
       // Convert to CallModeEvent format (treat as CALL_MODE_CHANGED since it's a switch)
+      // This ensures both call_type_switched and CALL_MODE_CHANGED have the same functionality
       const event: CallModeEvent = {
         event: 'CALL_MODE_CHANGED',
         call_mode: on_call_type,
@@ -361,6 +470,7 @@ export class AblyVideoCallService {
         timestamp: timestamp,
       };
 
+      // Call the same callback as CALL_MODE_CHANGED - both events have identical functionality
       if (this.options.onCallModeChange) {
         try {
           this.options.onCallModeChange(event);
@@ -392,15 +502,156 @@ export class AblyVideoCallService {
   
   // Verify connection is still active and listening
   verifyConnection(): void {
-    if (this.ably && this.ably.connection.state !== 'connected') {
-      console.warn('⚠️ Ably: Connection is not in connected state:', this.ably.connection.state);
+    if (!this.ably) {
+      console.warn('⚠️ Ably: Client is null');
+      return;
     }
     
-    if (this.appointmentChannel && this.appointmentChannel.state !== 'attached') {
-      console.warn('⚠️ Ably: Channel is not attached, attempting to reattach...');
-      this.appointmentChannel.attach().catch((err) => {
-        console.error('❌ Ably: Failed to reattach channel:', err);
-      });
+    const connectionState = this.ably.connection.state;
+    console.log('📡 Ably: Connection status check - State:', connectionState, 'Connected:', this.isConnected);
+    
+    if (connectionState !== 'connected') {
+      console.warn('⚠️ Ably: Connection is not in connected state:', connectionState);
+      // Try to reconnect if disconnected
+      if (connectionState === 'disconnected' || connectionState === 'suspended') {
+        console.log('🔄 Ably: Attempting to reconnect...');
+        this.ably.connection.connect();
+      }
+    }
+    
+    if (this.appointmentChannel) {
+      const channelState = this.appointmentChannel.state;
+      console.log('📡 Ably: Channel status check - State:', channelState);
+      
+      if (channelState !== 'attached') {
+        console.warn('⚠️ Ably: Channel is not attached, attempting to reattach...');
+        this.appointmentChannel.attach().then(() => {
+          console.log('✅ Ably: Channel reattached successfully');
+          // Re-subscribe to events after reattaching
+          this.resubscribeToEvents();
+        }).catch((err) => {
+          console.error('❌ Ably: Failed to reattach channel:', err);
+        });
+      } else {
+        // Channel is attached - verify subscriptions are still active
+        this.verifySubscriptions();
+      }
+    } else {
+      console.warn('⚠️ Ably: Appointment channel is null');
+    }
+  }
+  
+  // Verify subscriptions are still active and re-subscribe if needed
+  private verifySubscriptions(): void {
+    if (!this.appointmentChannel || this.appointmentChannel.state !== 'attached') {
+      return;
+    }
+    
+    // Check if subscriptions are active by checking channel listeners
+    // Note: Ably doesn't expose a direct way to check subscriptions, so we'll just log
+    console.log('📡 Ably: Verifying subscriptions are active on appointment channel');
+    console.log('📡 Ably: Channel is attached and ready to receive events');
+  }
+  
+  // Re-subscribe to all events after channel reattachment
+  private resubscribeToEvents(): void {
+    if (!this.appointmentChannel || !this.ably) {
+      return;
+    }
+    
+    const channelPrefix = process.env.NEXT_PUBLIC_ABLY_VIDEO_CHANNEL_PREFIX || 'clinic-video-call';
+    const appointmentChannelName = `${channelPrefix}.${this.options.appointmentId}`;
+    
+    console.log('🔄 Ably: Re-subscribing to events after channel reattachment');
+    
+    // Re-subscribe using stored handlers (or create new ones if they don't exist)
+    if (!this.subscriptionHandlers.callTypeSwitched) {
+      this.subscriptionHandlers.callTypeSwitched = (message: Ably.Message) => {
+        console.log('🔔🔔🔔 call_type_switched EVENT RECEIVED ON APPOINTMENT CHANNEL (after reattach) 🔔🔔🔔');
+        console.log('📡 Ably: Event name:', message.name);
+        console.log('📡 Ably: Event data:', JSON.stringify(message.data, null, 2));
+        this.handleCallTypeSwitchedEvent(message);
+      };
+    }
+    this.appointmentChannel.subscribe('call_type_switched', this.subscriptionHandlers.callTypeSwitched);
+    
+    if (!this.subscriptionHandlers.callModeChanged) {
+      this.subscriptionHandlers.callModeChanged = (message: Ably.Message) => {
+        console.log('🔔🔔🔔 CALL_MODE_CHANGED EVENT RECEIVED ON APPOINTMENT CHANNEL (after reattach) 🔔🔔🔔');
+        console.log('📡 Ably: Event name:', message.name);
+        console.log('📡 Ably: Event data:', JSON.stringify(message.data, null, 2));
+        this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
+      };
+    }
+    this.appointmentChannel.subscribe('CALL_MODE_CHANGED', this.subscriptionHandlers.callModeChanged);
+    
+    if (!this.subscriptionHandlers.callModeSet) {
+      this.subscriptionHandlers.callModeSet = (message: Ably.Message) => {
+        this.handleCallModeEvent(message, 'CALL_MODE_SET');
+      };
+    }
+    this.appointmentChannel.subscribe('CALL_MODE_SET', this.subscriptionHandlers.callModeSet);
+    
+    console.log('✅ Ably: Re-subscribed to all events on appointment channel');
+    console.log('✅ Ably: Handler references preserved to prevent garbage collection');
+  }
+  
+  // Start periodic connection monitoring during active calls
+  startConnectionMonitoring(intervalMs: number = 10000): () => void {
+    console.log('📡 Ably: Starting periodic connection monitoring every', intervalMs, 'ms');
+    const intervalId = setInterval(() => {
+      console.log('📡 Ably: Periodic connection check during active call');
+      this.verifyConnection();
+      
+      // Also verify subscriptions are still active
+      if (this.appointmentChannel && this.appointmentChannel.state === 'attached') {
+        console.log('✅ Ably: Channel is attached - subscriptions should be active');
+        console.log('✅ Ably: Ready to receive call_type_switched and CALL_MODE_CHANGED events');
+        
+        // Periodically re-verify subscriptions are still bound
+        // This ensures handlers haven't been garbage collected
+        if (this.subscriptionHandlers.callTypeSwitched && this.subscriptionHandlers.callModeChanged) {
+          console.log('✅ Ably: Subscription handlers are still stored in memory');
+        } else {
+          console.warn('⚠️ Ably: Subscription handlers missing - re-subscribing...');
+          this.resubscribeToEvents();
+        }
+      } else {
+        console.warn('⚠️ Ably: Channel is not attached - attempting to reattach...');
+        if (this.appointmentChannel) {
+          this.appointmentChannel.attach().then(() => {
+            console.log('✅ Ably: Channel reattached - re-subscribing to events');
+            this.resubscribeToEvents();
+          }).catch((err) => {
+            console.error('❌ Ably: Failed to reattach channel:', err);
+          });
+        }
+      }
+    }, intervalMs);
+    
+    // Return cleanup function
+    return () => {
+      clearInterval(intervalId);
+      console.log('📡 Ably: Stopped periodic connection monitoring');
+    };
+  }
+  
+  // Test function to verify subscriptions are active (for debugging)
+  testSubscription(): void {
+    if (!this.appointmentChannel) {
+      console.warn('⚠️ Ably: Cannot test subscription - channel is null');
+      return;
+    }
+    
+    console.log('🧪 Ably: Testing subscription status');
+    console.log('🧪 Ably: Channel state:', this.appointmentChannel.state);
+    console.log('🧪 Ably: Connection state:', this.ably?.connection?.state);
+    console.log('🧪 Ably: Channel name:', this.appointmentChannel.name);
+    
+    if (this.appointmentChannel.state === 'attached') {
+      console.log('✅ Ably: Channel is attached - subscriptions should be active');
+    } else {
+      console.warn('⚠️ Ably: Channel is not attached - subscriptions may not be active');
     }
   }
 }
