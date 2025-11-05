@@ -742,6 +742,7 @@ export interface AppointmentStateData {
   is_with_doctor: boolean;
   with_doctor_since: string | null;
   is_on_call: boolean;
+  on_call_type?: 'audio' | 'video' | null;
   is_completed: boolean;
   completed_since: string | null;
   scheduled_for: string;
@@ -763,6 +764,7 @@ export interface AppointmentStateData {
     }>;
     join_call: boolean;
     join_call_at: string | null;
+    on_call_type?: 'audio' | 'video' | null;
     scheduled_for: string;
     created_at: string;
     updated_at: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical, X, User } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, X, User, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
@@ -26,6 +26,7 @@ interface TelehealthVideoPanelProps {
   participantAudioLevels?: Map<string, number>;
   getVideoElementById?: (connectionId: string) => HTMLVideoElement | null;
   registerPiPToggle?: (fn: () => void) => void;
+  callMode?: 'audio' | 'video' | null;
 }
 
 type TileStrength = 'excellent' | 'good' | 'fair' | 'poor';
@@ -119,9 +120,13 @@ const throttle = (fn: () => void, delay: number): ThrottledFunction => {
 
 const normalizeVideoElements = (
   container: HTMLDivElement | null,
-  opts?: { strength?: TileStrength; names?: string[] }
+  opts?: { strength?: TileStrength; names?: string[]; skipOverlays?: boolean }
 ) => {
   if (!container) return;
+  
+  // Check if this is the local container - skip overlays for local container
+  const isLocalContainer = container.id === 'vonage-local-container' || container.closest('#vonage-local-container');
+  const skipOverlays = opts?.skipOverlays || isLocalContainer;
 
   const isTiled = container.dataset.tiled === "true";
   const videos = container.querySelectorAll("video");
@@ -149,7 +154,7 @@ const normalizeVideoElements = (
     wrapper.style.display = "flex";
     wrapper.style.alignItems = "center";
     wrapper.style.justifyContent = "center";
-    wrapper.style.backgroundColor = "#111827";
+    wrapper.style.backgroundColor = "transparent";
     wrapper.style.minHeight = "0";
     wrapper.style.width = "100%";
     wrapper.style.height = "100%";
@@ -179,7 +184,13 @@ const normalizeVideoElements = (
       const avatarPlaceholder = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
       const cameraOffOverlay = wrapper.querySelector('.camera-off-overlay') as HTMLElement;
       
-      if (!cameraOffOverlay) {
+      // Remove overlay if it exists (we don't want overlays on local container)
+      if (skipOverlays && cameraOffOverlay) {
+        cameraOffOverlay.remove();
+      }
+      
+      // Don't create overlay for local container
+      if (!skipOverlays && !cameraOffOverlay) {
         // A full-bleed black overlay we can toggle to fully cover any SDK UI when camera is off
         const overlay = document.createElement('div');
         overlay.className = 'camera-off-overlay';
@@ -326,14 +337,22 @@ const normalizeVideoElements = (
         }
         
         if (hasValidVideo) {
-          // Video is active - hide avatar and restore normal background
+          // Video is active - hide avatar and overlay
           avatar.style.display = 'none';
-          if (overlay) overlay.style.display = 'none';
-          wrapper.style.backgroundColor = '#111827'; // Restore original background
+          if (overlay && !skipOverlays) {
+            overlay.style.display = 'none';
+          } else if (overlay && skipOverlays) {
+            overlay.remove(); // Remove overlay completely for local container
+          }
+          wrapper.style.backgroundColor = 'transparent'; // Transparent background
         } else {
           // Video is not active - show avatar with black background
           avatar.style.display = 'flex';
-          if (overlay) overlay.style.display = 'block';
+          if (overlay && !skipOverlays) {
+            overlay.style.display = 'block';
+          } else if (overlay && skipOverlays) {
+            overlay.remove(); // Remove overlay for local container
+          }
           wrapper.style.backgroundColor = '#000000'; // Black background
         }
       };
@@ -388,7 +407,14 @@ const normalizeVideoElements = (
       // Store the checkVideoState function and listeners for cleanup
       normalizedVideos.set(video, { checkVideoState, listeners });
 
-      if (!wrapper.querySelector('.tile-signal-badge')) {
+      // Remove signal badge if it exists (especially for local container)
+      const existingBadge = wrapper.querySelector('.tile-signal-badge');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+      
+      // Don't create signal badge for local container
+      if (!skipOverlays && !wrapper.querySelector('.tile-signal-badge')) {
         const badge = document.createElement('div');
         badge.className = 'tile-signal-badge';
         badge.style.position = 'absolute';
@@ -464,7 +490,12 @@ export function TelehealthVideoPanel({
   participantAudioLevels,
   getVideoElementById,
   registerPiPToggle,
+  callMode = null,
 }: TelehealthVideoPanelProps) {
+  // Log callMode changes to debug UI updates
+  useEffect(() => {
+    console.log('🎨 TelehealthVideoPanel: callMode changed to:', callMode);
+  }, [callMode]);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
   const localRef = useRef<HTMLDivElement | null>(null);
@@ -607,9 +638,14 @@ export function TelehealthVideoPanel({
   }, [viewportWidth]);
 
   useEffect(() => {
-    onLocalContainerReady?.(localRef.current);
+    // In audio mode, don't pass local container to avoid duplicate avatars
+    if (callMode === 'audio') {
+      onLocalContainerReady?.(null);
+    } else {
+      onLocalContainerReady?.(localRef.current);
+    }
     return () => onLocalContainerReady?.(null);
-  }, [onLocalContainerReady]);
+  }, [onLocalContainerReady, callMode]);
 
   useEffect(() => {
     const remoteElement = remoteRef.current;
@@ -663,8 +699,10 @@ export function TelehealthVideoPanel({
     };
   }, []);
 
-  // Set participant name in dataset whenever it changes
+  // Set participant name in dataset whenever it changes (skip in audio mode to avoid duplicates)
   useEffect(() => {
+    if (callMode === 'audio') return; // Skip in audio mode - we show custom avatar instead
+    
     const localElement = localRef.current;
     if (!localElement) return;
 
@@ -680,12 +718,25 @@ export function TelehealthVideoPanel({
     if (container) {
       (container as HTMLElement).dataset.participantName = participantName;
     }
-  }, [localParticipantName]);
+  }, [localParticipantName, callMode]);
 
-  // Observe local element changes and normalize video elements
+  // Observe local element changes and normalize video elements (skip in audio mode)
   useEffect(() => {
+    if (callMode === 'audio') {
+      setLocalHasVideo(false); // In audio mode, no video
+      return; // Skip normalization in audio mode to avoid duplicate avatars
+    }
+    
     const localElement = localRef.current;
     if (!localElement) return;
+
+    // Remove any badges and overlays from local container
+    const badges = localElement.querySelectorAll('.tile-signal-badge');
+    badges.forEach(badge => badge.remove());
+    const nameBadges = localElement.querySelectorAll('.tile-name-badge');
+    nameBadges.forEach(badge => badge.remove());
+    const overlays = localElement.querySelectorAll('.camera-off-overlay');
+    overlays.forEach(overlay => overlay.remove());
 
     const participantName = localParticipantName || "You";
     const strength = signalStrength || 'good';
@@ -693,11 +744,52 @@ export function TelehealthVideoPanel({
     let timeoutId: NodeJS.Timeout | null = null;
 
     const update = () => {
-      const hasVideo = localElement.querySelector("video") !== null;
+      const videoElement = localElement.querySelector("video") as HTMLVideoElement | null;
+      let hasVideo = false;
+      
+      if (videoElement) {
+        // Check if video actually has active video tracks
+        if (videoElement.srcObject && videoElement.srcObject instanceof MediaStream) {
+          const videoTracks = videoElement.srcObject.getVideoTracks();
+          // Video is considered active only if there are video tracks that are enabled and live
+          hasVideo = videoTracks.length > 0 && 
+            videoTracks.some(track => 
+              track.enabled && 
+              !track.muted && 
+              track.readyState === 'live'
+            ) &&
+            !videoElement.paused &&
+            videoElement.readyState >= 2 &&
+            videoElement.videoWidth > 0 &&
+            videoElement.videoHeight > 0;
+        }
+      }
+      
       setLocalHasVideo(hasVideo);
       if (hasVideo) {
+        // Remove badges before normalizing
+        const badges = localElement.querySelectorAll('.tile-signal-badge');
+        badges.forEach(badge => badge.remove());
+        const nameBadges = localElement.querySelectorAll('.tile-name-badge');
+        nameBadges.forEach(badge => badge.remove());
         // Pass local participant name to normalizeVideoElements so avatar shows correct name
-        normalizeVideoElements(localElement, { strength, names: [participantName] });
+        // Skip overlays for local container
+        normalizeVideoElements(localElement, { strength, names: [participantName], skipOverlays: true });
+      } else {
+        // If no active video, ensure container is cleared and avatar is shown
+        const existingVideos = localElement.querySelectorAll('video');
+        existingVideos.forEach(video => {
+          // Remove video elements that don't have active tracks
+          if (video.srcObject && video.srcObject instanceof MediaStream) {
+            const tracks = video.srcObject.getVideoTracks();
+            const hasActiveTracks = tracks.length > 0 && tracks.some(t => t.enabled && t.readyState === 'live');
+            if (!hasActiveTracks) {
+              video.remove();
+            }
+          } else {
+            video.remove();
+          }
+        });
       }
     };
 
@@ -716,7 +808,7 @@ export function TelehealthVideoPanel({
       if (timeoutId) clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [localParticipantName, signalStrength]);
+  }, [localParticipantName, signalStrength, callMode]);
 
   // Note: Participant video registration is now handled by the hook
   // when streams are created/destroyed, so we don't need to do it here
@@ -872,7 +964,7 @@ export function TelehealthVideoPanel({
     remoteLayoutClass,
   );
   const localPreviewClasses = cn(
-    "relative overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-lg",
+    "relative overflow-hidden rounded-2xl border border-white/20 bg-transparent shadow-lg",
     // Smaller camera preview on mobile for better space utilization
     isMobileOrTablet 
       ? (isFullscreen ? "h-24 w-32" : "h-20 w-28")
@@ -940,68 +1032,109 @@ export function TelehealthVideoPanel({
         {!remoteHasVideo ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-slate-200">
             <div className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100">
-              Waiting for video
+              {callMode === 'audio' ? 'Waiting for audio' : 'Waiting for video'}
             </div>
             <p className="text-sm text-slate-200/80">
-              {statusMessage ?? `Video will appear automatically once ${providerFirstName}'s camera connects.`}
+              {statusMessage ?? (callMode === 'audio' 
+                ? `Audio will connect automatically once ${providerFirstName} joins.` 
+                : `Video will appear automatically once ${providerFirstName}'s camera connects.`)}
             </p>
           </div>
         ) : null}
 
-        <div 
-          className={cn(
-            "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
-            // Mobile: top-left positioning, Desktop: bottom-right positioning
-            hasUserPositioned ? "" : (isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")),
-            isDragging && "cursor-grabbing scale-105 transition-none"
-          )}
-          style={hasUserPositioned ? {
-            left: `${cameraPosition.x}px`,
-            top: `${cameraPosition.y}px`,
-            right: 'auto',
-            bottom: 'auto',
-          } : {}}
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleMouseDown}
-          onDoubleClick={resetCameraPosition}
-          title="Drag to move camera • Double-click to reset position"
-        >
-          <div className={cn(localPreviewClasses, "relative border border-gray-200 focus:border-primary focus:ring-0 focus:outline-none")}>
-            <div
-              ref={localRef}
-              id="vonage-local-container"
-              className="h-full w-full"
-              aria-label="Your video preview"
-            />
-            {!localHasVideo ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
+        {/* Local video preview - Show clean avatar when in audio mode */}
+        {callMode === 'audio' ? (
+          <div 
+            className={cn(
+              "absolute flex flex-col items-end gap-2 z-20",
+              // Mobile: top-left positioning, Desktop: bottom-right positioning
+              isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")
+            )}
+          >
+            <div className={cn(localPreviewClasses, "relative border border-white/20 bg-transparent flex items-center justify-center overflow-hidden")}>
+              {/* Clean avatar display - just avatar and name */}
+              <div className="flex flex-col items-center justify-center gap-1.5 px-2">
                 {/* Profile Avatar with Initials */}
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold flex-shrink-0">
                   {localParticipantName && localParticipantName !== "You" ? (() => {
                     const words = localParticipantName.trim().split(/\s+/);
                     const initials = words.length >= 2 
                       ? (words[0][0] + words[1][0]).toUpperCase()
                       : localParticipantName.substring(0, 2).toUpperCase();
-                    return <span className="text-base">{initials}</span>;
-                  })() : <User className="w-6 h-6" />}
+                    return <span className="text-lg">{initials}</span>;
+                  })() : <User className="w-7 h-7" />}
                 </div>
-                <span className="text-xs text-slate-200 font-medium">{localParticipantName}</span>
-                <span className="text-xs text-slate-400">Camera off</span>
+                <span className="text-[10px] text-slate-300 font-medium truncate max-w-[80px]">{localParticipantName || "You"}</span>
               </div>
-            ) : null}
-
-            {/* Drag handle */}
-            <div className="absolute top-1 right-1 pointer-events-none">
-              <GripVertical className="h-3 w-3 text-white/60" />
             </div>
-            {/* Reset indicator */}
-            {hasUserPositioned && (
-              <div className="absolute top-1 left-1 pointer-events-none">
-                <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" title="Custom position" />
-              </div>
-            )}
           </div>
-        </div>
+        ) : (
+          <div 
+            className={cn(
+              "absolute flex flex-col items-end gap-2 cursor-move select-none transition-all duration-75 ease-out focus:outline-none focus:ring-0 z-20",
+              // Mobile: top-left positioning, Desktop: bottom-right positioning
+              hasUserPositioned ? "" : (isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")),
+              isDragging && "cursor-grabbing scale-105 transition-none"
+            )}
+            style={hasUserPositioned ? {
+              left: `${cameraPosition.x}px`,
+              top: `${cameraPosition.y}px`,
+              right: 'auto',
+              bottom: 'auto',
+            } : {}}
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleMouseDown}
+            onDoubleClick={resetCameraPosition}
+            title="Drag to move camera • Double-click to reset position"
+          >
+            <div className={cn(localPreviewClasses, "relative border border-gray-200 focus:border-primary focus:ring-0 focus:outline-none")}>
+              <div
+                ref={localRef}
+                id="vonage-local-container"
+                className="h-full w-full bg-transparent"
+                style={{ backgroundColor: 'transparent' }}
+                aria-label="Your video preview"
+              />
+              {!localHasVideo ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
+                  {/* Profile Avatar with Initials */}
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+                    {localParticipantName && localParticipantName !== "You" ? (() => {
+                      const words = localParticipantName.trim().split(/\s+/);
+                      const initials = words.length >= 2 
+                        ? (words[0][0] + words[1][0]).toUpperCase()
+                        : localParticipantName.substring(0, 2).toUpperCase();
+                      return <span className="text-base">{initials}</span>;
+                    })() : <User className="w-6 h-6" />}
+                  </div>
+                  <span className="text-xs text-slate-200 font-medium">{localParticipantName}</span>
+                  <span className="text-xs text-slate-400">Camera off</span>
+                </div>
+              ) : null}
+
+              {/* Drag handle */}
+              <div className="absolute top-1 right-1 pointer-events-none">
+                <GripVertical className="h-3 w-3 text-white/60" />
+              </div>
+              {/* Reset indicator */}
+              {hasUserPositioned && (
+                <div className="absolute top-1 left-1 pointer-events-none">
+                  <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" title="Custom position" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Audio-only indicator when in audio mode */}
+        {callMode === 'audio' && (
+          <div className="absolute bottom-6 right-6 z-20">
+            <div className="rounded-full bg-black/60 px-4 py-2 flex items-center gap-2 text-white shadow-lg">
+              <Phone className="h-5 w-5" />
+              <span className="text-sm font-medium">Audio Call</span>
+            </div>
+          </div>
+        )}
 
         <div className={fullscreenToggleClasses}>
           {/* Fullscreen Button */}

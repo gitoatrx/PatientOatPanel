@@ -13,7 +13,7 @@ import { useVonageSession } from "@/lib/telehealth/useVonageSession";
 import { useChatApi } from "@/lib/services/chatApiService";
 import { useWaitingRoomService } from "@/lib/services/waitingRoomService";
 import { useVideoEventsService } from "@/lib/services/videoEventsService";
-import { AblyVideoCallService, type AblyConnectEvent } from "@/lib/services/ablyVideoCallService";
+import { AblyVideoCallService, type AblyConnectEvent, type CallModeEvent } from "@/lib/services/ablyVideoCallService";
 import { patientService } from "@/lib/services/patientService";
 import { AppointmentStateData } from "@/lib/types/api";
 import { API_CONFIG } from "@/lib/config/api";
@@ -60,6 +60,9 @@ export function TelehealthSessionContent({
   const [doctorConnected, setDoctorConnected] = useState(false);
   const [ablyService, setAblyService] = useState<AblyVideoCallService | null>(null);
 
+  // Call mode state
+  const [callMode, setCallMode] = useState<'audio' | 'video' | null>(null);
+
   // Permission status tracking
   type PermState = "granted" | "denied" | "prompt" | "unsupported";
   const [cameraPerm, setCameraPerm] = useState<PermState>("prompt");
@@ -73,8 +76,19 @@ export function TelehealthSessionContent({
   const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   // Appointment state - always fetch client-side
-  const [appointmentState, setAppointmentState] = useState<AppointmentStateData | null>(null);
+  const [appointmentState, setAppointmentState] = useState<AppointmentStateData | null>(initialAppointmentState);
   const [appointmentStateLoaded, setAppointmentStateLoaded] = useState(false);
+  
+  // Extract initial call mode from appointment state if available
+  React.useEffect(() => {
+    if (initialAppointmentState) {
+      const callType = initialAppointmentState.on_call_type || initialAppointmentState.appointment?.on_call_type;
+      if (callType === 'audio' || callType === 'video') {
+        console.log("📞 Initial: Setting call mode from initial appointment state:", callType);
+        setCallMode(callType);
+      }
+    }
+  }, [initialAppointmentState]);
 
   // Debug logging
   React.useEffect(() => {
@@ -113,6 +127,19 @@ export function TelehealthSessionContent({
             console.log("📡 Client-side: is_waiting:", response.data.is_waiting);
             console.log("📡 Client-side: status:", response.data.status);
             console.log("📡 Client-side: doctor info:", response.data.doctor);
+            
+            // Extract call type from API response (check both top-level and appointment level)
+            const callType = response.data.on_call_type || response.data.appointment?.on_call_type;
+            console.log("📞 Client-side: on_call_type from API:", callType);
+            
+            if (callType === 'audio' || callType === 'video') {
+              console.log("📞 Client-side: Setting initial call mode from API:", callType);
+              setCallMode(callType);
+              // Also update Vonage session call mode immediately so it's ready for join
+              if (telehealth.setCallMode) {
+                telehealth.setCallMode(callType);
+              }
+            }
 
             setAppointmentState(response.data);
             console.log("✅ Client-side: Successfully fetched appointment state");
@@ -176,8 +203,26 @@ export function TelehealthSessionContent({
     participantName: " ",
     remoteContainer,
     localContainer,
+    callMode,
   });
 
+  // Update call mode when appointment state changes (e.g., after API refresh)
+  React.useEffect(() => {
+    if (appointmentState) {
+      const callType = appointmentState.on_call_type || appointmentState.appointment?.on_call_type;
+      if (callType === 'audio' || callType === 'video') {
+        // Only update if call mode is different to avoid unnecessary updates
+        if (callMode !== callType) {
+          console.log("📞 State update: Setting call mode from appointment state:", callType);
+          setCallMode(callType);
+          // Always update Vonage session call mode (even if not connected yet, so it's ready for join)
+          if (telehealth.setCallMode) {
+            telehealth.setCallMode(callType);
+          }
+        }
+      }
+    }
+  }, [appointmentState, callMode, telehealth]);
 
   // Safe join handler that prevents multiple clicks
   const handleJoinCall = useCallback(async () => {
@@ -307,6 +352,37 @@ export function TelehealthSessionContent({
     }
   }, [appointmentId, followupToken, chatApi, telehealth.isConnected, messagesLoaded]);
 
+  // Keep Ably connection alive and monitor during active calls
+  useEffect(() => {
+    if (telehealth.isConnected && ablyService) {
+      console.log('📡 Ably: Starting connection monitoring during active call');
+      console.log('📡 Ably: Ably service state:', ablyService ? 'EXISTS' : 'NULL');
+      
+      // Verify connection immediately
+      ablyService.verifyConnection();
+      
+      // Test subscription status
+      ablyService.testSubscription();
+      
+      // Start periodic monitoring every 10 seconds during the call
+      const stopMonitoring = ablyService.startConnectionMonitoring(10000);
+      
+      // Also verify when connection state might change
+      const checkInterval = setInterval(() => {
+        if (ablyService) {
+          ablyService.verifyConnection();
+          ablyService.testSubscription(); // Test subscription status
+        }
+      }, 10000); // Check every 10 seconds
+      
+      return () => {
+        stopMonitoring();
+        clearInterval(checkInterval);
+        console.log('📡 Ably: Stopped connection monitoring');
+      };
+    }
+  }, [telehealth.isConnected, ablyService]);
+
   // Cleanup Ably service on unmount
   useEffect(() => {
     return () => {
@@ -413,11 +489,27 @@ export function TelehealthSessionContent({
 
   // Join flow: ensure containers exist then call join
   React.useEffect(() => {
-    if (!showPreJoin && pendingJoin && remoteContainer && localContainer) {
-      void telehealth.join();
-      setPendingJoin(false);
+    if (!showPreJoin && pendingJoin && remoteContainer) {
+      // For audio mode, localContainer can be null, so we don't require it
+      const requiresLocalContainer = callMode !== 'audio';
+      if (!requiresLocalContainer || localContainer) {
+        // Ensure call mode is set before joining
+        const currentCallMode = appointmentState?.on_call_type || appointmentState?.appointment?.on_call_type || callMode;
+        if (currentCallMode && currentCallMode !== callMode) {
+          console.log('🔄 Join effect: Setting call mode before join:', currentCallMode);
+          setCallMode(currentCallMode);
+          // Small delay to ensure call mode is updated in the hook
+          setTimeout(() => {
+            void telehealth.join();
+            setPendingJoin(false);
+          }, 100);
+        } else {
+          void telehealth.join();
+          setPendingJoin(false);
+        }
+      }
     }
-  }, [showPreJoin, pendingJoin, remoteContainer, localContainer, telehealth]);
+  }, [showPreJoin, pendingJoin, remoteContainer, localContainer, telehealth, callMode, appointmentState]);
 
 
   const onJoinWaitlist = async () => {
@@ -456,44 +548,56 @@ export function TelehealthSessionContent({
         appointmentId,
         clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
-          console.log('🚀 Ably: Received doctor/MOA connect event:', JSON.stringify(event, null, 2));
-          console.log('🚀 Ably: Event type:', event.event);
-          console.log('🚀 Ably: Event metadata:', event.metadata);
-          console.log('🚀 Ably: Event context:', event.context);
-
-          // Automatically start the session when doctor or MOA connects
-          if (event.event === 'connect') {
-            console.log('👨‍⚕️ Doctor connected - starting session');
-            console.log('👨‍⚕️ Doctor ID:', event.context.actor.id);
-            console.log('👨‍⚕️ Doctor name:', event.context.actor.name);
-          } else if (event.event === 'moa-calling') {
-            console.log('👩‍💼 MOA calling - starting session');
-            console.log('👩‍💼 MOA ID:', event.context.actor.id);
-            console.log('👩‍💼 MOA name:', event.context.actor.name);
-            console.log('👩‍💼 MOA type:', event.context.actor.type);
-            console.log('👩‍💼 Clinic ID:', event.context.actor.clinic_id);
+          // Extract and set call mode from event
+          if (event.call_type) {
+            setCallMode(event.call_type);
+            if (telehealth.setCallMode) {
+              telehealth.setCallMode(event.call_type);
+            }
+          } else if (event.call_mode) {
+            setCallMode(event.call_mode);
+            if (telehealth.setCallMode) {
+              telehealth.setCallMode(event.call_mode);
+            }
           }
 
-          // Disconnect from Ably since we're joining the session
-          if (ablyService) {
-            console.log('🔌 Ably: Disconnecting from Ably service...');
-            await ablyService.disconnect();
-            setAblyService(null);
-          }
+          // IMPORTANT: Keep Ably connected during the call so we can listen to call_type_switched events
+          // Do NOT disconnect - we need to continue listening for mode changes during the call
 
           // Join the Vonage session directly
-          console.log('🚀 Ably: Setting pending join and exiting waiting room...');
           setPendingJoin(true);
           setIsInWaitingRoom(false);
           setDoctorConnected(false);
+        },
+        onCallModeChange: (event: CallModeEvent) => {
+          console.log('🔄 CALL_MODE_CHANGED event received:', event);
+          console.log('🔄 New call_mode:', event.call_mode);
+          console.log('🔄 Previous call_mode:', event.previous_mode);
+          
+          // Update call mode state IMMEDIATELY
+          setCallMode(event.call_mode);
+          console.log('✅ callMode state updated to:', event.call_mode);
+          
+          // Update Vonage session immediately to switch camera and stream
+          if (telehealth.setCallMode) {
+            console.log('🔄 Calling telehealth.setCallMode with:', event.call_mode);
+            telehealth.setCallMode(event.call_mode);
+          } else {
+            console.warn('⚠️ telehealth.setCallMode is not available');
+          }
         },
         onError: (error: Error) => {
           console.error('❌ Ably: Error in video call service:', error);
         }
       });
 
-      await newAblyService.connect();
-      setAblyService(newAblyService);
+      try {
+        await newAblyService.connect();
+        setAblyService(newAblyService);
+      } catch (connectError) {
+        console.error('❌ Ably: Connection failed:', connectError);
+        throw connectError;
+      }
 
       // 4. Enter waiting room state
       setIsInWaitingRoom(true);
@@ -502,10 +606,8 @@ export function TelehealthSessionContent({
     } catch (error) {
       if (error instanceof Error && error.message.includes('Permission denied')) {
         setShowPermissionModal(true);
-      } else {
-        // Handle API errors or other issues
-        // You might want to show an error message to the user here
       }
+      console.error('❌ Error in onJoinWaitlist:', error);
     } finally {
       setIsJoining(false);
     }
@@ -519,12 +621,39 @@ export function TelehealthSessionContent({
     }
 
     try {
+      // Get current call mode - check appointment state first, then fallback to state
+      const currentCallMode = appointmentState?.on_call_type || appointmentState?.appointment?.on_call_type || callMode;
+      const isAudioMode = currentCallMode === 'audio';
+      
+      console.log('🚀 onJoinCallDirect: Current call mode:', currentCallMode);
+      console.log('🚀 onJoinCallDirect: Is audio mode:', isAudioMode);
+      
+      // Set call mode before joining if we have it
+      if (currentCallMode && currentCallMode !== callMode) {
+        console.log('🚀 onJoinCallDirect: Setting call mode before join:', currentCallMode);
+        setCallMode(currentCallMode);
+        // Also update telehealth hook if available
+        if (telehealth.setCallMode) {
+          telehealth.setCallMode(currentCallMode);
+        }
+      }
 
-      // Request camera and microphone permissions
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      stream.getTracks().forEach(t => t.stop());
-      setCameraPerm('granted');
-      setMicPerm('granted');
+      // Request permissions based on call mode
+      if (isAudioMode) {
+        // Audio mode - only request audio, no video
+        console.log('🎤 onJoinCallDirect: Requesting audio only permissions');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        stream.getTracks().forEach(t => t.stop());
+        setMicPerm('granted');
+        // Camera permission is not needed in audio mode
+      } else {
+        // Video mode - request both video and audio
+        console.log('📹 onJoinCallDirect: Requesting video and audio permissions');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream.getTracks().forEach(t => t.stop());
+        setCameraPerm('granted');
+        setMicPerm('granted');
+      }
 
       // Note: PiP permission will be requested after session starts
 
@@ -906,6 +1035,7 @@ export function TelehealthSessionContent({
               activeSpeakerId={telehealth.activeSpeakerId}
               participantAudioLevels={new Map()}
               getVideoElementById={telehealth.getVideoElementById}
+              callMode={callMode}
               overlayControls={
                 <TelehealthCallControls
                   variant="overlay"
@@ -927,6 +1057,7 @@ export function TelehealthSessionContent({
                   isChatOpen={isChatOpen}
                   chatUnreadCount={unreadCount}
                   onToggleChat={() => setIsChatOpen(v => !v)}
+                  callMode={callMode}
                   onTogglePictureInPicture={() => {
 
                     // Enable follow speaker mode
