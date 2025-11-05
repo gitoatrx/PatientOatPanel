@@ -120,9 +120,13 @@ const throttle = (fn: () => void, delay: number): ThrottledFunction => {
 
 const normalizeVideoElements = (
   container: HTMLDivElement | null,
-  opts?: { strength?: TileStrength; names?: string[] }
+  opts?: { strength?: TileStrength; names?: string[]; skipOverlays?: boolean }
 ) => {
   if (!container) return;
+  
+  // Check if this is the local container - skip overlays for local container
+  const isLocalContainer = container.id === 'vonage-local-container' || container.closest('#vonage-local-container');
+  const skipOverlays = opts?.skipOverlays || isLocalContainer;
 
   const isTiled = container.dataset.tiled === "true";
   const videos = container.querySelectorAll("video");
@@ -150,7 +154,7 @@ const normalizeVideoElements = (
     wrapper.style.display = "flex";
     wrapper.style.alignItems = "center";
     wrapper.style.justifyContent = "center";
-    wrapper.style.backgroundColor = "#111827";
+    wrapper.style.backgroundColor = "transparent";
     wrapper.style.minHeight = "0";
     wrapper.style.width = "100%";
     wrapper.style.height = "100%";
@@ -180,7 +184,13 @@ const normalizeVideoElements = (
       const avatarPlaceholder = wrapper.querySelector('.avatar-placeholder') as HTMLElement;
       const cameraOffOverlay = wrapper.querySelector('.camera-off-overlay') as HTMLElement;
       
-      if (!cameraOffOverlay) {
+      // Remove overlay if it exists (we don't want overlays on local container)
+      if (skipOverlays && cameraOffOverlay) {
+        cameraOffOverlay.remove();
+      }
+      
+      // Don't create overlay for local container
+      if (!skipOverlays && !cameraOffOverlay) {
         // A full-bleed black overlay we can toggle to fully cover any SDK UI when camera is off
         const overlay = document.createElement('div');
         overlay.className = 'camera-off-overlay';
@@ -327,14 +337,22 @@ const normalizeVideoElements = (
         }
         
         if (hasValidVideo) {
-          // Video is active - hide avatar and restore normal background
+          // Video is active - hide avatar and overlay
           avatar.style.display = 'none';
-          if (overlay) overlay.style.display = 'none';
-          wrapper.style.backgroundColor = '#111827'; // Restore original background
+          if (overlay && !skipOverlays) {
+            overlay.style.display = 'none';
+          } else if (overlay && skipOverlays) {
+            overlay.remove(); // Remove overlay completely for local container
+          }
+          wrapper.style.backgroundColor = 'transparent'; // Transparent background
         } else {
           // Video is not active - show avatar with black background
           avatar.style.display = 'flex';
-          if (overlay) overlay.style.display = 'block';
+          if (overlay && !skipOverlays) {
+            overlay.style.display = 'block';
+          } else if (overlay && skipOverlays) {
+            overlay.remove(); // Remove overlay for local container
+          }
           wrapper.style.backgroundColor = '#000000'; // Black background
         }
       };
@@ -389,7 +407,14 @@ const normalizeVideoElements = (
       // Store the checkVideoState function and listeners for cleanup
       normalizedVideos.set(video, { checkVideoState, listeners });
 
-      if (!wrapper.querySelector('.tile-signal-badge')) {
+      // Remove signal badge if it exists (especially for local container)
+      const existingBadge = wrapper.querySelector('.tile-signal-badge');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+      
+      // Don't create signal badge for local container
+      if (!skipOverlays && !wrapper.querySelector('.tile-signal-badge')) {
         const badge = document.createElement('div');
         badge.className = 'tile-signal-badge';
         badge.style.position = 'absolute';
@@ -467,6 +492,10 @@ export function TelehealthVideoPanel({
   registerPiPToggle,
   callMode = null,
 }: TelehealthVideoPanelProps) {
+  // Log callMode changes to debug UI updates
+  useEffect(() => {
+    console.log('🎨 TelehealthVideoPanel: callMode changed to:', callMode);
+  }, [callMode]);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const remoteRef = useRef<HTMLDivElement | null>(null);
   const localRef = useRef<HTMLDivElement | null>(null);
@@ -701,6 +730,14 @@ export function TelehealthVideoPanel({
     const localElement = localRef.current;
     if (!localElement) return;
 
+    // Remove any badges and overlays from local container
+    const badges = localElement.querySelectorAll('.tile-signal-badge');
+    badges.forEach(badge => badge.remove());
+    const nameBadges = localElement.querySelectorAll('.tile-name-badge');
+    nameBadges.forEach(badge => badge.remove());
+    const overlays = localElement.querySelectorAll('.camera-off-overlay');
+    overlays.forEach(overlay => overlay.remove());
+
     const participantName = localParticipantName || "You";
     const strength = signalStrength || 'good';
 
@@ -710,8 +747,14 @@ export function TelehealthVideoPanel({
       const hasVideo = localElement.querySelector("video") !== null;
       setLocalHasVideo(hasVideo);
       if (hasVideo) {
+        // Remove badges before normalizing
+        const badges = localElement.querySelectorAll('.tile-signal-badge');
+        badges.forEach(badge => badge.remove());
+        const nameBadges = localElement.querySelectorAll('.tile-name-badge');
+        nameBadges.forEach(badge => badge.remove());
         // Pass local participant name to normalizeVideoElements so avatar shows correct name
-        normalizeVideoElements(localElement, { strength, names: [participantName] });
+        // Skip overlays for local container
+        normalizeVideoElements(localElement, { strength, names: [participantName], skipOverlays: true });
       }
     };
 
@@ -886,7 +929,7 @@ export function TelehealthVideoPanel({
     remoteLayoutClass,
   );
   const localPreviewClasses = cn(
-    "relative overflow-hidden rounded-2xl border border-white/20 bg-black/60 shadow-lg",
+    "relative overflow-hidden rounded-2xl border border-white/20 bg-transparent shadow-lg",
     // Smaller camera preview on mobile for better space utilization
     isMobileOrTablet 
       ? (isFullscreen ? "h-24 w-32" : "h-20 w-28")
@@ -973,7 +1016,7 @@ export function TelehealthVideoPanel({
               isMobileOrTablet ? "top-3 left-3" : (isFullscreen ? "bottom-6 right-6" : "top-5 left-5 sm:top-auto sm:left-auto sm:bottom-5 sm:right-5")
             )}
           >
-            <div className={cn(localPreviewClasses, "relative border border-white/20 bg-black flex items-center justify-center overflow-hidden")}>
+            <div className={cn(localPreviewClasses, "relative border border-white/20 bg-transparent flex items-center justify-center overflow-hidden")}>
               {/* Clean avatar display - just avatar and name */}
               <div className="flex flex-col items-center justify-center gap-1.5 px-2">
                 {/* Profile Avatar with Initials */}
@@ -1013,7 +1056,8 @@ export function TelehealthVideoPanel({
               <div
                 ref={localRef}
                 id="vonage-local-container"
-                className="h-full w-full"
+                className="h-full w-full bg-transparent"
+                style={{ backgroundColor: 'transparent' }}
                 aria-label="Your video preview"
               />
               {!localHasVideo ? (

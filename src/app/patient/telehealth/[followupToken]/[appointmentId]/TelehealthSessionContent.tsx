@@ -352,6 +352,14 @@ export function TelehealthSessionContent({
     }
   }, [appointmentId, followupToken, chatApi, telehealth.isConnected, messagesLoaded]);
 
+  // Verify Ably connection is still active during call (only if issues detected)
+  useEffect(() => {
+    if (telehealth.isConnected && ablyService) {
+      // Check connection once, and only reattach if needed
+      ablyService.verifyConnection();
+    }
+  }, [telehealth.isConnected, ablyService]);
+
   // Cleanup Ably service on unmount
   useEffect(() => {
     return () => {
@@ -517,74 +525,42 @@ export function TelehealthSessionContent({
         appointmentId,
         clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
-          console.log('🚀 Ably: Received doctor/MOA connect event:', JSON.stringify(event, null, 2));
-          console.log('🚀 Ably: Event type:', event.event);
-          console.log('🚀 Ably: Event metadata:', event.metadata);
-          console.log('🚀 Ably: Event context:', event.context);
-
           // Extract and set call mode from event
           if (event.call_type) {
-            console.log('📞 Ably: Setting call mode from moa-calling event:', event.call_type);
             setCallMode(event.call_type);
-            // Update Vonage session with call mode
             if (telehealth.setCallMode) {
               telehealth.setCallMode(event.call_type);
             }
           } else if (event.call_mode) {
-            console.log('📞 Ably: Setting call mode from event:', event.call_mode);
             setCallMode(event.call_mode);
             if (telehealth.setCallMode) {
               telehealth.setCallMode(event.call_mode);
             }
           }
 
-          // Automatically start the session when doctor or MOA connects
-          if (event.event === 'connect') {
-            console.log('👨‍⚕️ Doctor connected - starting session');
-            console.log('👨‍⚕️ Doctor ID:', event.context.actor.id);
-            console.log('👨‍⚕️ Doctor name:', event.context.actor.name);
-          } else if (event.event === 'moa-calling') {
-            console.log('👩‍💼 MOA calling - starting session');
-            console.log('👩‍💼 MOA ID:', event.context.actor.id);
-            console.log('👩‍💼 MOA name:', event.context.actor.name);
-            console.log('👩‍💼 MOA type:', event.context.actor.type);
-            console.log('👩‍💼 Clinic ID:', event.context.actor.clinic_id);
-          }
-
-          // Disconnect from Ably since we're joining the session
-          if (ablyService) {
-            console.log('🔌 Ably: Disconnecting from Ably service...');
-            await ablyService.disconnect();
-            setAblyService(null);
-          }
+          // IMPORTANT: Keep Ably connected during the call so we can listen to call_type_switched events
+          // Do NOT disconnect - we need to continue listening for mode changes during the call
 
           // Join the Vonage session directly
-          console.log('🚀 Ably: Setting pending join and exiting waiting room...');
           setPendingJoin(true);
           setIsInWaitingRoom(false);
           setDoctorConnected(false);
         },
         onCallModeChange: (event: CallModeEvent) => {
-          console.log('📞 Ably: Received call mode event:', event);
-          console.log('📞 Ably: Call mode:', event.call_mode);
-          console.log('📞 Ably: Previous mode:', event.previous_mode);
+          console.log('🔄 CALL_MODE_CHANGED event received:', event);
+          console.log('🔄 New call_mode:', event.call_mode);
+          console.log('🔄 Previous call_mode:', event.previous_mode);
           
-          // Update call mode state IMMEDIATELY - this will hide camera controls
+          // Update call mode state IMMEDIATELY
           setCallMode(event.call_mode);
-          console.log('✅ Ably: Updated callMode state to:', event.call_mode);
-          console.log('✅ Ably: Camera controls should now be hidden if call_mode is "audio"');
+          console.log('✅ callMode state updated to:', event.call_mode);
           
-          // Update Vonage session immediately to turn off camera and stop stream
+          // Update Vonage session immediately to switch camera and stream
           if (telehealth.setCallMode) {
+            console.log('🔄 Calling telehealth.setCallMode with:', event.call_mode);
             telehealth.setCallMode(event.call_mode);
-            console.log('✅ Ably: Updated Vonage session call mode to:', event.call_mode);
-            if (event.call_mode === 'audio') {
-              console.log('✅ Ably: Audio mode - camera should be off and stream should be stopped');
-            } else {
-              console.log('✅ Ably: Video mode - camera should be on and stream should be published');
-            }
           } else {
-            console.warn('⚠️ Ably: setCallMode not available on telehealth hook');
+            console.warn('⚠️ telehealth.setCallMode is not available');
           }
         },
         onError: (error: Error) => {
@@ -592,8 +568,13 @@ export function TelehealthSessionContent({
         }
       });
 
-      await newAblyService.connect();
-      setAblyService(newAblyService);
+      try {
+        await newAblyService.connect();
+        setAblyService(newAblyService);
+      } catch (connectError) {
+        console.error('❌ Ably: Connection failed:', connectError);
+        throw connectError;
+      }
 
       // 4. Enter waiting room state
       setIsInWaitingRoom(true);
@@ -602,10 +583,8 @@ export function TelehealthSessionContent({
     } catch (error) {
       if (error instanceof Error && error.message.includes('Permission denied')) {
         setShowPermissionModal(true);
-      } else {
-        // Handle API errors or other issues
-        // You might want to show an error message to the user here
       }
+      console.error('❌ Error in onJoinWaitlist:', error);
     } finally {
       setIsJoining(false);
     }

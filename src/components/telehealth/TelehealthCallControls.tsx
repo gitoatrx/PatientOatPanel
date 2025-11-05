@@ -73,6 +73,11 @@ export function TelehealthCallControls({
   const [micMuted, setMicMuted] = useState(micMutedProp ?? false);
   const [cameraOff, setCameraOff] = useState(cameraOffProp ?? false);
 
+  // Log callMode changes to debug UI updates
+  useEffect(() => {
+    console.log('🎨 TelehealthCallControls: callMode changed to:', callMode);
+  }, [callMode]);
+
   useEffect(() => {
     if (micMutedProp !== undefined) {
       setMicMuted(micMutedProp);
