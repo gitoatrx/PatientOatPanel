@@ -62,6 +62,9 @@ export function TelehealthSessionContent({
 
   // Call mode state
   const [callMode, setCallMode] = useState<'audio' | 'video' | null>(null);
+  
+  // Track last call mode update with timestamp for precedence
+  const lastCallModeUpdateRef = React.useRef<{ ts: number; source: 'ably' | 'hydrate' } | null>(null);
 
   // Permission status tracking
   type PermState = "granted" | "denied" | "prompt" | "unsupported";
@@ -207,17 +210,32 @@ export function TelehealthSessionContent({
   });
 
   // Update call mode when appointment state changes (e.g., after API refresh)
+  // Use timestamp-based precedence to prevent stale appointment state from overriding live Ably events
   React.useEffect(() => {
     if (appointmentState) {
       const callType = appointmentState.on_call_type || appointmentState.appointment?.on_call_type;
       if (callType === 'audio' || callType === 'video') {
         // Only update if call mode is different to avoid unnecessary updates
         if (callMode !== callType) {
-          console.log("📞 State update: Setting call mode from appointment state:", callType);
-          setCallMode(callType);
-          // Always update Vonage session call mode (even if not connected yet, so it's ready for join)
-          if (telehealth.setCallMode) {
-            telehealth.setCallMode(callType);
+          // Get timestamp from appointment state (use updated_at or synced_at)
+          const hydrateTs = Date.parse(
+            appointmentState.updated_at || 
+            appointmentState.appointment?.updated_at || 
+            appointmentState.synced_at || 
+            '0'
+          );
+          
+          // Only apply if this is newer than the last Ably update
+          if (!lastCallModeUpdateRef.current || hydrateTs > lastCallModeUpdateRef.current.ts) {
+            console.log("📞 State update: Setting call mode from appointment state:", callType, "timestamp:", hydrateTs);
+            lastCallModeUpdateRef.current = { ts: hydrateTs, source: 'hydrate' };
+            setCallMode(callType);
+            // Always update Vonage session call mode (even if not connected yet, so it's ready for join)
+            if (telehealth.setCallMode) {
+              telehealth.setCallMode(callType);
+            }
+          } else {
+            console.debug('⏭️ Skipping stale appointment-mode hydrate (timestamp:', hydrateTs, 'vs', lastCallModeUpdateRef.current.ts, ')');
           }
         }
       }
@@ -392,6 +410,93 @@ export function TelehealthSessionContent({
     };
   }, [ablyService]);
 
+  // Initialize Ably service after page refresh if user is already in a call
+  useEffect(() => {
+    // Only initialize if user is connected but Ably service is not initialized
+    if (telehealth.isConnected && !ablyService) {
+      console.log('🔄 Page refresh detected: Initializing Ably service for active call');
+      
+      const initializeAbly = async () => {
+        try {
+          const newAblyService = new AblyVideoCallService({
+            appointmentId,
+            clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
+            onDoctorConnect: async (event: AblyConnectEvent) => {
+              console.log('🔄 DOCTOR_CONNECT event received (after refresh):', event);
+              console.log('🔄 Full event object:', JSON.stringify(event, null, 2));
+              console.log('🔄 Event type:', event.event);
+              console.log('🔄 Call type:', event.call_type);
+              console.log('🔄 Call mode:', event.call_mode);
+              console.log('🔄 Metadata:', event.metadata);
+              console.log('🔄 Context:', event.context);
+              
+              // Extract and set call mode from event
+              if (event.call_type) {
+                setCallMode(event.call_type);
+                if (telehealth.setCallMode) {
+                  telehealth.setCallMode(event.call_type);
+                }
+              } else if (event.call_mode) {
+                setCallMode(event.call_mode);
+                if (telehealth.setCallMode) {
+                  telehealth.setCallMode(event.call_mode);
+                }
+              }
+            },
+            onCallModeChange: (event: CallModeEvent) => {
+              console.log('🔄 CALL_MODE_CHANGED event received (after refresh):', event);
+              console.log('🔄 Full event object:', JSON.stringify(event, null, 2));
+              console.log('🔄 Event type:', event.event);
+              console.log('🔄 New call_mode:', event.call_mode);
+              console.log('🔄 Previous call_mode:', event.previous_mode);
+              console.log('🔄 Appointment ID:', event.appointment_id);
+              console.log('🔄 Patient ID:', event.patient_id);
+              console.log('🔄 Clinic ID:', event.clinic_id);
+              console.log('🔄 Timestamp:', event.timestamp);
+              
+              // Get timestamp from event (use timestamp field or parse from ISO string)
+              const eventTs = event.timestamp ? Date.parse(event.timestamp) : Date.now();
+              
+              // Only apply if this is newer than the last update (or if no previous update)
+              if (!lastCallModeUpdateRef.current || eventTs >= lastCallModeUpdateRef.current.ts) {
+                lastCallModeUpdateRef.current = { ts: eventTs, source: 'ably' };
+                
+                // Update call mode state IMMEDIATELY
+                setCallMode(event.call_mode);
+                console.log('✅ callMode state updated to:', event.call_mode, 'timestamp:', eventTs);
+                
+                // Update Vonage session with debouncing to prevent rapid-fire events
+                if (telehealth.setCallMode) {
+                  console.log('🔄 Calling telehealth.setCallMode with:', event.call_mode);
+                  // Use requestAnimationFrame for debouncing
+                  requestAnimationFrame(() => {
+                    void telehealth.setCallMode(event.call_mode);
+                  });
+                } else {
+                  console.warn('⚠️ telehealth.setCallMode is not available');
+                }
+              } else {
+                console.debug('⏭️ Skipping stale Ably event (timestamp:', eventTs, 'vs', lastCallModeUpdateRef.current.ts, ')');
+              }
+            },
+            onError: (error: Error) => {
+              console.error('❌ Ably: Error in video call service (after refresh):', error);
+            }
+          });
+
+          await newAblyService.connect();
+          setAblyService(newAblyService);
+          console.log('✅ Ably service initialized successfully after page refresh');
+        } catch (connectError) {
+          console.error('❌ Ably: Connection failed after page refresh:', connectError);
+        }
+      };
+
+      // Initialize Ably service
+      void initializeAbly();
+    }
+  }, [telehealth.isConnected, ablyService, appointmentId, telehealth.setCallMode]);
+
   // On tab switch / app blur: show PiP nudge
   useEffect(() => {
     const handleTabSwitch = async () => {
@@ -548,6 +653,14 @@ export function TelehealthSessionContent({
         appointmentId,
         clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
+          console.log('🔄 DOCTOR_CONNECT event received:', event);
+          console.log('🔄 Full event object:', JSON.stringify(event, null, 2));
+          console.log('🔄 Event type:', event.event);
+          console.log('🔄 Call type:', event.call_type);
+          console.log('🔄 Call mode:', event.call_mode);
+          console.log('🔄 Metadata:', event.metadata);
+          console.log('🔄 Context:', event.context);
+          
           // Extract and set call mode from event
           if (event.call_type) {
             setCallMode(event.call_type);
@@ -571,19 +684,38 @@ export function TelehealthSessionContent({
         },
         onCallModeChange: (event: CallModeEvent) => {
           console.log('🔄 CALL_MODE_CHANGED event received:', event);
+          console.log('🔄 Full event object:', JSON.stringify(event, null, 2));
+          console.log('🔄 Event type:', event.event);
           console.log('🔄 New call_mode:', event.call_mode);
           console.log('🔄 Previous call_mode:', event.previous_mode);
+          console.log('🔄 Appointment ID:', event.appointment_id);
+          console.log('🔄 Patient ID:', event.patient_id);
+          console.log('🔄 Clinic ID:', event.clinic_id);
+          console.log('🔄 Timestamp:', event.timestamp);
           
-          // Update call mode state IMMEDIATELY
-          setCallMode(event.call_mode);
-          console.log('✅ callMode state updated to:', event.call_mode);
+          // Get timestamp from event (use timestamp field or parse from ISO string)
+          const eventTs = event.timestamp ? Date.parse(event.timestamp) : Date.now();
           
-          // Update Vonage session immediately to switch camera and stream
-          if (telehealth.setCallMode) {
-            console.log('🔄 Calling telehealth.setCallMode with:', event.call_mode);
-            telehealth.setCallMode(event.call_mode);
+          // Only apply if this is newer than the last update (or if no previous update)
+          if (!lastCallModeUpdateRef.current || eventTs >= lastCallModeUpdateRef.current.ts) {
+            lastCallModeUpdateRef.current = { ts: eventTs, source: 'ably' };
+            
+            // Update call mode state IMMEDIATELY
+            setCallMode(event.call_mode);
+            console.log('✅ callMode state updated to:', event.call_mode, 'timestamp:', eventTs);
+            
+            // Update Vonage session with debouncing to prevent rapid-fire events
+            if (telehealth.setCallMode) {
+              console.log('🔄 Calling telehealth.setCallMode with:', event.call_mode);
+              // Use requestAnimationFrame for debouncing
+              requestAnimationFrame(() => {
+                void telehealth.setCallMode(event.call_mode);
+              });
+            } else {
+              console.warn('⚠️ telehealth.setCallMode is not available');
+            }
           } else {
-            console.warn('⚠️ telehealth.setCallMode is not available');
+            console.debug('⏭️ Skipping stale Ably event (timestamp:', eventTs, 'vs', lastCallModeUpdateRef.current.ts, ')');
           }
         },
         onError: (error: Error) => {

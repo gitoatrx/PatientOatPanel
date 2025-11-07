@@ -141,6 +141,20 @@ const normalizeVideoElements = (
     
     if (!wrapper) return;
     
+    // For local container: just size the video and bail out - skip all overlays
+    if (skipOverlays) {
+      // Remove any overlays that may have been added previously
+      const existing = wrapper.querySelectorAll('.camera-off-overlay, .avatar-placeholder, .tile-signal-badge, .tile-name-badge');
+      existing.forEach(el => el.remove());
+      
+      // Do NOT create avatar/overlays for local
+      // Just mark as normalized to prevent re-processing
+      if (!normalizedVideos.has(video)) {
+        normalizedVideos.set(video, { checkVideoState: () => {}, listeners: [] });
+      }
+      return; // Important: early return for local container
+    }
+    
     // Skip if already normalized (except for name updates or when forced)
     const existing = normalizedVideos.get(video);
     const hasNameUpdate = opts?.names?.[index] && opts.names[index] !== wrapper.dataset.participantName;
@@ -643,9 +657,74 @@ export function TelehealthVideoPanel({
       onLocalContainerReady?.(null);
     } else {
       onLocalContainerReady?.(localRef.current);
+      
+      // Belt-and-suspenders: enforce one publisher subtree in the local container
+      const root = localRef.current;
+      if (root) {
+        const pubs = root.querySelectorAll('.OT_publisher');
+        pubs.forEach((n, i) => {
+          if (i > 0) {
+            try {
+              n.parentElement?.removeChild(n);
+            } catch (e) {
+              // Ignore errors
+            }
+          }
+        });
+      }
     }
     return () => onLocalContainerReady?.(null);
   }, [onLocalContainerReady, callMode]);
+
+  // Add a short grace period after switching to video so the overlay doesn't flash while OT mounts
+  useEffect(() => {
+    if (callMode !== 'video') return;
+    
+    // Optimistic: assume video will appear in the next few ticks
+    setLocalHasVideo(true);
+    const t1 = setTimeout(() => {
+      // Observer will correct this if needed
+    }, 800);
+    
+    return () => clearTimeout(t1);
+  }, [callMode]);
+
+  // Hard block OT nodes from appearing in audio mode (panel-level guard)
+  useEffect(() => {
+    if (callMode !== 'audio') return;
+
+    const root = panelRef.current;
+    if (!root) return;
+
+    const kill = (el: Element) => { 
+      try { 
+        el.parentElement?.removeChild(el); 
+      } catch {} 
+    };
+    
+    const purge = () => {
+      // Purge any OT nodes or video elements from local container
+      const localContainer = root.querySelector('#vonage-local-container');
+      if (localContainer) {
+        localContainer.querySelectorAll('.OT_publisher, .OT_subscriber, video').forEach(kill);
+      }
+      // Also check for any OT nodes directly in the panel
+      root.querySelectorAll('.OT_publisher, .OT_subscriber').forEach((el) => {
+        // Only remove if it's inside or near the local container area
+        if (el.closest('#vonage-local-container') || el.closest('[data-role="local"]')) {
+          kill(el);
+        }
+      });
+    };
+
+    purge(); // once immediately
+
+    // Keep enforcing while in audio mode
+    const mo = new MutationObserver(() => purge());
+    mo.observe(root, { childList: true, subtree: true });
+    
+    return () => mo.disconnect();
+  }, [callMode]);
 
   useEffect(() => {
     const remoteElement = remoteRef.current;
@@ -744,53 +823,32 @@ export function TelehealthVideoPanel({
     let timeoutId: NodeJS.Timeout | null = null;
 
     const update = () => {
-      const videoElement = localElement.querySelector("video") as HTMLVideoElement | null;
-      let hasVideo = false;
-      
-      if (videoElement) {
-        // Check if video actually has active video tracks
-        if (videoElement.srcObject && videoElement.srcObject instanceof MediaStream) {
-          const videoTracks = videoElement.srcObject.getVideoTracks();
-          // Video is considered active only if there are video tracks that are enabled and live
-          hasVideo = videoTracks.length > 0 && 
-            videoTracks.some(track => 
-              track.enabled && 
-              !track.muted && 
-              track.readyState === 'live'
-            ) &&
-            !videoElement.paused &&
-            videoElement.readyState >= 2 &&
-            videoElement.videoWidth > 0 &&
-            videoElement.videoHeight > 0;
-        }
-      }
-      
+      // Make the local-video detector more tolerant during the mount window
+      const publisherRoot = localElement.querySelector('.OT_publisher, [data-ot="publisher"]') as HTMLElement | null;
+      const videoEl = localElement.querySelector('video') as HTMLVideoElement | null;
+
+      // Consider video present if OT has mounted a publisher OR any <video> exists.
+      // Do not rely on srcObject/readyState for the local tile.
+      const hasVideo = callMode === 'video' && (!!publisherRoot || !!videoEl);
+
       setLocalHasVideo(hasVideo);
+
       if (hasVideo) {
         // Remove badges before normalizing
         const badges = localElement.querySelectorAll('.tile-signal-badge');
         badges.forEach(badge => badge.remove());
         const nameBadges = localElement.querySelectorAll('.tile-name-badge');
         nameBadges.forEach(badge => badge.remove());
-        // Pass local participant name to normalizeVideoElements so avatar shows correct name
-        // Skip overlays for local container
-        normalizeVideoElements(localElement, { strength, names: [participantName], skipOverlays: true });
-      } else {
-        // If no active video, ensure container is cleared and avatar is shown
-        const existingVideos = localElement.querySelectorAll('video');
-        existingVideos.forEach(video => {
-          // Remove video elements that don't have active tracks
-          if (video.srcObject && video.srcObject instanceof MediaStream) {
-            const tracks = video.srcObject.getVideoTracks();
-            const hasActiveTracks = tracks.length > 0 && tracks.some(t => t.enabled && t.readyState === 'live');
-            if (!hasActiveTracks) {
-              video.remove();
-            }
-          } else {
-            video.remove();
-          }
+        // Keep normalization (no overlays for local)
+        normalizeVideoElements(localElement, {
+          strength: signalStrength || 'good',
+          names: [participantName],
+          skipOverlays: true,
         });
       }
+      // REMOVED: Do not delete video elements during transient switch
+      // Just set localHasVideo and let the publisher element live
+      // UI already covers the "camera off" case visually
     };
 
     // Debounced update to avoid excessive calls
@@ -800,6 +858,9 @@ export function TelehealthVideoPanel({
     };
 
     update(); // Initial update immediately
+    
+    // Recompute once shortly after switching to video mode to catch publisher mounting
+    setTimeout(update, 250);
 
     const observer = new MutationObserver(debouncedUpdate);
     observer.observe(localElement, { childList: true, subtree: true });
@@ -1001,6 +1062,35 @@ export function TelehealthVideoPanel({
     }
   }, [signalStrength, participants]);
 
+  // Compute "do we have a local publisher/video?" from the localRef, not document.querySelector
+  // Only check the actual local container DOM - do not rely on participant props or state
+  const localEl = localRef.current;
+  const hasPublisherRoot = !!localEl?.querySelector('.OT_publisher, [data-ot="publisher"]');
+  const hasAnyVideoEl = !!localEl?.querySelector('video');
+  
+  // "we should show live preview" if we're in video mode and have publisher/video in the container
+  const localPreviewActive = callMode === 'video' && (hasPublisherRoot || hasAnyVideoEl);
+
+  // Debug logging with local tile audit
+  if (process.env.NODE_ENV === 'development') {
+    const localTileAudit = {
+      mode: callMode,
+      hasPub: !!document.querySelector('#vonage-local-container .OT_publisher'),
+      hasSub: !!document.querySelector('#vonage-local-container .OT_subscriber'),
+      hasVid: !!document.querySelector('#vonage-local-container video'),
+    };
+    
+    console.log('localPreviewActive', {
+      callMode,
+      hasVideo: localHasVideo,
+      publisherRoot: hasPublisherRoot,
+      videoEl: hasAnyVideoEl,
+      localPreviewActive,
+    });
+    
+    console.log('local tile audit', localTileAudit);
+  }
+
   return (
     <div ref={panelRef} className={cn(panelClasses, "h-full")}>
         
@@ -1089,13 +1179,14 @@ export function TelehealthVideoPanel({
           >
             <div className={cn(localPreviewClasses, "relative border border-gray-200 focus:border-primary focus:ring-0 focus:outline-none")}>
               <div
-                ref={localRef}
                 id="vonage-local-container"
+                data-role="local"
+                ref={localRef}
                 className="h-full w-full bg-transparent"
                 style={{ backgroundColor: 'transparent' }}
                 aria-label="Your video preview"
               />
-              {!localHasVideo ? (
+              {!localPreviewActive ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
                   {/* Profile Avatar with Initials */}
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
