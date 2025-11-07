@@ -1162,7 +1162,7 @@ export function TelehealthVideoPanel({
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    display: ((callMode === 'audio' as any) || !localHasVideo) ? 'flex' : 'none',
+                     display: !localHasVideo ? 'flex' : 'none',
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: '#000',
@@ -1197,7 +1197,7 @@ export function TelehealthVideoPanel({
                   <span style={{ color: '#94a3b8', fontSize: 12 }}>Audio Call</span>
                 </div>
               </div>
-              {!localPreviewActive && (callMode !== 'audio' as any) && callMode !== null ? (
+               {!localPreviewActive && callMode === 'video' ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
                   {/* Profile Avatar with Initials */}
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
