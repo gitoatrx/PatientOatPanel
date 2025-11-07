@@ -135,6 +135,8 @@ interface UseVonageSessionResult {
   audioLevel: number;
   audioDevices: Array<{ deviceId?: string; label?: string }>;
   currentAudioDevice: string | null;
+  otReady: boolean;
+  ensureOT: () => Promise<any>;
   chatMessages: ChatMessage[];
   sendChatMessage: (content: string, type?: 'text' | 'image' | 'file', attachment?: any) => void;
   typingUsers: TypingUser[];
@@ -250,38 +252,72 @@ const isApiError = (value: unknown): value is ApiError => {
   return "code" in candidate && "message" in candidate && "type" in candidate;
 };
 
-const loadVonageScript = () => {
+// Load OpenTok SDK and return the OT object
+const loadOpenTokSDK = (): Promise<any> => {
   if (typeof window === "undefined") {
-    return Promise.reject(new Error("Vonage script can only be loaded in the browser"));
+    return Promise.reject(new Error("OpenTok SDK can only be loaded in the browser"));
   }
 
+  // If already loaded, return it immediately
   if (window.OT) {
-    return Promise.resolve();
+    return Promise.resolve(window.OT);
   }
 
-  if (!vonageScriptPromise) {
-    vonageScriptPromise = new Promise<void>((resolve, reject) => {
-      const existing = document.querySelector<HTMLScriptElement>(
-        `script[src="${VONAGE_SCRIPT_URL}"]`,
-      );
-      if (existing) {
-        existing.addEventListener("load", () => resolve(), { once: true });
-        existing.addEventListener("error", () => reject(new Error("Failed to load Vonage script")), {
-          once: true,
-        });
-        return;
+  // If already loading, return the existing promise
+  if (vonageScriptPromise) {
+    return vonageScriptPromise.then(() => {
+      if (window.OT) {
+        return window.OT;
       }
-
-      const script = document.createElement("script");
-      script.src = VONAGE_SCRIPT_URL;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load Vonage script"));
-      document.head.appendChild(script);
+      throw new Error('OpenTok loaded but window.OT missing');
     });
   }
 
-  return vonageScriptPromise;
+  // Start loading
+  vonageScriptPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${VONAGE_SCRIPT_URL}"]`,
+    );
+    if (existing) {
+      existing.addEventListener("load", () => {
+        if (window.OT) {
+          resolve();
+        } else {
+          reject(new Error('OpenTok loaded but window.OT missing'));
+        }
+      }, { once: true });
+      existing.addEventListener("error", () => reject(new Error("Failed to load OpenTok SDK")), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = VONAGE_SCRIPT_URL;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.onload = () => {
+      if (window.OT) {
+        resolve();
+      } else {
+        reject(new Error('OpenTok loaded but window.OT missing'));
+      }
+    };
+    script.onerror = () => reject(new Error("Failed to load OpenTok SDK"));
+    document.head.appendChild(script);
+  });
+
+  return vonageScriptPromise.then(() => {
+    if (window.OT) {
+      return window.OT;
+    }
+    throw new Error('OpenTok loaded but window.OT missing');
+  });
+};
+
+// Legacy function name for compatibility
+const loadVonageScript = () => {
+  return loadOpenTokSDK().then(() => undefined);
 };
 
 const listVideoInputs = async (OT: any) => {
@@ -459,6 +495,7 @@ export function useVonageSession({
   const [participantCount, setParticipantCount] = useState(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(initialCallMode !== 'audio');
+  const [currentCallMode, setCurrentCallMode] = useState<'audio' | 'video' | null>(initialCallMode || null);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
@@ -475,79 +512,183 @@ export function useVonageSession({
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const [pendingPiPRequest, setPendingPiPRequest] = useState(false);
 
-  // Ensure publisher is mounted exactly once into the fixed local container
-  // Mount the publisher into the stable container with fixed ID
-  const ensurePublisher = useCallback(() => {
-    if (didInitPublisher.current) {
-      // Verify publisher is still in the correct container
+  // OpenTok SDK readiness state
+  const [otReady, setOtReady] = useState(false);
+
+  // Promise ref to track in-flight publisher initialization
+  const ensurePubPromiseRef = useRef<Promise<VonagePublisher> | null>(null);
+
+  // Ensure OpenTok SDK is loaded and ready
+  const ensureOT = useCallback(async () => {
+    const OT = await loadOpenTokSDK();
+    if (!otReady) {
+      setOtReady(true);
+    }
+    return OT;
+  }, [otReady]);
+
+  // Wait for local container to be mounted by TelehealthVideoPanel
+  const waitForLocalContainer = useCallback((timeoutMs = 3000): Promise<HTMLElement> => {
+    return new Promise((resolve, reject) => {
+      const elNow = document.getElementById('vonage-local-container') as HTMLElement | null;
+      if (elNow) {
+        return resolve(elNow);
+      }
+
+      const start = Date.now();
+      const obs = new MutationObserver(() => {
+        const el = document.getElementById('vonage-local-container') as HTMLElement | null;
+        if (el) {
+          obs.disconnect();
+          resolve(el);
+        } else if (Date.now() - start > timeoutMs) {
+          obs.disconnect();
+          reject(new Error('Local container not mounted within timeout'));
+        }
+      });
+
+      obs.observe(document.body, { childList: true, subtree: true });
+
+      // Safety timeout
+      setTimeout(() => {
+        obs.disconnect();
+        reject(new Error('Local container timeout'));
+      }, timeoutMs);
+    });
+  }, []);
+
+  // Ensure publisher is mounted exactly once into the provided container
+  // Now async and container-aware - accepts the target container element
+  const ensurePublisher = useCallback(async (target: HTMLElement): Promise<VonagePublisher> => {
+    // If publisher already exists and is in the correct container, return it
+    if (publisherRef.current) {
       const pub = publisherRef.current;
-      if (pub) {
-        const pubEl = (pub as any)?.element as HTMLElement | undefined;
-        const parentId = pubEl?.parentElement?.id;
-        if (parentId !== 'vonage-local-container') {
-          console.error('⚠️ Publisher is not under local container, re-mounting', { parentId });
+      const pubEl = (pub as any)?.element as HTMLElement | undefined;
+      
+      // Check if publisher is already mounted in the target container
+      if (pubEl && target.contains(pubEl)) {
+        return pub;
+      }
+      
+      // Publisher exists but is in wrong location
+      // CRITICAL: If publisher is already published (has stream), don't destroy it!
+      // Just move the element or keep it - destroying would disconnect the user
+      if (pub.stream) {
+        // Publisher is published and working - don't destroy it!
+        // Try to move the element to the target container if possible
+        if (pubEl && pubEl.parentElement && pubEl.parentElement !== target) {
           try {
-            pub.destroy();
+            target.appendChild(pubEl);
+          } catch (e) {
+            // If move fails, that's okay - publisher is still working
+            console.warn('Could not move publisher element, but publisher is still published');
+          }
+        }
+        return pub; // Return existing published publisher
+      }
+      
+      // Publisher exists but is not published - safe to destroy and recreate
+      try {
+        pub.destroy();
+      } catch (e) {
+        // Ignore errors
+      }
+      publisherRef.current = null;
+      didInitPublisher.current = false;
+    }
+
+    // If there's already a promise in flight, return it
+    if (ensurePubPromiseRef.current) {
+      return ensurePubPromiseRef.current;
+    }
+
+    // Create new promise for publisher initialization
+    ensurePubPromiseRef.current = (async (): Promise<VonagePublisher> => {
+      // FIRST: Ensure OpenTok SDK is loaded
+      const OT = await ensureOT();
+      
+      // Use the provided target container (don't look up by ID)
+      const container = target;
+
+      // Clean any stray OT nodes once (dev hot-reload guard)
+      Array.from(container.children).forEach((n: any) => {
+        if (n?.classList?.contains('OT_publisher') || n?.dataset?.ot === 'publisher') {
+          try {
+            n.remove();
           } catch (e) {
             // Ignore errors
           }
-          publisherRef.current = null;
-          didInitPublisher.current = false;
-        } else {
-          return; // Publisher exists and is in correct place
         }
-      }
-    }
+      });
 
-    const container = document.getElementById('vonage-local-container') as HTMLElement | null;
-    if (!container) {
-      console.warn('⚠️ No local container to mount publisher yet');
-      return;
-    }
+      didInitPublisher.current = true;
 
-    // Clean any stray OT nodes once (dev hot-reload guard)
-    Array.from(container.children).forEach((n: any) => {
-      if (n?.classList?.contains('OT_publisher') || n?.dataset?.ot === 'publisher') {
-        try {
-          n.remove();
-        } catch (e) {
-          // Ignore errors
+      // Initialize publisher and wait for it to be ready
+      return new Promise<VonagePublisher>((resolve, reject) => {
+        const pub = OT.initPublisher(container, {
+          insertMode: 'append',
+          width: '100%',
+          height: '100%',
+          // Disable default Vonage UI controls
+          showControls: false,
+          controls: false,
+          style: {
+            buttonDisplayMode: "off",
+            nameDisplayMode: "off",
+            audioLevelDisplayMode: "off",
+            archiveStatusDisplayMode: "off",
+            backgroundImageURI: "off"
+          },
+        }, (err?: Error) => {
+          if (err) {
+            console.error('❌ initPublisher error', err);
+            didInitPublisher.current = false;
+            ensurePubPromiseRef.current = null;
+            reject(err);
+            return;
+          }
+        });
+
+        // Resolve when publisher element is mounted
+        const tryResolve = () => {
+          const el = (pub as any)?.element as HTMLElement | undefined;
+          if (el && el.parentElement) {
+            publisherRef.current = pub;
+            resolve(pub);
+          }
+        };
+
+        // Listen for publisher events
+        if (pub.on) {
+          pub.on('videoElementCreated', tryResolve);
+          pub.on('streamCreated', tryResolve);
         }
+
+        // Fallback: try to resolve immediately if element already exists
+        setTimeout(tryResolve, 0);
+        
+        // Safety timeout
+        setTimeout(() => {
+          const el = (pub as any)?.element as HTMLElement | undefined;
+          if (el && el.parentElement) {
+            publisherRef.current = pub;
+            resolve(pub);
+          } else {
+            // If still not ready, resolve anyway (publisher might be ready but element not yet)
+            publisherRef.current = pub;
+            resolve(pub);
+          }
+        }, 1000);
+      });
+    })().finally(() => {
+      // If it failed, allow retry
+      if (!publisherRef.current) {
+        ensurePubPromiseRef.current = null;
       }
     });
 
-    const OT = window.OT;
-    if (!OT) {
-      console.warn('⚠️ OpenTok SDK not loaded yet');
-      return;
-    }
-
-    didInitPublisher.current = true;
-
-    const pub = OT.initPublisher(container, {
-      insertMode: 'append',
-      width: '100%',
-      height: '100%',
-      // Disable default Vonage UI controls
-      showControls: false,
-      controls: false,
-      style: {
-        buttonDisplayMode: "off",
-        nameDisplayMode: "off",
-        audioLevelDisplayMode: "off",
-        archiveStatusDisplayMode: "off",
-        backgroundImageURI: "off"
-      },
-    }, (err?: Error) => {
-      if (err) {
-        console.error('❌ initPublisher error', err);
-        didInitPublisher.current = false;
-      }
-    });
-
-    publisherRef.current = pub;
-    
-  }, []);
+    return ensurePubPromiseRef.current;
+  }, [waitForLocalContainer]);
 
   // One-time publisher initialization - call when container is ready
   useEffect(() => {
@@ -556,8 +697,8 @@ export function useVonageSession({
     
     didInitRef.current = true;
     
-    // Try to ensure publisher is mounted (will wait for container if not ready)
-    ensurePublisher();
+    // Publisher initialization is now handled by the effect when switching to video mode
+    // No need to initialize here - the effect will handle it when localContainer is available
 
     return () => {
       // Only reset on full unmount
@@ -928,6 +1069,7 @@ export function useVonageSession({
     localContainerRef.current = localContainer;
   }, [localContainer]);
 
+
   // Sync callMode prop to callModeRef when it changes
   useEffect(() => {
     if (initialCallMode !== undefined && initialCallMode !== callModeRef.current) {
@@ -1230,16 +1372,8 @@ export function useVonageSession({
         return;
       }
 
-      await loadVonageScript();
-      const OT = window.OT;
-      if (!OT) {
-        setError('Unable to load the video service. Please refresh the page and try again.');
-        setStatusMessage('Service unavailable');
-        cleanup({ message: 'Video service failed to load' });
-        setIsBusy(false);
-        isJoiningRef.current = false;
-        return;
-      }
+      // FIRST: Ensure OpenTok SDK is loaded
+      const OT = await ensureOT();
 
       // Debug: Log the Vonage SDK version and API endpoints
 
@@ -1549,7 +1683,8 @@ export function useVonageSession({
                   )
                 : [...prev, newParticipant];
 
-              setParticipantCount(nextParticipants.length + 1);
+              // Count should be the actual length of participants array (includes both local and remote)
+              setParticipantCount(nextParticipants.length);
               return nextParticipants;
             });
 
@@ -1588,7 +1723,8 @@ export function useVonageSession({
         if (connectionId) {
           setParticipants((prev) => {
             const updated = prev.filter((participant) => participant.connectionId !== connectionId);
-            setParticipantCount(updated.length + 1);
+            // Count should be the actual length of participants array
+            setParticipantCount(updated.length);
             return updated;
           });
         }
@@ -1919,7 +2055,10 @@ export function useVonageSession({
       // For audio mode, create publisher in dummy container if needed
       if (!isAudioMode) {
         // Video mode: ensure publisher is mounted in the fixed container
-        ensurePublisher();
+        const container = localContainerRef.current || localContainer;
+        if (container) {
+          await ensurePublisher(container).catch(() => {});
+        }
         publisher = publisherRef.current;
       } else {
         // Audio mode: create publisher in dummy container if it doesn't exist
@@ -2105,7 +2244,29 @@ export function useVonageSession({
 
         setStatusMessage("Connected to session");
         setCallStatus(CALL_STATUSES.CONNECTED);
-        setParticipantCount(1); // We are connected
+        
+        // Add local participant to the array when session connects
+        const localConnectionId = session.connection?.connectionId;
+        if (localConnectionId) {
+          const localParticipant: Participant = {
+            connectionId: localConnectionId,
+            streamId: undefined, // Will be set when publisher is published
+            hasVideo: !isAudioMode && !isCameraOff,
+            hasAudio: !isMicMuted,
+            isLocal: true
+          };
+          
+          setParticipants(prev => {
+            const existing = prev.find(p => p.connectionId === localConnectionId);
+            if (existing) {
+              return prev; // Already exists
+            } else {
+              const updated = [...prev, localParticipant];
+              setParticipantCount(updated.length);
+              return updated;
+            }
+          });
+        }
 
         // Check for existing participants in the session
 
@@ -2153,7 +2314,7 @@ export function useVonageSession({
             return;
           }
 
-          // Add local participant to tracking
+          // Update local participant with stream ID (it was already added when session connected)
           const localConnectionId = session.connection?.connectionId;
           if (localConnectionId) {
             const localParticipant: Participant = {
@@ -2167,13 +2328,17 @@ export function useVonageSession({
             setParticipants(prev => {
               const existing = prev.find(p => p.connectionId === localConnectionId);
               if (existing) {
+                // Update existing local participant with stream ID
                 return prev.map(p => 
                   p.connectionId === localConnectionId 
                     ? { ...p, ...localParticipant }
                     : p
                 );
               } else {
-                return [...prev, localParticipant];
+                // If for some reason local participant wasn't added, add it now
+                const updated = [...prev, localParticipant];
+                setParticipantCount(updated.length);
+                return updated;
               }
             });
           }
@@ -3044,6 +3209,350 @@ export function useVonageSession({
     });
   }, [localContainer]);
 
+  // Ensure publisher exists in the right container (idempotent)
+  const ensurePublisherIn = useCallback(async (targetEl: HTMLElement): Promise<VonagePublisher> => {
+    const OT = await ensureOT();
+    
+    // If publisher already exists and is in the target container, return it
+    if (publisherRef.current) {
+      const pub = publisherRef.current;
+      const pubEl = (pub as any)?.element as HTMLElement | undefined;
+      if (pubEl && targetEl.contains(pubEl)) {
+        return pub;
+      }
+    }
+
+    // Otherwise, use the existing ensurePublisher which will create it
+    return await ensurePublisher(targetEl);
+  }, [ensureOT, ensurePublisher]);
+
+  // If the publisher was ever audio-only (videoSource:null), attach a real camera
+  const ensureCameraTrack = useCallback(async (pub: VonagePublisher): Promise<void> => {
+    // Check if publisher already has active video tracks
+    const stream = pub.stream;
+    if (stream) {
+      const videoTracks = (stream as any).getVideoTracks?.() || [];
+      const hasActiveVideoTrack = videoTracks.some((track: MediaStreamTrack) => 
+        track.enabled && track.readyState === 'live'
+      );
+      
+      if (hasActiveVideoTrack && (stream as any).hasVideo) {
+        // Already has active video track - ensure it's enabled
+        videoTracks.forEach((track: MediaStreamTrack) => {
+          if (!track.enabled) track.enabled = true;
+        });
+        return;
+      }
+    }
+
+    // First, request camera access to ensure we have permission
+    let cameraStream: MediaStream | null = null;
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      // We got the stream, but we'll use setVideoSource instead of attaching directly
+      // Stop the tracks we just got - we'll use Vonage's setVideoSource
+      cameraStream.getTracks().forEach(track => track.stop());
+    } catch (error) {
+      console.warn('Could not get camera access, will try setVideoSource anyway:', error);
+    }
+
+    // Attach a camera device if API is available
+    const maybeSetSource = (pub as any).setVideoSource;
+    if (typeof maybeSetSource === 'function') {
+      const OT = await ensureOT();
+      const devices = await new Promise<any[]>((resolve) => {
+        OT.getDevices((err: Error | null, devices: any[]) => {
+          if (err) {
+            resolve([]);
+          } else {
+            resolve(Array.isArray(devices) ? devices : []);
+          }
+        });
+      });
+      
+      const cam = devices.find((d: any) => d.kind === 'videoInput' || d.kind === 'videoinput');
+      if (cam && cam.deviceId) {
+        await new Promise<void>((resolve, reject) => {
+          maybeSetSource(cam.deviceId, (err?: Error) => {
+            if (err) {
+              console.error('Failed to set video source:', err);
+              reject(err);
+            } else {
+              // Wait for the video track to be ready and enabled
+              const checkVideoTrack = () => {
+                const stream = pub.stream;
+                if (stream) {
+                  const videoTracks = (stream as any).getVideoTracks?.() || [];
+                  if (videoTracks.length > 0) {
+                    // Enable the video track
+                    videoTracks.forEach((track: MediaStreamTrack) => {
+                      track.enabled = true;
+                    });
+                    // Verify track is live
+                    const hasLiveTrack = videoTracks.some((t: MediaStreamTrack) => t.readyState === 'live');
+                    if (hasLiveTrack) {
+                      resolve();
+                      return;
+                    }
+                  }
+                }
+                // If not ready yet, check again
+                setTimeout(checkVideoTrack, 100);
+              };
+              
+              // Start checking after a short delay
+              setTimeout(checkVideoTrack, 200);
+              
+              // Timeout after 3 seconds
+              setTimeout(() => {
+                const stream = pub.stream;
+                if (stream) {
+                  const videoTracks = (stream as any).getVideoTracks?.() || [];
+                  if (videoTracks.length > 0) {
+                    videoTracks.forEach((track: MediaStreamTrack) => {
+                      track.enabled = true;
+                    });
+                  }
+                }
+                resolve(); // Resolve anyway - video might still work
+              }, 3000);
+            }
+          });
+        });
+      } else {
+        // No camera device found - this is a problem
+        throw new Error('No camera device found');
+      }
+    } else {
+      // setVideoSource not available - this is a problem
+      throw new Error('setVideoSource not available on publisher');
+    }
+  }, [ensureOT]);
+
+  // (Re)publish if needed, then ensure the video track is enabled
+  const ensurePublishedForVideo = useCallback(async (targetEl: HTMLElement): Promise<void> => {
+    const session = sessionRef.current;
+    if (!session || !session.connection) {
+      throw new Error('Session not connected');
+    }
+
+    const pub = await ensurePublisherIn(targetEl);
+    
+    // If publisher already has a stream (is published), enable video on it
+    if (pub.stream) {
+      // Publisher is already published - ensure camera track is attached FIRST
+      try {
+        await ensureCameraTrack(pub);
+      } catch (error) {
+        console.error('Failed to ensure camera track:', error);
+        // Don't return - try to enable video anyway
+      }
+      
+      // Enable video publishing - this tells Vonage to publish video
+      pub.publishVideo(true);
+      
+      // Also ensure video tracks are enabled in the stream
+      const stream = pub.stream;
+      if (stream) {
+        const videoTracks = (stream as any).getVideoTracks?.() || [];
+        if (videoTracks.length > 0) {
+          videoTracks.forEach((track: MediaStreamTrack) => {
+            track.enabled = true;
+          });
+        }
+      }
+      
+      // Show the publisher element if it was hidden
+      const pubEl = (pub as any)?.element as HTMLElement | undefined;
+      if (pubEl && pubEl.style) {
+        pubEl.style.display = '';
+      }
+      
+      // Update state to reflect video is on
+      setIsCameraOff(false);
+      setIsVideoEnabled(true);
+      setLocalVideoVisibility(true);
+      
+      // Wait a moment for video to start, then verify and update participant state
+      setTimeout(() => {
+        const stream = pub.stream;
+        if (stream) {
+          const videoTracks = (stream as any).getVideoTracks?.() || [];
+          const hasVideo = (stream as any).hasVideo || videoTracks.some((t: MediaStreamTrack) => t.enabled && t.readyState === 'live');
+          
+          if (hasVideo) {
+            // Video is active - update participant state
+            const session = sessionRef.current;
+            if (session?.connection?.connectionId) {
+              setParticipants((prev) => {
+                return prev.map((participant) => 
+                  participant.isLocal && participant.connectionId === session.connection?.connectionId
+                    ? { ...participant, hasVideo: true }
+                    : participant
+                );
+              });
+            }
+          } else {
+            console.warn('⚠️ Video not active after enabling - trying to force enable');
+            // Try one more time to enable video
+            pub.publishVideo(true);
+            videoTracks.forEach((track: MediaStreamTrack) => {
+              track.enabled = true;
+            });
+          }
+        }
+      }, 1000);
+      
+      return; // Exit early - publisher is already working
+    }
+
+    // Publisher exists but not published yet - publish it
+    await ensureCameraTrack(pub);
+    
+    // Publish to session
+    await new Promise<void>((resolve, reject) => {
+      session.publish(pub, (err?: Error) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    // Finally, ensure the video track is enabled
+    pub.publishVideo(true);
+    
+    // Update state
+    setIsCameraOff(false);
+    setIsVideoEnabled(true);
+    setLocalVideoVisibility(true);
+  }, [ensurePublisherIn, ensureCameraTrack, setIsCameraOff, setIsVideoEnabled, setLocalVideoVisibility, setParticipants]);
+
+  // When user switches to video, and the local container is finally available,
+  // ensure OT is loaded, create/mount publisher once, and publish video.
+  useEffect(() => {
+    if (currentCallMode !== 'video') return;
+    if (!localContainer) return;
+    if (!isConnected) return; // Wait for session to be connected
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        console.log('[switch→video]', {
+          hasLocalContainer: !!localContainer,
+          otReady,
+          isConnected,
+        });
+
+        await ensureOT();
+        if (cancelled) return;
+
+        await ensurePublishedForVideo(localContainer);
+        if (cancelled) return;
+
+        // Show publisher element (undo audio mode hide)
+        const pub = publisherRef.current;
+        if (pub) {
+          const pubEl = (pub as any)?.element as HTMLElement | undefined;
+          if (pubEl && pubEl.style) {
+            pubEl.style.display = '';
+          }
+        }
+
+        // Convergence check: repair edge cases where only preview video exists
+        queueMicrotask(() => {
+          if (cancelled) return;
+          
+          const root = localContainerRef.current || localContainer;
+          if (!root) return;
+
+          const hasPub =
+            !!root.querySelector(".OT_publisher") ||
+            !!root.querySelector('[data-ot="publisher"]');
+
+          const hasOnlyPreview =
+            !hasPub && !!root.querySelector("video");
+
+          if (hasOnlyPreview) {
+            // Last-resort repair: destroy and recreate the publisher into this container
+            try {
+              publisherRef.current?.destroy();
+            } catch {}
+            publisherRef.current = null;
+            didInitPublisher.current = false;
+            ensurePubPromiseRef.current = null;
+
+            void (async () => {
+              try {
+                const repaired = await ensurePublisher(root);
+                repaired.publishVideo(true);
+                setLocalVideoVisibility(true);
+                setIsCameraOff(false);
+                setIsVideoEnabled(true);
+
+                const session = sessionRef.current;
+                // Check for stream instead of session reference - stream is the reliable indicator
+                if (session && repaired && !repaired.stream) {
+                  session.publish(repaired, (e?: Error) => {
+                    if (e) {
+                      console.error("❌ Error publishing after repair:", e);
+                    } else {
+                      // Verify publisher has a stream after publishing
+                      setTimeout(() => {
+                        if (!repaired.stream) {
+                          console.warn('⚠️ Publisher still has no stream after publish callback');
+                        }
+                      }, 500);
+                    }
+                  });
+                }
+              } catch (e) {
+                console.error("❌ Repair path failed:", e);
+              }
+            })();
+          }
+        });
+
+        // Audit: check final state
+        const session = sessionRef.current;
+        const root = localContainerRef.current || localContainer;
+        const hasPub =
+          !!root?.querySelector(".OT_publisher") ||
+          !!root?.querySelector('[data-ot="publisher"]');
+        const hasSub =
+          !!root?.querySelector(".OT_subscriber") ||
+          !!root?.querySelector('[data-ot="subscriber"]');
+        const hasVid = !!root?.querySelector("video");
+        
+        console.log('[audit→video]', {
+          connected: !!session?.connection,
+          pubElInLocal: !!localContainer?.contains((pub as any)?.element),
+          hasStream: !!pub?.stream,
+          hasVideo: !!(pub as any)?.stream?.hasVideo,
+          isPublished: !!(pub as any)?.session,
+          hasPub,
+          hasSub,
+          hasVid,
+        });
+
+        // Update state
+        setIsCameraOff(false);
+        setIsVideoEnabled(true);
+        setLocalVideoVisibility(true);
+      } catch (e) {
+        console.error('switch→video: publish failed', e);
+        setIsCameraOff(true);
+        setIsVideoEnabled(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCallMode, localContainer, otReady, isConnected, ensureOT, ensurePublishedForVideo, setLocalVideoVisibility]);
+
   // Set call mode and update video publishing
   // Idempotent with guards to prevent redundant calls and stale overwrites
   const setCallMode = useCallback(async (mode: 'audio' | 'video') => {
@@ -3072,214 +3581,173 @@ export function useVonageSession({
       }
 
       callModeRef.current = mode;
-
-      // Ensure publisher exists and is in the correct container
-      ensurePublisher();
-      const publisher = publisherRef.current;
+      setCurrentCallMode(mode); // Update state to trigger UI updates
       
-      if (!publisher) {
-        // Try to ensure it exists
-        ensurePublisher();
-        const retryPublisher = publisherRef.current;
-        if (!retryPublisher) {
-          console.error('❌ Publisher still not available after ensurePublisher');
-          setIsCameraOff(mode === 'audio');
-          setIsVideoEnabled(mode === 'video');
-          return;
-        }
-      }
-
-      // Make sure publisher is mounted under the correct container
-      if (!publisher) {
-        console.error('❌ Publisher is null after ensurePublisher');
+      const session = sessionRef.current;
+      if (!session || !isConnected) {
+        // Not joined yet - just update state flags
         setIsCameraOff(mode === 'audio');
         setIsVideoEnabled(mode === 'video');
         return;
       }
-      
-      const pubEl = (publisher as any)?.element as HTMLElement | undefined;
-      const parentId = pubEl?.parentElement?.id;
-      if (parentId !== 'vonage-local-container') {
-        console.error('❌ Publisher is not under local container, re-mounting', { parentId });
-        // Destroy and re-create in the right place (last resort)
-        try {
-          publisher.destroy();
-        } catch (e) {
-          // Ignore errors
-        }
-        publisherRef.current = null;
-        didInitPublisher.current = false;
-        ensurePublisher();
-        const newPublisher = publisherRef.current;
-        if (!newPublisher) {
-          console.error('❌ Failed to re-create publisher in correct container');
-          setIsCameraOff(mode === 'audio');
-          setIsVideoEnabled(mode === 'video');
-          return;
-        }
-        // Use the new publisher
-        const updatedPublisher: VonagePublisher = newPublisher;
-        
-        // Runtime check after switch
-        const pubElAfter = (updatedPublisher as any)?.element as HTMLElement | undefined;
-        
-        // Continue with mode switch using new publisher
-        if (mode === 'audio') {
-          updatedPublisher.publishVideo(false);
-          setLocalVideoVisibility(false);
-          setIsCameraOff(true);
-          setIsVideoEnabled(false);
-          return;
-        } else {
-          updatedPublisher.publishVideo(true);
-          setLocalVideoVisibility(true);
-          setIsCameraOff(false);
-          setIsVideoEnabled(true);
-          return;
-        }
-      }
-      
-      // Runtime check after switch
-
-      // Check current video state to avoid redundant publishVideo calls
-      if (!publisher) {
-        console.error('❌ Publisher is null after verification');
-        setIsCameraOff(mode === 'audio');
-        setIsVideoEnabled(mode === 'video');
-        return;
-      }
-      
-      const publisherStream = publisher.stream;
-      const hasVideo = !!(publisherStream && (publisherStream as any).hasVideo);
 
       if (mode === 'audio') {
-        // Only toggle if actually on
-        if (hasVideo) {
+        // Audio mode: unpublish and destroy publisher, but DO NOT disconnect session
+        const pub = publisherRef.current;
+        if (pub) {
           try {
-            // Call publishVideo (OpenTok SDK returns void, not a Promise)
-            publisher.publishVideo(false);
-            setLocalVideoVisibility(false);
-            setIsCameraOff(true);
-            setIsVideoEnabled(false);
-            
-            // Hide publisher element visually (don't destroy, just hide)
-            const pubEl = (publisher as any)?.element as HTMLElement | undefined;
-            if (pubEl) {
-              pubEl.style.display = 'none';
-            }
-            
-            // Update local participant's hasVideo property
-            const session = sessionRef.current;
-            if (session?.connection?.connectionId) {
-              setParticipants((prev) => {
-                return prev.map((participant) => 
-                  participant.isLocal && participant.connectionId === session.connection?.connectionId
-                    ? { ...participant, hasVideo: false }
-                    : participant
-                );
-              });
-            }
-          } catch (error) {
-            console.warn('⚠️ useVonageSession: Error disabling video publishing:', error);
-            setIsCameraOff(true);
-            setIsVideoEnabled(false);
-          }
-        } else {
-          // Already in audio mode, just ensure state is correct
-          setLocalVideoVisibility(false);
-          setIsCameraOff(true);
-          setIsVideoEnabled(false);
-          
-          // Hide publisher element visually
-          const pubEl = (publisher as any)?.element as HTMLElement | undefined;
-          if (pubEl) {
-            pubEl.style.display = 'none';
-          }
-        }
-      } else {
-        // Video mode: only toggle if actually off
-        if (!hasVideo) {
-          try {
-            // Check if publisher already has video stream
-            if (!hasVideo) {
-              // Publisher doesn't have video, need to get camera access
+            // Unpublish from session first (but stay connected)
+            if ((pub as any).session) {
               try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                const videoTracks = stream.getVideoTracks();
-                
-                if (videoTracks.length > 0) {
-                  // Ensure all video tracks are enabled (don't stop existing tracks)
-                  videoTracks.forEach(track => {
-                    track.enabled = true;
-                  });
-                  
-                  // Set video source if supported
-                  if (publisher.setVideoSource && typeof publisher.setVideoSource === 'function') {
-                    try {
-                      const deviceId = videoTracks[0].getSettings().deviceId;
-                      if (deviceId) {
-                        await publisher.setVideoSource(deviceId);
-                      }
-                    } catch (setSourceError: any) {
-                      const errorCode = setSourceError?.code;
-                      const errorName = setSourceError?.name;
-                      if (errorCode !== 1040 && errorName !== 'OT_SET_VIDEO_SOURCE_FAILURE') {
-                        console.warn('⚠️ useVonageSession: Could not set video source:', setSourceError);
-                      }
-                    }
-                  }
-                }
-              } catch (permError) {
-                console.error('❌ useVonageSession: Error requesting camera permissions:', permError);
-                setIsCameraOff(true);
-                setIsVideoEnabled(false);
-                return;
+                session.unpublish(pub);
+              } catch (e) {
+                // Ignore unpublish errors
               }
             }
             
-            // Show publisher element visually (unhide)
-            const pubEl = (publisher as any)?.element as HTMLElement | undefined;
-            if (pubEl) {
-              pubEl.style.display = '';
+            // Destroy the publisher
+            try {
+              pub.destroy();
+            } catch (e) {
+              // Ignore destroy errors
             }
-            
-            // Enable video publishing (OpenTok SDK returns void, not a Promise)
-            if (publisher) {
-              publisher.publishVideo(true);
-              setLocalVideoVisibility(true);
-              setIsCameraOff(false);
-              setIsVideoEnabled(true);
-            }
-            
-            // Update local participant's hasVideo property
-            const session = sessionRef.current;
-            if (session?.connection?.connectionId) {
-              setParticipants((prev) => {
-                return prev.map((participant) => 
-                  participant.isLocal && participant.connectionId === session.connection?.connectionId
-                    ? { ...participant, hasVideo: true }
-                    : participant
-                );
-              });
-            }
-            
-            // Subscribe to any existing remote streams that were skipped while in audio mode
-            setTimeout(() => {
-              checkExistingStreams();
-            }, 1000);
-            
           } catch (error) {
-            console.error('❌ useVonageSession: Error enabling video publishing:', error);
-            setIsCameraOff(true);
-            setIsVideoEnabled(false);
+            console.warn('⚠️ Error destroying publisher:', error);
           }
-        } else {
-          // Already in video mode, just ensure state is correct
-          setLocalVideoVisibility(true);
-          setIsCameraOff(false);
-          setIsVideoEnabled(true);
         }
+        
+        publisherRef.current = null;
+        didInitPublisher.current = false;
+        ensurePubPromiseRef.current = null;
+        setIsCameraOff(true);
+        setIsVideoEnabled(false);
+        setLocalVideoVisibility(false);
+        
+        // Update participant state
+        if (session?.connection?.connectionId) {
+          setParticipants((prev) => {
+            return prev.map((participant) => 
+              participant.isLocal && participant.connectionId === session.connection?.connectionId
+                ? { ...participant, hasVideo: false }
+                : participant
+            );
+          });
+        }
+        
+        return;
       }
+
+      // mode === 'video'
+      const container = localContainerRef.current || localContainer;
+      if (!container) {
+        // Defer one frame until the panel hands the element
+        requestAnimationFrame(() => {
+          if (callModeRef.current === 'video') {
+            void setCallMode('video');
+          }
+        });
+        return;
+      }
+
+      // Create the publisher into THIS container and publish it
+      try {
+        const OT = await ensureOT();
+        
+        // Destroy existing publisher if it exists
+        const existingPub = publisherRef.current;
+        if (existingPub) {
+          try {
+            if ((existingPub as any).session) {
+              session.unpublish(existingPub);
+            }
+            existingPub.destroy();
+          } catch (e) {
+            // Ignore errors
+          }
+          publisherRef.current = null;
+          didInitPublisher.current = false;
+          ensurePubPromiseRef.current = null;
+        }
+        
+        // Create new publisher in the container
+        const pub = OT.initPublisher(container, {
+          insertMode: 'append',
+          width: '100%',
+          height: '100%',
+          showControls: false,
+          controls: false,
+          style: {
+            buttonDisplayMode: "off",
+            nameDisplayMode: "off",
+            audioLevelDisplayMode: "off",
+            archiveStatusDisplayMode: "off",
+            backgroundImageURI: "off"
+          },
+        }, (err?: Error) => {
+          if (err) {
+            console.error('❌ initPublisher error:', err);
+          }
+        });
+
+        // Make sure video is enabled
+        try {
+          pub.publishVideo(true);
+        } catch (e) {
+          console.warn('Could not enable video initially:', e);
+        }
+
+        // Publish to session if not already published
+        if (!(pub as any).session && session) {
+          session.publish(pub, (e?: Error) => {
+            if (e) {
+              console.error('❌ publish error:', e);
+            } else {
+              // Update participant state after successful publish
+              if (session?.connection?.connectionId) {
+                setParticipants((prev) => {
+                  return prev.map((participant) => 
+                    participant.isLocal && participant.connectionId === session.connection?.connectionId
+                      ? { ...participant, hasVideo: true }
+                      : participant
+                  );
+                });
+              }
+            }
+          });
+        }
+
+        publisherRef.current = pub;
+        setIsCameraOff(false);
+        setIsVideoEnabled(true);
+        setLocalVideoVisibility(true);
+        
+        // One-tick repair: check for preview-only video
+        queueMicrotask(() => {
+          const root = localContainerRef.current || localContainer;
+          if (!root) return;
+          
+          const hasPub = !!root.querySelector('.OT_publisher, [data-ot="publisher"]');
+          const hasOnlyPreview = !hasPub && !!root.querySelector('video');
+          
+          if (hasOnlyPreview) {
+            console.warn('⚠️ Found preview video but no publisher - repairing');
+            try {
+              publisherRef.current?.destroy();
+            } catch {}
+            publisherRef.current = null;
+            didInitPublisher.current = false;
+            ensurePubPromiseRef.current = null;
+            // Rerun creation path
+            void setCallMode('video');
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error creating publisher for video mode:', error);
+        setIsCameraOff(true);
+        setIsVideoEnabled(false);
+      }
+      
+      // Session remains connected - subscribers and data channel stay active
     })();
 
     transitionLockRef.current = run.finally(() => { 
@@ -3287,7 +3755,7 @@ export function useVonageSession({
     });
     
     await run;
-  }, [setLocalVideoVisibility, checkExistingStreams]);
+  }, [isConnected, ensureOT, setLocalVideoVisibility, setParticipants]);
 
   return useMemo(
     () => ({
@@ -3339,7 +3807,9 @@ export function useVonageSession({
       pendingPiPRequest,
       setPendingPiPRequest,
       togglePictureInPicture,
+      otReady,
+      ensureOT,
     }),
-    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, openDeviceSettings, setCallMode, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, networkQuality, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory, assessNetworkQuality, onParticipantVideoReady, activeSpeakerId, enablePiPFollowSpeaker, disablePiPFollowSpeaker, pipFollowsSpeaker, getVideoElementById, isPictureInPicture, pendingPiPRequest, setPendingPiPRequest, togglePictureInPicture],
+    [join, leave, toggleMic, toggleCamera, switchCamera, switchMicrophone, selectMicrophone, openDeviceSettings, setCallMode, isConnected, isBusy, isMicMuted, isCameraOff, statusMessage, error, clearError, participants, printParticipants, checkExistingStreams, startCameraPreview, callStatus, participantCount, isAudioEnabled, isVideoEnabled, signalStrength, networkQuality, audioLevel, chatMessages, sendChatMessage, typingUsers, sendTypingIndicator, stopTypingIndicator, clearChatHistory, assessNetworkQuality, onParticipantVideoReady, activeSpeakerId, enablePiPFollowSpeaker, disablePiPFollowSpeaker, pipFollowsSpeaker, getVideoElementById, isPictureInPicture, pendingPiPRequest, setPendingPiPRequest, togglePictureInPicture, otReady, ensureOT],
   );
 }

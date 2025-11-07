@@ -651,11 +651,9 @@ export function TelehealthVideoPanel({
     return () => window.removeEventListener('resize', onResize);
   }, [viewportWidth]);
 
+  // Hand the container ONLY when in video. Do NOT null it during a video switch.
   useEffect(() => {
-    // In audio mode, don't pass local container to avoid duplicate avatars
-    if (callMode === 'audio') {
-      onLocalContainerReady?.(null);
-    } else {
+    if (callMode === 'video') {
       onLocalContainerReady?.(localRef.current);
       
       // Belt-and-suspenders: enforce one publisher subtree in the local container
@@ -673,8 +671,15 @@ export function TelehealthVideoPanel({
         });
       }
     }
-    return () => onLocalContainerReady?.(null);
-  }, [onLocalContainerReady, callMode]);
+    // No cleanup here that nulls the container - prevents race during mode switch
+  }, [callMode, onLocalContainerReady]);
+
+  // In audio mode, explicitly hand back null once (no cleanup race).
+  useEffect(() => {
+    if (callMode === 'audio') {
+      onLocalContainerReady?.(null);
+    }
+  }, [callMode, onLocalContainerReady]);
 
   // Add a short grace period after switching to video so the overlay doesn't flash while OT mounts
   useEffect(() => {
@@ -1182,11 +1187,52 @@ export function TelehealthVideoPanel({
                 id="vonage-local-container"
                 data-role="local"
                 ref={localRef}
-                className="h-full w-full bg-transparent"
+                className="h-full w-full bg-transparent relative"
                 style={{ backgroundColor: 'transparent' }}
                 aria-label="Your video preview"
-              />
-              {!localPreviewActive ? (
+              >
+                {/* Guaranteed local avatar for audio mode (and as fallback if video is absent) */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: ((callMode === 'audio' as any) || !localHasVideo) ? 'flex' : 'none',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#000',
+                    zIndex: 10,
+                    pointerEvents: 'none',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: 20,
+                      letterSpacing: 0.5,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    }}
+                  >
+                    {localParticipantName && localParticipantName !== "You" ? (() => {
+                      const words = (localParticipantName || 'You').trim().split(/\s+/).slice(0, 2);
+                      const initials = words.map(w => w[0] || '').join('').toUpperCase();
+                      return initials || 'U';
+                    })() : <User className="w-7 h-7" />}
+                  </div>
+                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Audio Call</span>
+                </div>
+              </div>
+              {!localPreviewActive && (callMode !== 'audio' as any) && callMode !== null ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
                   {/* Profile Avatar with Initials */}
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">

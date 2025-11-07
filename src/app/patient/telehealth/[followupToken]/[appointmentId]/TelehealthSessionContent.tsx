@@ -105,9 +105,11 @@ export function TelehealthSessionContent({
             
             if (callType === 'audio' || callType === 'video') {
               setCallMode(callType);
-              // Also update Vonage session call mode immediately so it's ready for join
+              // Update Vonage session call mode after UI updates
               if (telehealth.setCallMode) {
-                telehealth.setCallMode(callType);
+                requestAnimationFrame(() => {
+                  telehealth.setCallMode?.(callType);
+                });
               }
             }
 
@@ -155,8 +157,16 @@ export function TelehealthSessionContent({
     participantName: " ",
     remoteContainer,
     localContainer,
-    callMode,
+    callMode, // Pass callMode to hook
   });
+
+  // Derive effective callMode from telehealth hook state to keep it in sync with actual camera state
+  const effectiveCallMode = telehealth.isCameraOff ? "audio" : (callMode || "video");
+
+  // Proactively start loading OpenTok SDK as soon as component mounts
+  React.useEffect(() => {
+    void telehealth.ensureOT();
+  }, [telehealth.ensureOT]);
 
   // Update call mode when appointment state changes (e.g., after API refresh)
   // Use timestamp-based precedence to prevent stale appointment state from overriding live Ably events
@@ -176,10 +186,13 @@ export function TelehealthSessionContent({
           // Only apply if this is newer than the last Ably update
           if (!lastCallModeUpdateRef.current || hydrateTs > lastCallModeUpdateRef.current.ts) {
             lastCallModeUpdateRef.current = { ts: hydrateTs, source: 'hydrate' };
+            // 1) Update UI state so the panel can hand the container in 'video'
             setCallMode(callType);
-            // Always update Vonage session call mode (even if not connected yet, so it's ready for join)
+            // 2) Defer hook update to next frame to avoid null-container races
             if (telehealth.setCallMode) {
-              telehealth.setCallMode(callType);
+              requestAnimationFrame(() => {
+                telehealth.setCallMode?.(callType);
+              });
             }
           } else {
             console.debug('⏭️ Skipping stale appointment-mode hydrate (timestamp:', hydrateTs, 'vs', lastCallModeUpdateRef.current.ts, ')');
@@ -367,15 +380,19 @@ export function TelehealthSessionContent({
             onDoctorConnect: async (event: AblyConnectEvent) => {
               
               // Extract and set call mode from event
-              if (event.call_type) {
+              if (event.call_type && (event.call_type === 'audio' || event.call_type === 'video')) {
                 setCallMode(event.call_type);
                 if (telehealth.setCallMode) {
-                  telehealth.setCallMode(event.call_type);
+                  requestAnimationFrame(() => {
+                    telehealth.setCallMode?.(event.call_type as 'audio' | 'video');
+                  });
                 }
-              } else if (event.call_mode) {
+              } else if (event.call_mode && (event.call_mode === 'audio' || event.call_mode === 'video')) {
                 setCallMode(event.call_mode);
                 if (telehealth.setCallMode) {
-                  telehealth.setCallMode(event.call_mode);
+                  requestAnimationFrame(() => {
+                    telehealth.setCallMode?.(event.call_mode as 'audio' | 'video');
+                  });
                 }
               }
             },
@@ -511,28 +528,73 @@ export function TelehealthSessionContent({
     if (isChatOpen) setLastReadIndex(uiMessages.length);
   }, [isChatOpen, uiMessages.length]);
 
-  // Join flow: ensure containers exist then call join
+  // Join flow: retry join until connected (while pendingJoin is true)
+  const JOIN_RETRY_MS = 1500;
+
   React.useEffect(() => {
-    if (!showPreJoin && pendingJoin && remoteContainer) {
-      // For audio mode, localContainer can be null, so we don't require it
-      const requiresLocalContainer = callMode !== 'audio';
-      if (!requiresLocalContainer || localContainer) {
-        // Ensure call mode is set before joining
-        const currentCallMode = appointmentState?.on_call_type || appointmentState?.appointment?.on_call_type || callMode;
-        if (currentCallMode && currentCallMode !== callMode) {
-          setCallMode(currentCallMode);
-          // Small delay to ensure call mode is updated in the hook
-          setTimeout(() => {
-            void telehealth.join();
-            setPendingJoin(false);
-          }, 100);
-        } else {
-          void telehealth.join();
-          setPendingJoin(false);
+    if (showPreJoin || !pendingJoin || !telehealth.otReady) return; // Wait for OpenTok SDK
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tryJoin = async () => {
+      if (cancelled) return;
+
+      // 1) Decide authoritative mode first (server > state > default audio)
+      const desiredMode =
+        appointmentState?.on_call_type ??
+        appointmentState?.appointment?.on_call_type ??
+        callMode ?? 'audio';
+
+      if (desiredMode !== callMode) {
+        setCallMode(desiredMode);
+        requestAnimationFrame(() => {
+          telehealth.setCallMode?.(desiredMode);
+        });
+      }
+
+      // 2) Wait for required containers
+      if (!remoteContainer) {
+        timer = setTimeout(tryJoin, JOIN_RETRY_MS);
+        return;
+      }
+      if (desiredMode !== 'audio' && !localContainer) {
+        timer = setTimeout(tryJoin, JOIN_RETRY_MS);
+        return;
+      }
+
+      // 3) Join and only clear flag on success
+      try {
+        await telehealth.join();
+        if (!cancelled) {
+          setPendingJoin(false); // success: clear flag
+        }
+      } catch (e) {
+        // transient (token fetch, network, OT handshake) -> retry
+        if (!cancelled) {
+          console.error('join failed, will retry:', e);
+          timer = setTimeout(tryJoin, JOIN_RETRY_MS);
         }
       }
-    }
-  }, [showPreJoin, pendingJoin, remoteContainer, localContainer, telehealth, callMode, appointmentState]);
+    };
+
+    tryJoin();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [
+    showPreJoin,
+    pendingJoin,
+    telehealth.otReady, // Wait for OpenTok SDK
+    remoteContainer,
+    localContainer,
+    appointmentState?.on_call_type,
+    appointmentState?.appointment?.on_call_type,
+    callMode,
+    telehealth
+  ]);
 
 
   const onJoinWaitlist = async () => {
@@ -572,15 +634,19 @@ export function TelehealthSessionContent({
         clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
           // Extract and set call mode from event
-          if (event.call_type) {
+          if (event.call_type && (event.call_type === 'audio' || event.call_type === 'video')) {
             setCallMode(event.call_type);
             if (telehealth.setCallMode) {
-              telehealth.setCallMode(event.call_type);
+              requestAnimationFrame(() => {
+                telehealth.setCallMode?.(event.call_type as 'audio' | 'video');
+              });
             }
-          } else if (event.call_mode) {
+          } else if (event.call_mode && (event.call_mode === 'audio' || event.call_mode === 'video')) {
             setCallMode(event.call_mode);
             if (telehealth.setCallMode) {
-              telehealth.setCallMode(event.call_mode);
+              requestAnimationFrame(() => {
+                telehealth.setCallMode?.(event.call_mode as 'audio' | 'video');
+              });
             }
           }
 
@@ -654,9 +720,11 @@ export function TelehealthSessionContent({
       // Set call mode before joining if we have it
       if (currentCallMode && currentCallMode !== callMode) {
         setCallMode(currentCallMode);
-        // Also update telehealth hook if available
+        // Update telehealth hook after UI updates
         if (telehealth.setCallMode) {
-          telehealth.setCallMode(currentCallMode);
+          requestAnimationFrame(() => {
+            telehealth.setCallMode?.(currentCallMode);
+          });
         }
       }
 
@@ -1028,7 +1096,18 @@ export function TelehealthSessionContent({
             <TelehealthVideoPanel
               sessionTitle={sessionTitle}
               providerName={providerName}
-              participants={telehealth.participants}
+              participants={[
+                // Include a local participant so layout/tile math is correct
+                {
+                  connectionId: "local",
+                  streamId: undefined,
+                  hasVideo: !telehealth.isCameraOff,
+                  hasAudio: !telehealth.isMicMuted,
+                  isLocal: true,
+                },
+                // Only remote participants (filter out any local from hook)
+                ...telehealth.participants.filter(p => !p.isLocal),
+              ]}
               localParticipantName={appointmentState?.patient?.full_name || "You"}
               statusMessage={telehealth.statusMessage}
               onRemoteContainerReady={handleRemoteContainerReady}
@@ -1045,7 +1124,7 @@ export function TelehealthSessionContent({
               activeSpeakerId={telehealth.activeSpeakerId}
               participantAudioLevels={new Map()}
               getVideoElementById={telehealth.getVideoElementById}
-              callMode={callMode}
+              callMode={effectiveCallMode} // Drive panel's guards from hook state
               overlayControls={
                 <TelehealthCallControls
                   variant="overlay"
