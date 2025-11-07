@@ -38,6 +38,8 @@ interface TelehealthCallControlsProps {
   onTogglePictureInPicture?: () => void;
   isPictureInPicture?: boolean;
   pendingPiPRequest?: boolean;
+  // Call mode
+  callMode?: 'audio' | 'video' | null;
 }
 
 export function TelehealthCallControls({
@@ -66,9 +68,15 @@ export function TelehealthCallControls({
   onTogglePictureInPicture,
   isPictureInPicture = false,
   pendingPiPRequest = false,
+  callMode = null,
 }: TelehealthCallControlsProps) {
   const [micMuted, setMicMuted] = useState(micMutedProp ?? false);
   const [cameraOff, setCameraOff] = useState(cameraOffProp ?? false);
+
+  // Log callMode changes to debug UI updates
+  useEffect(() => {
+    console.log('🎨 TelehealthCallControls: callMode changed to:', callMode);
+  }, [callMode]);
 
   useEffect(() => {
     if (micMutedProp !== undefined) {
@@ -151,6 +159,17 @@ export function TelehealthCallControls({
             onDeviceChange={onSwitchMicrophone || (() => {})}
             disabled={controlsDisabled}
           />
+        </div>
+      )}
+
+      {/* Audio-only indicator */}
+      {callMode === 'audio' && isConnected && (
+        <div className={cn(
+          "flex items-center justify-center gap-2 px-3 py-2 rounded-lg",
+          isOverlay ? "bg-black/50 text-white" : "bg-blue-50 text-blue-700 border border-blue-200"
+        )}>
+          <Phone className="h-4 w-4" />
+          <span className="text-sm font-medium">Audio Only</span>
         </div>
       )}
 
@@ -258,42 +277,46 @@ export function TelehealthCallControls({
             </>
           )}
         </div>
-        {/* Camera */}
-        <Button
-          type="button"
-          variant="ghost"
-          className={cn(
-            "order-2 h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
-            isOverlay && !cameraIsOff && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
-            isOverlay && cameraIsOff && "h-12 w-12 px-0 rounded-full text-white hover:bg-red-700 bg-red-600",
-            cameraIsOff && !isOverlay && "bg-red-600 hover:bg-red-700 text-white",
-            !cameraIsOff && !isOverlay && "bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white"
-          )}
-          onClick={handleToggleCamera}
-          aria-label={cameraIsOff ? "Start video" : "Stop video"}
-          disabled={controlsDisabled}
-        >
-          {cameraIsOff ? <VideoOff className={cn(isOverlay ? "h-8 w-8" : "h-7 w-7")} /> : <Video className={cn(isOverlay ? "h-8 w-8" : "h-7 w-7")} />}
-          {!isOverlay && <span className="ml-2">{cameraIsOff ? "Start video" : "Stop video"}</span>}
-        </Button>
+        {/* Camera - Hidden when call mode is audio */}
+        {callMode !== 'audio' && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn(
+                "order-2 h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
+                isOverlay && !cameraIsOff && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
+                isOverlay && cameraIsOff && "h-12 w-12 px-0 rounded-full text-white hover:bg-red-700 bg-red-600",
+                cameraIsOff && !isOverlay && "bg-red-600 hover:bg-red-700 text-white",
+                !cameraIsOff && !isOverlay && "bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white"
+              )}
+              onClick={handleToggleCamera}
+              aria-label={cameraIsOff ? "Start video" : "Stop video"}
+              disabled={controlsDisabled}
+            >
+              {cameraIsOff ? <VideoOff className={cn(isOverlay ? "h-8 w-8" : "h-7 w-7")} /> : <Video className={cn(isOverlay ? "h-8 w-8" : "h-7 w-7")} />}
+              {!isOverlay && <span className="ml-2">{cameraIsOff ? "Start video" : "Stop video"}</span>}
+            </Button>
 
-        {/* Camera Swap - Only show when multiple cameras available */}
-        {videoDevices.length > 1 && (
-          <Button
-            type="button"
-            variant="ghost"
-            className={cn(
-              "order-2.5 h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
-              isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
-              !isOverlay && "bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white"
+            {/* Camera Swap - Only show when multiple cameras available and not in audio mode */}
+            {videoDevices.length > 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  "order-2.5 h-10 w-10 rounded-full flex items-center justify-center transition-all duration-200",
+                  isOverlay && "h-12 w-12 px-0 rounded-full text-white hover:bg-white/20 bg-black/30",
+                  !isOverlay && "bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white"
+                )}
+                onClick={onSwitchCamera}
+                aria-label="Switch camera"
+                disabled={controlsDisabled}
+              >
+                <RotateCcw className={cn(isOverlay ? "h-8 w-8" : "h-7 w-7")} />
+                {!isOverlay && <span className="ml-2">Switch</span>}
+              </Button>
             )}
-            onClick={onSwitchCamera}
-            aria-label="Switch camera"
-            disabled={controlsDisabled}
-          >
-            <RotateCcw className={cn(isOverlay ? "h-8 w-8" : "h-7 w-7")} />
-            {!isOverlay && <span className="ml-2">Switch</span>}
-          </Button>
+          </>
         )}
 
         {/* Join/Leave */}
@@ -356,8 +379,8 @@ export function TelehealthCallControls({
           </Button>
         )}
 
-        {/* Optional switch camera icon (panel view retains it) */}
-        {!isOverlay && (
+        {/* Optional switch camera icon (panel view retains it) - Hidden in audio mode */}
+        {!isOverlay && callMode !== 'audio' && videoDevices.length > 0 && (
           <Button
             type="button"
             variant="outline"
