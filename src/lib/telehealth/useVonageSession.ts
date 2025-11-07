@@ -483,6 +483,9 @@ export function useVonageSession({
   const didInitRef = useRef(false); // Guard to ensure publisher is only created once
   const didInitPublisher = useRef(false); // Track if publisher has been initialized
   const subscribersRef = useRef<Map<string, any>>(new Map()); // Track subscribers by streamId for idempotence
+  
+  // Race-proof mode switching: single-flight publisher creation and monotonic token
+  const switchTokenRef = useRef(0); // Monotonic token to invalidate stale async work
 
   const [isConnected, setIsConnected] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -556,6 +559,81 @@ export function useVonageSession({
       }, timeoutMs);
     });
   }, []);
+
+  // Helper: wait for a non-null container (UI updates first)
+  const waitForContainer = useCallback((): Promise<HTMLElement> => {
+    return new Promise((resolve) => {
+      const tryNow = () => {
+        const el = localContainerRef.current;
+        if (el) {
+          resolve(el);
+        } else {
+          requestAnimationFrame(tryNow);
+        }
+      };
+      tryNow();
+    });
+  }, []);
+
+  // Helper: create or return the single publisher (never destroy here)
+  const ensurePublisherOnce = useCallback(async (el: HTMLElement): Promise<VonagePublisher> => {
+    if (publisherRef.current) return publisherRef.current;
+    
+    if (!ensurePubPromiseRef.current) {
+      ensurePubPromiseRef.current = (async () => {
+        const OT = await ensureOT();
+        const pub = OT.initPublisher(el, {
+          insertMode: 'append',
+          width: '100%',
+          height: '100%',
+          showControls: false,
+          controls: false,
+          style: {
+            buttonDisplayMode: "off",
+            nameDisplayMode: "off",
+            audioLevelDisplayMode: "off",
+            archiveStatusDisplayMode: "off",
+            backgroundImageURI: "off"
+          },
+        }, (err?: Error) => {
+          if (err) {
+            console.error('❌ initPublisher error:', err);
+          }
+        });
+        
+        publisherRef.current = pub;
+        return pub;
+      })().finally(() => { 
+        ensurePubPromiseRef.current = null; 
+      });
+    }
+    
+    return ensurePubPromiseRef.current;
+  }, [ensureOT]);
+
+  // Helper: idempotent publish to session
+  const attachToSession = useCallback((pub: VonagePublisher) => {
+    const s = sessionRef.current;
+    // Some SDKs set pub.session when attached; check and publish if not
+    if (s && !(pub as any).session) {
+      s.publish(pub, (err?: Error) => {
+        if (err) {
+          console.error('[vonage] publish error', err);
+        } else {
+          // Update participant state after successful publish
+          if (s?.connection?.connectionId) {
+            setParticipants((prev) => {
+              return prev.map((participant) => 
+                participant.isLocal && participant.connectionId === s.connection?.connectionId
+                  ? { ...participant, hasVideo: true }
+                  : participant
+              );
+            });
+          }
+        }
+      });
+    }
+  }, [setParticipants]);
 
   // Ensure publisher is mounted exactly once into the provided container
   // Now async and container-aware - accepts the target container element
@@ -3429,132 +3507,17 @@ export function useVonageSession({
     setLocalVideoVisibility(true);
   }, [ensurePublisherIn, ensureCameraTrack, setIsCameraOff, setIsVideoEnabled, setLocalVideoVisibility, setParticipants]);
 
-  // When user switches to video, and the local container is finally available,
-  // ensure OT is loaded, create/mount publisher once, and publish video.
-  useEffect(() => {
-    if (currentCallMode !== 'video') return;
-    if (!localContainer) return;
-    if (!isConnected) return; // Wait for session to be connected
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        console.log('[switch→video]', {
-          hasLocalContainer: !!localContainer,
-          otReady,
-          isConnected,
-        });
-
-        await ensureOT();
-        if (cancelled) return;
-
-        await ensurePublishedForVideo(localContainer);
-        if (cancelled) return;
-
-        // Show publisher element (undo audio mode hide)
-        const pub = publisherRef.current;
-        if (pub) {
-          const pubEl = (pub as any)?.element as HTMLElement | undefined;
-          if (pubEl && pubEl.style) {
-            pubEl.style.display = '';
-          }
-        }
-
-        // Convergence check: repair edge cases where only preview video exists
-        queueMicrotask(() => {
-          if (cancelled) return;
-          
-          const root = localContainerRef.current || localContainer;
-          if (!root) return;
-
-          const hasPub =
-            !!root.querySelector(".OT_publisher") ||
-            !!root.querySelector('[data-ot="publisher"]');
-
-          const hasOnlyPreview =
-            !hasPub && !!root.querySelector("video");
-
-          if (hasOnlyPreview) {
-            // Last-resort repair: destroy and recreate the publisher into this container
-            try {
-              publisherRef.current?.destroy();
-            } catch {}
-            publisherRef.current = null;
-            didInitPublisher.current = false;
-            ensurePubPromiseRef.current = null;
-
-            void (async () => {
-              try {
-                const repaired = await ensurePublisher(root);
-                repaired.publishVideo(true);
-                setLocalVideoVisibility(true);
-                setIsCameraOff(false);
-                setIsVideoEnabled(true);
-
-                const session = sessionRef.current;
-                // Check for stream instead of session reference - stream is the reliable indicator
-                if (session && repaired && !repaired.stream) {
-                  session.publish(repaired, (e?: Error) => {
-                    if (e) {
-                      console.error("❌ Error publishing after repair:", e);
-                    } else {
-                      // Verify publisher has a stream after publishing
-                      setTimeout(() => {
-                        if (!repaired.stream) {
-                          console.warn('⚠️ Publisher still has no stream after publish callback');
-                        }
-                      }, 500);
-                    }
-                  });
-                }
-              } catch (e) {
-                console.error("❌ Repair path failed:", e);
-              }
-            })();
-          }
-        });
-
-        // Audit: check final state
-        const session = sessionRef.current;
-        const root = localContainerRef.current || localContainer;
-        const hasPub =
-          !!root?.querySelector(".OT_publisher") ||
-          !!root?.querySelector('[data-ot="publisher"]');
-        const hasSub =
-          !!root?.querySelector(".OT_subscriber") ||
-          !!root?.querySelector('[data-ot="subscriber"]');
-        const hasVid = !!root?.querySelector("video");
-        
-        console.log('[audit→video]', {
-          connected: !!session?.connection,
-          pubElInLocal: !!localContainer?.contains((pub as any)?.element),
-          hasStream: !!pub?.stream,
-          hasVideo: !!(pub as any)?.stream?.hasVideo,
-          isPublished: !!(pub as any)?.session,
-          hasPub,
-          hasSub,
-          hasVid,
-        });
-
-        // Update state
-        setIsCameraOff(false);
-        setIsVideoEnabled(true);
-        setLocalVideoVisibility(true);
-      } catch (e) {
-        console.error('switch→video: publish failed', e);
-        setIsCameraOff(true);
-        setIsVideoEnabled(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentCallMode, localContainer, otReady, isConnected, ensureOT, ensurePublishedForVideo, setLocalVideoVisibility]);
+  // DISABLED: setCallMode now handles publisher creation directly to avoid race conditions
+  // This effect was competing with setCallMode, causing disconnections
+  // useEffect(() => {
+  //   if (currentCallMode !== 'video') return;
+  //   if (!localContainer) return;
+  //   if (!isConnected) return;
+  //   ... publisher creation logic removed - now handled by setCallMode
+  // }, [currentCallMode, localContainer, otReady, isConnected, ensureOT, ensurePublishedForVideo, setLocalVideoVisibility]);
 
   // Set call mode and update video publishing
-  // Idempotent with guards to prevent redundant calls and stale overwrites
+  // Race-proof: uses monotonic token to invalidate stale async work
   const setCallMode = useCallback(async (mode: 'audio' | 'video') => {
     // Drop exact duplicate - already in this mode and no pending change
     if (callModeRef.current === mode && lastRequestedModeRef.current === mode) {
@@ -3567,13 +3530,13 @@ export function useVonageSession({
     }
 
     lastRequestedModeRef.current = mode;
+    const myToken = ++switchTokenRef.current;
 
     const run = (async () => {
       // If a newer request superseded us, bail
       if (lastRequestedModeRef.current !== mode) {
         return;
       }
-
 
       // Idempotent guard - already in this mode
       if (callModeRef.current === mode) {
@@ -3591,161 +3554,184 @@ export function useVonageSession({
         return;
       }
 
+      // Never disconnect the session on mode changes
+      // Never destroy the publisher in mode changes (unless it's in wrong container)
+
       if (mode === 'audio') {
-        // Audio mode: unpublish and destroy publisher, but DO NOT disconnect session
-        const pub = publisherRef.current;
-        if (pub) {
+        // Keep publisher object; just stop sending video
+        void (async () => {
           try {
-            // Unpublish from session first (but stay connected)
-            if ((pub as any).session) {
-              try {
-                session.unpublish(pub);
-              } catch (e) {
-                // Ignore unpublish errors
+            const el = await waitForContainer();
+            if (myToken !== switchTokenRef.current) return; // stale
+            
+            const pub = await ensurePublisherOnce(el);
+            if (myToken !== switchTokenRef.current) return; // stale
+            
+            try { 
+              pub.publishVideo(false);
+              const stream = pub.stream;
+              if (stream) {
+                const videoTracks = (stream as any).getVideoTracks?.() || [];
+                videoTracks.forEach((track: MediaStreamTrack) => {
+                  track.enabled = false;
+                });
               }
+            } catch (e) {
+              console.warn('Could not disable video:', e);
             }
             
-            // Destroy the publisher
-            try {
-              pub.destroy();
-            } catch (e) {
-              // Ignore destroy errors
+            setIsCameraOff(true);
+            setIsVideoEnabled(false);
+            setLocalVideoVisibility(false);
+            
+            // Update participant state
+            if (session?.connection?.connectionId) {
+              setParticipants((prev) => {
+                return prev.map((participant) => 
+                  participant.isLocal && participant.connectionId === session.connection?.connectionId
+                    ? { ...participant, hasVideo: false }
+                    : participant
+                );
+              });
             }
           } catch (error) {
-            console.warn('⚠️ Error destroying publisher:', error);
+            console.error('❌ Error in audio mode setup:', error);
+            setIsCameraOff(true);
+            setIsVideoEnabled(false);
           }
-        }
-        
-        publisherRef.current = null;
-        didInitPublisher.current = false;
-        ensurePubPromiseRef.current = null;
-        setIsCameraOff(true);
-        setIsVideoEnabled(false);
-        setLocalVideoVisibility(false);
-        
-        // Update participant state
-        if (session?.connection?.connectionId) {
-          setParticipants((prev) => {
-            return prev.map((participant) => 
-              participant.isLocal && participant.connectionId === session.connection?.connectionId
-                ? { ...participant, hasVideo: false }
-                : participant
-            );
-          });
-        }
+        })();
         
         return;
       }
 
       // mode === 'video'
-      const container = localContainerRef.current || localContainer;
-      if (!container) {
-        // Defer one frame until the panel hands the element
-        requestAnimationFrame(() => {
-          if (callModeRef.current === 'video') {
-            void setCallMode('video');
-          }
-        });
-        return;
-      }
-
-      // Create the publisher into THIS container and publish it
-      try {
-        const OT = await ensureOT();
-        
-        // Destroy existing publisher if it exists
-        const existingPub = publisherRef.current;
-        if (existingPub) {
-          try {
-            if ((existingPub as any).session) {
-              session.unpublish(existingPub);
-            }
-            existingPub.destroy();
-          } catch (e) {
-            // Ignore errors
-          }
-          publisherRef.current = null;
-          didInitPublisher.current = false;
-          ensurePubPromiseRef.current = null;
-        }
-        
-        // Create new publisher in the container
-        const pub = OT.initPublisher(container, {
-          insertMode: 'append',
-          width: '100%',
-          height: '100%',
-          showControls: false,
-          controls: false,
-          style: {
-            buttonDisplayMode: "off",
-            nameDisplayMode: "off",
-            audioLevelDisplayMode: "off",
-            archiveStatusDisplayMode: "off",
-            backgroundImageURI: "off"
-          },
-        }, (err?: Error) => {
-          if (err) {
-            console.error('❌ initPublisher error:', err);
-          }
-        });
-
-        // Make sure video is enabled
+      void (async () => {
         try {
-          pub.publishVideo(true);
-        } catch (e) {
-          console.warn('Could not enable video initially:', e);
-        }
-
-        // Publish to session if not already published
-        if (!(pub as any).session && session) {
-          session.publish(pub, (e?: Error) => {
-            if (e) {
-              console.error('❌ publish error:', e);
-            } else {
-              // Update participant state after successful publish
-              if (session?.connection?.connectionId) {
-                setParticipants((prev) => {
-                  return prev.map((participant) => 
-                    participant.isLocal && participant.connectionId === session.connection?.connectionId
-                      ? { ...participant, hasVideo: true }
-                      : participant
-                  );
+          const el = await waitForContainer();
+          if (myToken !== switchTokenRef.current) return; // stale
+          
+          const pub = await ensurePublisherOnce(el);
+          if (myToken !== switchTokenRef.current) return; // stale
+          
+          // Ensure publisher is rooted in the current container
+          const pubElement = (pub as any).element || (pub as any).container || (pub as any).el || (pub as any).elementDom;
+          const rootedHere = pubElement && el.contains(pubElement);
+          
+          if (!rootedHere) {
+            // Publisher exists but is in wrong container - recreate
+            try { 
+              if ((pub as any).session) {
+                session.unpublish(pub);
+              }
+              (pub as any).destroy?.(); 
+            } catch (e) {
+              // Ignore errors
+            }
+            publisherRef.current = null;
+            ensurePubPromiseRef.current = null;
+            
+            // Recreate fresh into the *current* element, still guarded by token
+            const fresh = await ensurePublisherOnce(el);
+            if (myToken !== switchTokenRef.current) return; // stale
+            
+            try { 
+              fresh.publishVideo(true);
+              const stream = fresh.stream;
+              if (stream) {
+                const videoTracks = (stream as any).getVideoTracks?.() || [];
+                videoTracks.forEach((track: MediaStreamTrack) => {
+                  track.enabled = true;
                 });
+              }
+            } catch (e) {
+              console.warn('Could not enable video:', e);
+            }
+            
+            attachToSession(fresh);
+            
+            setIsCameraOff(false);
+            setIsVideoEnabled(true);
+            setLocalVideoVisibility(true);
+            
+            // Update participant state
+            if (session?.connection?.connectionId) {
+              setParticipants((prev) => {
+                return prev.map((participant) => 
+                  participant.isLocal && participant.connectionId === session.connection?.connectionId
+                    ? { ...participant, hasVideo: true }
+                    : participant
+                );
+              });
+            }
+            
+            return;
+          }
+          
+          // Normal resume path - publisher is in correct container
+          try { 
+            pub.publishVideo(true);
+            const stream = pub.stream;
+            if (stream) {
+              const videoTracks = (stream as any).getVideoTracks?.() || [];
+              videoTracks.forEach((track: MediaStreamTrack) => {
+                track.enabled = true;
+              });
+            }
+          } catch (e) {
+            console.warn('Could not enable video:', e);
+          }
+          
+          attachToSession(pub);
+          
+          setIsCameraOff(false);
+          setIsVideoEnabled(true);
+          setLocalVideoVisibility(true);
+          
+          // Update participant state
+          if (session?.connection?.connectionId) {
+            setParticipants((prev) => {
+              return prev.map((participant) => 
+                participant.isLocal && participant.connectionId === session.connection?.connectionId
+                  ? { ...participant, hasVideo: true }
+                  : participant
+              );
+            });
+          }
+          
+          // One-tick repair: detect "preview video only" without .OT_publisher
+          queueMicrotask(() => {
+            if (myToken !== switchTokenRef.current) return; // stale
+            
+            const containerEl = localContainerRef.current;
+            if (!containerEl) return;
+            
+            const hasPub = !!containerEl.querySelector('.OT_publisher,[data-ot="publisher"]');
+            const hasOnlyPreview = !hasPub && !!containerEl.querySelector('video');
+            
+            if (hasOnlyPreview && publisherRef.current) {
+              try { 
+                if ((publisherRef.current as any).session) {
+                  session.unpublish(publisherRef.current);
+                }
+                (publisherRef.current as any).destroy?.(); 
+              } catch (e) {
+                // Ignore errors
+              }
+              publisherRef.current = null;
+              ensurePubPromiseRef.current = null;
+              
+              // Re-run guarded path
+              if (callModeRef.current === 'video') {
+                void setCallMode('video');
               }
             }
           });
+        } catch (error) {
+          console.error('❌ Error in video mode setup:', error);
+          setIsCameraOff(true);
+          setIsVideoEnabled(false);
         }
-
-        publisherRef.current = pub;
-        setIsCameraOff(false);
-        setIsVideoEnabled(true);
-        setLocalVideoVisibility(true);
-        
-        // One-tick repair: check for preview-only video
-        queueMicrotask(() => {
-          const root = localContainerRef.current || localContainer;
-          if (!root) return;
-          
-          const hasPub = !!root.querySelector('.OT_publisher, [data-ot="publisher"]');
-          const hasOnlyPreview = !hasPub && !!root.querySelector('video');
-          
-          if (hasOnlyPreview) {
-            console.warn('⚠️ Found preview video but no publisher - repairing');
-            try {
-              publisherRef.current?.destroy();
-            } catch {}
-            publisherRef.current = null;
-            didInitPublisher.current = false;
-            ensurePubPromiseRef.current = null;
-            // Rerun creation path
-            void setCallMode('video');
-          }
-        });
-      } catch (error) {
-        console.error('❌ Error creating publisher for video mode:', error);
-        setIsCameraOff(true);
-        setIsVideoEnabled(false);
-      }
+      })();
       
       // Session remains connected - subscribers and data channel stay active
     })();
@@ -3755,7 +3741,7 @@ export function useVonageSession({
     });
     
     await run;
-  }, [isConnected, ensureOT, setLocalVideoVisibility, setParticipants]);
+  }, [isConnected, ensureOT, waitForContainer, ensurePublisherOnce, attachToSession, setLocalVideoVisibility, setParticipants]);
 
   return useMemo(
     () => ({

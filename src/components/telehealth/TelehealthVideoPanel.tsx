@@ -651,35 +651,26 @@ export function TelehealthVideoPanel({
     return () => window.removeEventListener('resize', onResize);
   }, [viewportWidth]);
 
-  // Hand the container ONLY when in video. Do NOT null it during a video switch.
+  // Always provide the same container; never null it during mode switches.
+  // This keeps the publisher DOM alive so the hook can toggle video without destroying/recreating.
   useEffect(() => {
-    if (callMode === 'video') {
-      onLocalContainerReady?.(localRef.current);
-      
-      // Belt-and-suspenders: enforce one publisher subtree in the local container
-      const root = localRef.current;
-      if (root) {
-        const pubs = root.querySelectorAll('.OT_publisher');
-        pubs.forEach((n, i) => {
-          if (i > 0) {
-            try {
-              n.parentElement?.removeChild(n);
-            } catch (e) {
-              // Ignore errors
-            }
+    onLocalContainerReady?.(localRef.current);
+    
+    // Belt-and-suspenders: enforce one publisher subtree in the local container
+    const root = localRef.current;
+    if (root) {
+      const pubs = root.querySelectorAll('.OT_publisher');
+      pubs.forEach((n, i) => {
+        if (i > 0) {
+          try {
+            n.parentElement?.removeChild(n);
+          } catch (e) {
+            // Ignore errors
           }
-        });
-      }
+        }
+      });
     }
-    // No cleanup here that nulls the container - prevents race during mode switch
-  }, [callMode, onLocalContainerReady]);
-
-  // In audio mode, explicitly hand back null once (no cleanup race).
-  useEffect(() => {
-    if (callMode === 'audio') {
-      onLocalContainerReady?.(null);
-    }
-  }, [callMode, onLocalContainerReady]);
+  }, [onLocalContainerReady]);
 
   // Add a short grace period after switching to video so the overlay doesn't flash while OT mounts
   useEffect(() => {
@@ -694,41 +685,15 @@ export function TelehealthVideoPanel({
     return () => clearTimeout(t1);
   }, [callMode]);
 
-  // Hard block OT nodes from appearing in audio mode (panel-level guard)
+  // In audio mode, just visually hide local videos; do NOT remove OT DOM.
+  // This keeps the publisher alive so the hook can toggle video without destroying/recreating.
   useEffect(() => {
-    if (callMode !== 'audio') return;
-
-    const root = panelRef.current;
+    const root = localRef.current;
     if (!root) return;
-
-    const kill = (el: Element) => { 
-      try { 
-        el.parentElement?.removeChild(el); 
-      } catch {} 
-    };
-    
-    const purge = () => {
-      // Purge any OT nodes or video elements from local container
-      const localContainer = root.querySelector('#vonage-local-container');
-      if (localContainer) {
-        localContainer.querySelectorAll('.OT_publisher, .OT_subscriber, video').forEach(kill);
-      }
-      // Also check for any OT nodes directly in the panel
-      root.querySelectorAll('.OT_publisher, .OT_subscriber').forEach((el) => {
-        // Only remove if it's inside or near the local container area
-        if (el.closest('#vonage-local-container') || el.closest('[data-role="local"]')) {
-          kill(el);
-        }
-      });
-    };
-
-    purge(); // once immediately
-
-    // Keep enforcing while in audio mode
-    const mo = new MutationObserver(() => purge());
-    mo.observe(root, { childList: true, subtree: true });
-    
-    return () => mo.disconnect();
+    const videos = root.querySelectorAll<HTMLVideoElement>('video');
+    videos.forEach(v => {
+      v.style.visibility = callMode === 'audio' ? 'hidden' : '';
+    });
   }, [callMode]);
 
   useEffect(() => {
