@@ -288,7 +288,7 @@ const normalizeVideoElements = (
         participantNameText.style.overflow = 'hidden';
         participantNameText.style.textOverflow = 'ellipsis';
         participantNameText.style.whiteSpace = 'nowrap';
-        participantNameText.textContent = participantName;
+        participantNameText.textContent = '';
         
         // Create camera off indicator text
         const cameraOffText = document.createElement('span');
