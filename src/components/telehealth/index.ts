@@ -6,3 +6,6 @@ export { PermissionRequestModal } from "./PermissionRequestModal";
 export { SignalStrengthIndicator } from "./SignalStrengthIndicator";
 export { AudioLevelIndicator } from "./AudioLevelIndicator";
 export { MicrophoneSelector } from "./MicrophoneSelector";
+export { AudioWaveform } from "./AudioWaveform";
+export { AudioCallParticipantCard } from "./AudioCallParticipantCard";
+export { AudioCallGrid } from "./AudioCallGrid";
