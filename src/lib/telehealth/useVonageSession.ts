@@ -2452,35 +2452,38 @@ export function useVonageSession({
           }
 
           // Add a fallback check - if video doesn't appear in 3 seconds, restore preview
-          setTimeout(() => {
-            const localEl = localContainerRef.current;
-            if (localEl && localEl.children.length === 0) {
-              // Restart camera preview as fallback
-              // Only if publisher doesn't exist - once publisher is created, it manages video
-              if (!publisherRef.current) {
-                navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                  .then(stream => {
-                    // Append fallback video only if publisher doesn't exist
-                    const videoElement = document.createElement('video');
-                    videoElement.srcObject = stream;
-                    videoElement.autoplay = true;
-                    videoElement.muted = true;
-                    videoElement.playsInline = true;
-                    videoElement.style.width = '100%';
-                    videoElement.style.height = '100%';
-                    videoElement.style.objectFit = 'cover';
+          // Skip this in audio mode - we don't want video
+          if (!isAudioMode) {
+            setTimeout(() => {
+              const localEl = localContainerRef.current;
+              if (localEl && localEl.children.length === 0) {
+                // Restart camera preview as fallback
+                // Only if publisher doesn't exist - once publisher is created, it manages video
+                if (!publisherRef.current) {
+                  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    .then(stream => {
+                      // Append fallback video only if publisher doesn't exist
+                      const videoElement = document.createElement('video');
+                      videoElement.srcObject = stream;
+                      videoElement.autoplay = true;
+                      videoElement.muted = true;
+                      videoElement.playsInline = true;
+                      videoElement.style.width = '100%';
+                      videoElement.style.height = '100%';
+                      videoElement.style.objectFit = 'cover';
 
-                    enablePiPSupportOnVideo(videoElement);
-                    
-                    localEl.appendChild(videoElement);
-                  })
-                  .catch(error => {
-                    // Ignore errors
-                  });
-              } else {
+                      enablePiPSupportOnVideo(videoElement);
+                      
+                      localEl.appendChild(videoElement);
+                    })
+                    .catch(error => {
+                      // Ignore errors
+                    });
+                } else {
+                }
               }
-            }
-          }, 3000);
+            }, 3000);
+          }
 
           setIsConnected(true);
           setIsBusy(false);
@@ -3112,6 +3115,10 @@ export function useVonageSession({
   }, []);
 
   const startCameraPreview = useCallback(async () => {
+    // Don't start camera preview in audio mode
+    if (callModeRef.current === 'audio') {
+      return;
+    }
 
     if (!localContainerRef.current) {
 
@@ -3306,6 +3313,11 @@ export function useVonageSession({
 
   // If the publisher was ever audio-only (videoSource:null), attach a real camera
   const ensureCameraTrack = useCallback(async (pub: VonagePublisher): Promise<void> => {
+    // Don't request camera in audio mode
+    if (callModeRef.current === 'audio') {
+      return;
+    }
+
     // Check if publisher already has active video tracks
     const stream = pub.stream;
     if (stream) {
