@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, GripVertical, X, User, Phone } from "lucide-react";
+import { Maximize2, Minimize2, GripVertical, X, User, UserCircle, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TelehealthVideoPanelProps {
@@ -212,11 +212,12 @@ const addWaveformToTile = (wrapper: HTMLElement, video: HTMLVideoElement, isLoca
     barWrapper.style.display = 'flex';
     barWrapper.style.flexDirection = 'column';
     barWrapper.style.alignItems = 'center';
-    barWrapper.style.justifyContent = 'center'; // Center top and bottom bars
+    barWrapper.style.justifyContent = 'center'; // Center top and bottom bars - they meet at center
     barWrapper.style.flex = '0 0 auto'; // Don't grow, maintain fixed width
     barWrapper.style.alignSelf = 'center'; // Ensure vertical centering
+    barWrapper.style.gap = '0px'; // No gap between top and bottom bars
 
-    // Top bar (extends upward based on frequency) - rounded
+    // Top bar (extends upward from center) - rounded
     const topBar = document.createElement('div');
     topBar.className = 'waveform-bar-top';
     topBar.style.width = '100%';
@@ -224,11 +225,12 @@ const addWaveformToTile = (wrapper: HTMLElement, video: HTMLVideoElement, isLoca
     topBar.style.minHeight = '1px';
     topBar.style.maxHeight = '50%';
     topBar.style.backgroundColor = color;
-    topBar.style.borderRadius = '1px'; // Rounded corners
+    topBar.style.borderRadius = '50%'; // Fully rounded pill shape
     topBar.style.transition = 'height 80ms ease-out';
     topBar.style.boxSizing = 'border-box';
+    topBar.style.marginBottom = '0px'; // No gap - bars meet at center
 
-    // Bottom bar (extends downward based on frequency) - rounded
+    // Bottom bar (extends downward from center) - rounded
     const bottomBar = document.createElement('div');
     bottomBar.className = 'waveform-bar-bottom';
     bottomBar.style.width = '100%';
@@ -236,9 +238,9 @@ const addWaveformToTile = (wrapper: HTMLElement, video: HTMLVideoElement, isLoca
     bottomBar.style.minHeight = '1px';
     bottomBar.style.maxHeight = '50%';
     bottomBar.style.backgroundColor = color;
-    bottomBar.style.borderRadius = '1px'; // Rounded corners
+    bottomBar.style.borderRadius = '50%'; // Fully rounded pill shape
     bottomBar.style.transition = 'height 80ms ease-out';
-    bottomBar.style.marginTop = '0px';
+    bottomBar.style.marginTop = '0px'; // No gap - bars meet at center
     bottomBar.style.boxSizing = 'border-box';
 
     barWrapper.appendChild(topBar);
@@ -253,7 +255,7 @@ const addWaveformToTile = (wrapper: HTMLElement, video: HTMLVideoElement, isLoca
   // Set up audio analysis if video has audio stream
   if (video.srcObject instanceof MediaStream) {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(video.srcObject);
 
@@ -415,7 +417,7 @@ const normalizeVideoElements = (
         avatar.style.position = 'absolute';
         avatar.style.top = '50%';
         avatar.style.left = '50%';
-        avatar.style.transform = 'translate(-50%, -50%)';
+        avatar.style.transform = 'translate(-50%, calc(-50% + 3px))'; // Slightly down for better center alignment
         avatar.style.zIndex = '30'; // Higher z-index than waveform (25) so avatar appears above
         avatar.style.display = 'flex';
         avatar.style.flexDirection = 'column';
@@ -427,11 +429,13 @@ const normalizeVideoElements = (
         avatarCircle.style.width = isTiled ? '72px' : '56px'; // Increased size
         avatarCircle.style.height = isTiled ? '72px' : '56px'; // Increased size
         avatarCircle.style.borderRadius = '50%';
-        avatarCircle.style.background = 'linear-gradient(135deg, #3b82f6, #8b5cf6)';
+        avatarCircle.style.background = 'rgba(31, 41, 55, 0.9)'; // gray-800/90
+        avatarCircle.style.backdropFilter = 'blur(4px)';
+        (avatarCircle.style as any).webkitBackdropFilter = 'blur(4px)';
         avatarCircle.style.display = 'flex';
         avatarCircle.style.alignItems = 'center';
         avatarCircle.style.justifyContent = 'center';
-        avatarCircle.style.color = 'white';
+        avatarCircle.style.color = '#9ca3af'; // gray-400
         avatarCircle.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
         avatarCircle.style.fontWeight = '600';
         avatarCircle.style.fontSize = isTiled ? '24px' : '18px'; // Increased font size
@@ -445,7 +449,7 @@ const normalizeVideoElements = (
         if (hasRealName) {
           avatarCircle.textContent = initials;
         } else {
-          // Create User icon SVG as fallback
+          // Create UserCircle icon SVG as fallback
           const userIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           userIcon.setAttribute('width', isTiled ? '36' : '28'); // Increased icon size
           userIcon.setAttribute('height', isTiled ? '36' : '28'); // Increased icon size
@@ -456,13 +460,14 @@ const normalizeVideoElements = (
           userIcon.setAttribute('stroke-linecap', 'round');
           userIcon.setAttribute('stroke-linejoin', 'round');
           
+          // UserCircle icon path
           const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path1.setAttribute('d', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2');
+          path1.setAttribute('d', 'M18 20a6 6 0 0 0-12 0');
           userIcon.appendChild(path1);
           
           const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           circle.setAttribute('cx', '12');
-          circle.setAttribute('cy', '7');
+          circle.setAttribute('cy', '10');
           circle.setAttribute('r', '4');
           userIcon.appendChild(circle);
           
@@ -674,7 +679,7 @@ const normalizeVideoElements = (
 
       // Add or remove waveform visualization based on audio mode
       if (opts?.isAudioMode && !skipOverlays) {
-        const isLocal = isLocalContainer;
+        const isLocal = Boolean(isLocalContainer);
         // Get connectionId from wrapper dataset (set by Vonage)
         const connectionId = wrapper.dataset.connectionId || wrapper.getAttribute('data-connection-id') || '';
         addWaveformToTile(wrapper, video, isLocal, connectionId, index);
@@ -1025,9 +1030,13 @@ export function TelehealthVideoPanel({
       const publisherRoot = localElement.querySelector('.OT_publisher, [data-ot="publisher"]') as HTMLElement | null;
       const videoEl = localElement.querySelector('video') as HTMLVideoElement | null;
 
+      // Extract callMode values before any type narrowing
+      const currentCallMode = callMode as 'audio' | 'video' | null;
+      const isAudioMode = currentCallMode === 'audio';
+      
       // Consider video present if OT has mounted a publisher OR any <video> exists.
       // Do not rely on srcObject/readyState for the local tile.
-      const hasVideo = callMode === 'video' && (!!publisherRoot || !!videoEl);
+      const hasVideo = currentCallMode === 'video' && (!!publisherRoot || !!videoEl);
 
       setLocalHasVideo(hasVideo);
 
@@ -1042,7 +1051,7 @@ export function TelehealthVideoPanel({
           strength: signalStrength || 'good',
           names: [participantName],
           skipOverlays: true,
-          isAudioMode: callMode === 'audio',
+          isAudioMode: isAudioMode,
         });
       }
       // REMOVED: Do not delete video elements during transient switch
@@ -1381,26 +1390,13 @@ export function TelehealthVideoPanel({
                   }}
                 >
                   <div
-                    style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      fontWeight: 600,
-                      fontSize: 20,
-                      letterSpacing: 0.5,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                    }}
+                    className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-800/90 backdrop-blur-sm"
                   >
                     {localParticipantName && localParticipantName !== "You" ? (() => {
                       const words = (localParticipantName || 'You').trim().split(/\s+/).slice(0, 2);
                       const initials = words.map(w => w[0] || '').join('').toUpperCase();
-                      return initials || 'U';
-                    })() : <User className="w-7 h-7" />}
+                      return <span className="text-gray-400 font-semibold text-xl">{initials || 'U'}</span>;
+                    })() : <UserCircle className="h-16 w-16 text-gray-400" />}
                   </div>
                   <span style={{ color: '#94a3b8', fontSize: 12 }}>Camera off</span>
                 </div>
@@ -1408,14 +1404,14 @@ export function TelehealthVideoPanel({
                {!localPreviewActive ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-100 bg-black">
                   {/* Profile Avatar with Initials */}
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-800/90 backdrop-blur-sm">
                     {localParticipantName && localParticipantName !== "You" ? (() => {
                       const words = localParticipantName.trim().split(/\s+/);
                       const initials = words.length >= 2 
                         ? (words[0][0] + words[1][0]).toUpperCase()
                         : localParticipantName.substring(0, 2).toUpperCase();
-                      return <span className="text-base">{initials}</span>;
-                    })() : <User className="w-6 h-6" />}
+                      return <span className="text-gray-400 font-semibold text-xl">{initials}</span>;
+                    })() : <UserCircle className="h-16 w-16 text-gray-400" />}
                   </div>
                   <span className="text-xs text-slate-200 font-medium">{localParticipantName}</span>
                   <span className="text-xs text-slate-400">Camera off</span>

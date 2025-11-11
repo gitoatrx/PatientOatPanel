@@ -34,7 +34,7 @@ export function AudioWaveform({
 
     // Create audio context and analyser
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(audioStream);
 
@@ -120,7 +120,7 @@ export function AudioWaveform({
           <div
             key={index}
             className={cn(
-              "rounded-sm transition-all duration-75 ease-out",
+              "transition-all duration-75 ease-out",
               isActive ? "" : "bg-gray-500"
             )}
             style={{
@@ -130,6 +130,7 @@ export function AudioWaveform({
               backgroundColor: isActive ? color : "#6b7280",
               minHeight: "10%",
               maxHeight: "90%",
+              borderRadius: "50%", // Fully rounded pill shape
             }}
           />
         );

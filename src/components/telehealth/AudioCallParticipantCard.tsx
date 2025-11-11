@@ -1,6 +1,6 @@
 "use client";
 
-import { User } from "lucide-react";
+import { UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AudioWaveform } from "./AudioWaveform";
 
@@ -64,11 +64,11 @@ export function AudioCallParticipantCard({
 
       {/* Avatar/Initials - Centered */}
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-lg font-semibold">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-800/90 backdrop-blur-sm">
           {initials ? (
-            <span className="text-2xl">{initials}</span>
+            <span className="text-gray-400 font-semibold text-2xl">{initials}</span>
           ) : (
-            <User className="w-8 h-8" />
+            <UserCircle className="h-16 w-16 text-gray-400" />
           )}
         </div>
       </div>
@@ -92,4 +92,5 @@ export function AudioCallParticipantCard({
     </div>
   );
 }
+
 

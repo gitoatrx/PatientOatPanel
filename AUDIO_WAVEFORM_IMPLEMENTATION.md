@@ -247,3 +247,4 @@ Potential improvements:
 
 The audio waveform visualization provides an intuitive visual representation of audio activity during calls, enhancing the user experience by clearly showing which participants are speaking. The implementation is lightweight, performant, and requires no external dependencies.
 
+

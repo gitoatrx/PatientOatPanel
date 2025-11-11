@@ -422,3 +422,4 @@ This implementation provides:
 
 Simply copy the functions, integrate them into your video panel, and call `addWaveformToTile` when in audio mode!
 
+
