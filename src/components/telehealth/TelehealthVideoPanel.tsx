@@ -431,7 +431,8 @@ const normalizeVideoElements = (
         avatarCircle.style.borderRadius = '50%';
         avatarCircle.style.background = 'rgba(31, 41, 55, 0.9)'; // gray-800/90
         avatarCircle.style.backdropFilter = 'blur(4px)';
-        (avatarCircle.style as any).webkitBackdropFilter = 'blur(4px)';
+        // @ts-expect-error - webkitBackdropFilter is not in TypeScript types but is needed for Safari
+        avatarCircle.style.webkitBackdropFilter = 'blur(4px)';
         avatarCircle.style.display = 'flex';
         avatarCircle.style.alignItems = 'center';
         avatarCircle.style.justifyContent = 'center';
