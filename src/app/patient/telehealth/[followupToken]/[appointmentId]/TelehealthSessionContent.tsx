@@ -127,7 +127,7 @@ export function TelehealthSessionContent({
   // Auto-start session when doctor is ready and on call
   React.useEffect(() => {
     if (appointmentState?.is_with_doctor && appointmentState?.is_on_call && appointmentStateLoaded && showPreJoin && !autoStartFailed) {
-      // Small delay to ensure UI is ready
+      // Minimal delay to ensure UI is ready (reduced from 1000ms)
       setTimeout(() => {
         try {
           onJoinCallDirect();
@@ -135,7 +135,7 @@ export function TelehealthSessionContent({
           console.error("Auto-start failed:", error);
           setAutoStartFailed(true);
         }
-      }, 1000);
+      }, 100); // Reduced delay for faster auto-start
     }
   }, [appointmentState?.is_with_doctor, appointmentState?.is_on_call, appointmentStateLoaded, showPreJoin, autoStartFailed]);
 
@@ -378,21 +378,18 @@ export function TelehealthSessionContent({
             appointmentId,
             clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
             onDoctorConnect: async (event: AblyConnectEvent) => {
-              
-              // Extract and set call mode from event
+              // Extract and set call mode from event IMMEDIATELY (no delays)
               if (event.call_type && (event.call_type === 'audio' || event.call_type === 'video')) {
                 setCallMode(event.call_type);
                 if (telehealth.setCallMode) {
-                  requestAnimationFrame(() => {
-                    telehealth.setCallMode?.(event.call_type as 'audio' | 'video');
-                  });
+                  // Call immediately without requestAnimationFrame delay
+                  telehealth.setCallMode(event.call_type as 'audio' | 'video');
                 }
               } else if (event.call_mode && (event.call_mode === 'audio' || event.call_mode === 'video')) {
                 setCallMode(event.call_mode);
                 if (telehealth.setCallMode) {
-                  requestAnimationFrame(() => {
-                    telehealth.setCallMode?.(event.call_mode as 'audio' | 'video');
-                  });
+                  // Call immediately without requestAnimationFrame delay
+                  telehealth.setCallMode(event.call_mode as 'audio' | 'video');
                 }
               }
             },
@@ -407,12 +404,9 @@ export function TelehealthSessionContent({
                 
                 // Update call mode state IMMEDIATELY
                 setCallMode(event.call_mode);
-                // Update Vonage session with debouncing to prevent rapid-fire events
+                // Update Vonage session immediately (no debouncing delays)
                 if (telehealth.setCallMode) {
-                  // Use requestAnimationFrame for debouncing
-                  requestAnimationFrame(() => {
-                    telehealth.setCallMode?.(event.call_mode);
-                  });
+                  telehealth.setCallMode(event.call_mode);
                 }
               }
             },
@@ -529,37 +523,49 @@ export function TelehealthSessionContent({
   }, [isChatOpen, uiMessages.length]);
 
   // Join flow: retry join until connected (while pendingJoin is true)
-  const JOIN_RETRY_MS = 1500;
+  const JOIN_RETRY_MS = 500; // Reduced from 1500ms for faster retries
+  const CONTAINER_WAIT_MS = 100; // Faster retry for container readiness
 
   React.useEffect(() => {
     if (showPreJoin || !pendingJoin || !telehealth.otReady) return; // Wait for OpenTok SDK
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let attemptCount = 0;
 
     const tryJoin = async () => {
       if (cancelled) return;
+      attemptCount++;
 
-      // 1) Decide authoritative mode first (server > state > default audio)
-      const desiredMode =
-        appointmentState?.on_call_type ??
-        appointmentState?.appointment?.on_call_type ??
-        callMode ?? 'audio';
+      // 1) Decide authoritative mode first (callMode from event > appointmentState > default audio)
+      // CRITICAL: Prioritize callMode from event over appointmentState to prevent race conditions
+      const eventSetCallMode = callMode; // Store current callMode (set from event)
+      const appointmentCallMode = appointmentState?.on_call_type ?? appointmentState?.appointment?.on_call_type;
+      
+      // Use event-set callMode if available, otherwise fall back to appointmentState or default
+      const desiredMode = eventSetCallMode ?? appointmentCallMode ?? 'audio';
 
-      if (desiredMode !== callMode) {
-        setCallMode(desiredMode);
-        requestAnimationFrame(() => {
-          telehealth.setCallMode?.(desiredMode);
-        });
+      console.log('📞 TelehealthSessionContent: Join flow - eventSetCallMode:', eventSetCallMode, 'appointmentCallMode:', appointmentCallMode, 'desiredMode:', desiredMode);
+      
+      // Always ensure telehealth hook is using the desired mode
+      if (telehealth.setCallMode && desiredMode) {
+        telehealth.setCallMode(desiredMode);
+      }
+      
+      // Only update state if callMode is not set yet (null) - don't override event-set values
+      if (!eventSetCallMode && appointmentCallMode) {
+        setCallMode(appointmentCallMode);
       }
 
-      // 2) Wait for required containers
+      // 2) Wait for required containers - but retry faster for first few attempts
       if (!remoteContainer) {
-        timer = setTimeout(tryJoin, JOIN_RETRY_MS);
+        const retryDelay = attemptCount <= 3 ? CONTAINER_WAIT_MS : JOIN_RETRY_MS;
+        timer = setTimeout(tryJoin, retryDelay);
         return;
       }
       if (desiredMode !== 'audio' && !localContainer) {
-        timer = setTimeout(tryJoin, JOIN_RETRY_MS);
+        const retryDelay = attemptCount <= 3 ? CONTAINER_WAIT_MS : JOIN_RETRY_MS;
+        timer = setTimeout(tryJoin, retryDelay);
         return;
       }
 
@@ -578,6 +584,7 @@ export function TelehealthSessionContent({
       }
     };
 
+    // Start immediately - no initial delay
     tryJoin();
 
     return () => {
@@ -633,30 +640,45 @@ export function TelehealthSessionContent({
         appointmentId,
         clinicId: API_CONFIG.CLINIC_ID, // Pass clinic ID for MOA calling events
         onDoctorConnect: async (event: AblyConnectEvent) => {
-          // Extract and set call mode from event
+          console.log('📞 TelehealthSessionContent: onDoctorConnect event received:', event);
+          console.log('📞 TelehealthSessionContent: event.call_type:', event.call_type);
+          console.log('📞 TelehealthSessionContent: event.call_mode:', event.call_mode);
+          
+          // Extract and set call mode from event IMMEDIATELY (no delays)
+          let finalCallMode: 'audio' | 'video' | null = null;
+          
           if (event.call_type && (event.call_type === 'audio' || event.call_type === 'video')) {
-            setCallMode(event.call_type);
-            if (telehealth.setCallMode) {
-              requestAnimationFrame(() => {
-                telehealth.setCallMode?.(event.call_type as 'audio' | 'video');
-              });
-            }
+            finalCallMode = event.call_type;
+            console.log('📞 TelehealthSessionContent: Setting call mode from call_type:', finalCallMode);
           } else if (event.call_mode && (event.call_mode === 'audio' || event.call_mode === 'video')) {
-            setCallMode(event.call_mode);
+            finalCallMode = event.call_mode;
+            console.log('📞 TelehealthSessionContent: Setting call mode from call_mode:', finalCallMode);
+          } else {
+            console.warn('⚠️ TelehealthSessionContent: No valid call_type or call_mode in event, defaulting to video');
+            finalCallMode = 'video'; // Default to video if not specified
+          }
+
+          if (finalCallMode) {
+            console.log('📞 TelehealthSessionContent: Setting call mode to:', finalCallMode);
+            setCallMode(finalCallMode);
             if (telehealth.setCallMode) {
-              requestAnimationFrame(() => {
-                telehealth.setCallMode?.(event.call_mode as 'audio' | 'video');
-              });
+              // Call immediately without requestAnimationFrame delay
+              console.log('📞 TelehealthSessionContent: Calling telehealth.setCallMode with:', finalCallMode);
+              telehealth.setCallMode(finalCallMode);
+            } else {
+              console.warn('⚠️ TelehealthSessionContent: telehealth.setCallMode is not available');
             }
           }
 
           // IMPORTANT: Keep Ably connected during the call so we can listen to call_type_switched events
           // Do NOT disconnect - we need to continue listening for mode changes during the call
 
-          // Join the Vonage session directly
-          setPendingJoin(true);
+          // Join the Vonage session IMMEDIATELY - set all flags synchronously
+          console.log('📞 TelehealthSessionContent: Triggering join flow with call mode:', finalCallMode);
           setIsInWaitingRoom(false);
           setDoctorConnected(false);
+          setShowPreJoin(false); // CRITICAL: Must be set to false BEFORE pendingJoin to allow join effect to run
+          setPendingJoin(true); // This triggers the join effect
         },
         onCallModeChange: (event: CallModeEvent) => {
           // Get timestamp from event (use timestamp field or parse from ISO string)
@@ -669,12 +691,9 @@ export function TelehealthSessionContent({
             // Update call mode state IMMEDIATELY
             setCallMode(event.call_mode);
             
-            // Update Vonage session with debouncing to prevent rapid-fire events
+            // Update Vonage session immediately (no debouncing delays)
             if (telehealth.setCallMode) {
-              // Use requestAnimationFrame for debouncing
-              requestAnimationFrame(() => {
-                telehealth.setCallMode?.(event.call_mode);
-              });
+              telehealth.setCallMode(event.call_mode);
             }
           }
         },
@@ -720,11 +739,9 @@ export function TelehealthSessionContent({
       // Set call mode before joining if we have it
       if (currentCallMode && currentCallMode !== callMode) {
         setCallMode(currentCallMode);
-        // Update telehealth hook after UI updates
+        // Update telehealth hook immediately
         if (telehealth.setCallMode) {
-          requestAnimationFrame(() => {
-            telehealth.setCallMode?.(currentCallMode);
-          });
+          telehealth.setCallMode(currentCallMode);
         }
       }
 

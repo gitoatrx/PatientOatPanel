@@ -279,59 +279,92 @@ export class AblyVideoCallService {
         const clinicChannel = ably.channels.get(clinicChannelName);
         this.clinicChannel = clinicChannel;
 
-        // Subscribe to moa-calling events on clinic channel
-        clinicChannel.subscribe('moa-calling', (message) => {
-          try {
-            // Extract call_type from metadata
-            const metadata = message.data.metadata || [];
-            let call_type: 'video' | 'audio' | undefined = undefined;
-            
-            // Try to get call_type from multiple sources
-            if (message.data.call_type) {
-              call_type = message.data.call_type as 'video' | 'audio';
-            } else if (Array.isArray(metadata) && typeof metadata[0] === 'object' && metadata[0] !== null) {
-              const firstMeta = metadata[0] as Record<string, unknown>;
-              call_type = firstMeta.call_type as 'video' | 'audio' | undefined;
-            } else if (message.data.context?.call_type) {
-              call_type = message.data.context.call_type as 'video' | 'audio';
-            }
+        // CRITICAL: Attach clinic channel BEFORE subscribing to ensure events are received
+        clinicChannel.attach().then(() => {
+          console.log('✅ Ably: Clinic channel attached successfully');
+          
+          // Subscribe to moa-calling events on clinic channel
+          clinicChannel.subscribe('moa-calling', (message) => {
+            try {
+              console.log('📞 Ably: MOA-calling event received:', message);
+              console.log('📞 Ably: Full message data:', JSON.stringify(message.data, null, 2));
+              
+              // Extract call_type from metadata - check ALL possible locations
+              const metadata = message.data.metadata || [];
+              let call_type: 'video' | 'audio' | undefined = undefined;
+              
+              // Try to get call_type from multiple sources (comprehensive check)
+              if (message.data.call_type) {
+                call_type = message.data.call_type as 'video' | 'audio';
+                console.log('📞 Ably: Found call_type in message.data.call_type:', call_type);
+              } else if (message.data.call_mode) {
+                call_type = message.data.call_mode as 'video' | 'audio';
+                console.log('📞 Ably: Found call_type in message.data.call_mode:', call_type);
+              } else if (message.data.on_call_type) {
+                call_type = message.data.on_call_type as 'video' | 'audio';
+                console.log('📞 Ably: Found call_type in message.data.on_call_type:', call_type);
+              } else if (Array.isArray(metadata) && typeof metadata[0] === 'object' && metadata[0] !== null) {
+                const firstMeta = metadata[0] as Record<string, unknown>;
+                call_type = (firstMeta.call_type || firstMeta.call_mode || firstMeta.on_call_type) as 'video' | 'audio' | undefined;
+                console.log('📞 Ably: Found call_type in metadata[0]:', call_type);
+              } else if (message.data.context?.call_type) {
+                call_type = message.data.context.call_type as 'video' | 'audio';
+                console.log('📞 Ably: Found call_type in message.data.context.call_type:', call_type);
+              } else if (message.data.context?.call_mode) {
+                call_type = message.data.context.call_mode as 'video' | 'audio';
+                console.log('📞 Ably: Found call_type in message.data.context.call_mode:', call_type);
+              } else if (message.data.context?.on_call_type) {
+                call_type = message.data.context.on_call_type as 'video' | 'audio';
+                console.log('📞 Ably: Found call_type in message.data.context.on_call_type:', call_type);
+              }
 
-            const event: AblyConnectEvent = {
-              event: 'moa-calling',
-              metadata: metadata,
-              context: {
-                actor: {
-                  id: message.data.context?.actor?.id || 'unknown',
-                  name: message.data.context?.actor?.name || 'MOA',
-                  role: 'moa',
-                  type: message.data.context?.actor?.type || 'clinic_user',
-                  clinic_id: message.data.context?.actor?.clinic_id || this.options.clinicId,
+              if (!call_type) {
+                console.warn('⚠️ Ably: No call_type found in MOA-calling event, defaulting to video');
+                call_type = 'video'; // Default to video if not specified
+              }
+
+              console.log('📞 Ably: Final call_type determined:', call_type);
+
+              const event: AblyConnectEvent = {
+                event: 'moa-calling',
+                metadata: metadata,
+                context: {
+                  actor: {
+                    id: message.data.context?.actor?.id || 'unknown',
+                    name: message.data.context?.actor?.name || 'MOA',
+                    role: 'moa',
+                    type: message.data.context?.actor?.type || 'clinic_user',
+                    clinic_id: message.data.context?.actor?.clinic_id || this.options.clinicId,
+                  },
+                  appointmentId: this.options.appointmentId,
+                  timestamp: message.data.context?.published_at || new Date().toISOString(),
                 },
-                appointmentId: this.options.appointmentId,
-                timestamp: message.data.context?.published_at || new Date().toISOString(),
-              },
-              call_type: call_type,
-            };
+                call_type: call_type,
+                call_mode: call_type, // Also set call_mode for compatibility
+              };
 
-            this.options.onDoctorConnect(event);
-          } catch (error) {
-            console.error('❌ Ably: Error processing moa-calling event:', error);
-            this.options.onError(error instanceof Error ? error : new Error('Unknown error processing moa-calling event'));
-          }
-        });
+              console.log('📞 Ably: Calling onDoctorConnect with event:', event);
+              this.options.onDoctorConnect(event);
+            } catch (error) {
+              console.error('❌ Ably: Error processing moa-calling event:', error);
+              this.options.onError(error instanceof Error ? error : new Error('Unknown error processing moa-calling event'));
+            }
+          });
+          // Subscribe to CALL_MODE_SET and CALL_MODE_CHANGED events on clinic channel (after attach)
+          clinicChannel.subscribe('CALL_MODE_SET', (message) => {
+            this.handleCallModeEvent(message, 'CALL_MODE_SET');
+          });
 
-        // Subscribe to CALL_MODE_SET and CALL_MODE_CHANGED events on clinic channel
-        clinicChannel.subscribe('CALL_MODE_SET', (message) => {
-          this.handleCallModeEvent(message, 'CALL_MODE_SET');
-        });
+          clinicChannel.subscribe('CALL_MODE_CHANGED', (message) => {
+            this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
+          });
 
-        clinicChannel.subscribe('CALL_MODE_CHANGED', (message) => {
-          this.handleCallModeEvent(message, 'CALL_MODE_CHANGED');
-        });
-
-        // Subscribe to call_type_switched event on clinic channel
-        clinicChannel.subscribe('call_type_switched', (message) => {
-          this.handleCallTypeSwitchedEvent(message);
+          // Subscribe to call_type_switched event on clinic channel
+          clinicChannel.subscribe('call_type_switched', (message) => {
+            this.handleCallTypeSwitchedEvent(message);
+          });
+        }).catch((err) => {
+          console.error('❌ Ably: Error attaching to clinic channel:', err);
         });
       }
 
