@@ -410,6 +410,13 @@ export function TelehealthSessionContent({
                 }
               }
             },
+            onDisconnect: () => {
+              console.log('🔌 TelehealthSessionContent: Disconnect event received - ending session and refreshing page');
+              // Immediately end the Vonage session to stop all streams
+              telehealth.leave();
+              // Refresh the page after ending the session
+              window.location.reload();
+            },
             onError: (error: Error) => {
               console.error('Ably error in video call service (after refresh):', error);
             }
@@ -696,6 +703,13 @@ export function TelehealthSessionContent({
               telehealth.setCallMode(event.call_mode);
             }
           }
+        },
+        onDisconnect: () => {
+          console.log('🔌 TelehealthSessionContent: Disconnect event received - ending session and refreshing page');
+          // Immediately end the Vonage session to stop all streams
+          telehealth.leave();
+          // Refresh the page after ending the session
+          window.location.reload();
         },
         onError: (error: Error) => {
           console.error('Ably error in video call service:', error);
