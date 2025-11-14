@@ -33,6 +33,7 @@ export interface AblyVideoCallServiceOptions {
   clinicId?: number;
   onDoctorConnect: (event: AblyConnectEvent) => void;
   onCallModeChange?: (event: CallModeEvent) => void;
+  onDisconnect?: () => void;
   onError: (error: Error) => void;
 }
 
@@ -269,6 +270,14 @@ export class AblyVideoCallService {
         channel.subscribe('CALL_MODE_SET', this.subscriptionHandlers.callModeSet);
 
         channel.subscribe('CALL_MODE_CHANGED', this.subscriptionHandlers.callModeChanged);
+
+        // Subscribe to disconnect events
+        channel.subscribe('disconnect', (message: Ably.Message) => {
+          console.log('🔌 Ably: Disconnect event received:', message);
+          if (this.options.onDisconnect) {
+            this.options.onDisconnect();
+          }
+        });
       }).catch((err) => {
         console.error('❌ Ably: Error attaching to appointment channel:', err);
       });
@@ -379,10 +388,23 @@ export class AblyVideoCallService {
           this.handleCallTypeSwitchedEvent(message);
         } else if (eventType === 'CALL_MODE_CHANGED' || eventType === 'CALL_MODE_SET') {
           this.handleCallModeEvent(message, eventType as 'CALL_MODE_SET' | 'CALL_MODE_CHANGED');
+        } else if (eventType === 'disconnect' || messageName === 'disconnect') {
+          console.log('🔌 Ably: Disconnect event received via catch-all listener:', message);
+          if (this.options.onDisconnect) {
+            this.options.onDisconnect();
+          }
         }
       });
 
       if (this.clinicChannel) {
+        // Subscribe to disconnect events on clinic channel
+        this.clinicChannel.subscribe('disconnect', (message: Ably.Message) => {
+          console.log('🔌 Ably: Disconnect event received on clinic channel:', message);
+          if (this.options.onDisconnect) {
+            this.options.onDisconnect();
+          }
+        });
+
         this.clinicChannel.subscribe((message) => {
           const messageName = message.name;
           const dataType = message.data && typeof message.data === 'object' && 'type' in message.data ? message.data.type : null;
@@ -392,6 +414,11 @@ export class AblyVideoCallService {
             this.handleCallTypeSwitchedEvent(message);
           } else if (eventType === 'CALL_MODE_CHANGED' || eventType === 'CALL_MODE_SET') {
             this.handleCallModeEvent(message, eventType as 'CALL_MODE_SET' | 'CALL_MODE_CHANGED');
+          } else if (eventType === 'disconnect' || messageName === 'disconnect') {
+            console.log('🔌 Ably: Disconnect event received on clinic channel via catch-all listener:', message);
+            if (this.options.onDisconnect) {
+              this.options.onDisconnect();
+            }
           }
         });
       }
