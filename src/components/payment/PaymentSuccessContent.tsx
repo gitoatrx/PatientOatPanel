@@ -9,10 +9,16 @@ interface PaymentSuccessContentProps {
 export function PaymentSuccessContent({ paymentData }: PaymentSuccessContentProps) {
   const { data } = paymentData;
   
-  // Format the appointment date and time
-  const appointmentDate = new Date(data.appointment.date_and_time);
-  const formattedDate = format(appointmentDate, 'EEE, MMM d, yyyy');
-  const formattedTime = format(appointmentDate, 'h:mm a');
+  // Check if appointment is null and payment is paid
+  const hasNoAppointment = !data.appointment && data.payment.status === 'paid';
+  
+  // Format the appointment date and time (only if appointment exists)
+  const appointmentDate = data.appointment ? new Date(data.appointment.date_and_time) : null;
+  const formattedDate = appointmentDate ? format(appointmentDate, 'EEE, MMM d, yyyy') : '';
+  const formattedTime = appointmentDate ? format(appointmentDate, 'h:mm a') : '';
+
+  // Format patient name: LastName.FirstName
+  const patientName = `${data.patient.last_name}.${data.patient.first_name}`;
 
   return (
     <div className="min-h-screen bg-white">
@@ -29,9 +35,15 @@ export function PaymentSuccessContent({ paymentData }: PaymentSuccessContentProp
             Payment Successful!
           </h1>
           
-          <p className="text-gray-600 mb-4">
-            Your appointment has been confirmed and payment processed successfully.
-          </p>
+          {hasNoAppointment ? (
+            <p className="text-gray-600 mb-4">
+              {patientName} your payment is successful.
+            </p>
+          ) : (
+            <p className="text-gray-600 mb-4">
+              Your appointment has been confirmed and payment processed successfully.
+            </p>
+          )}
           
           <div className="inline-flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg text-sm font-medium">
             <CreditCard className="w-4 h-4" />
@@ -50,35 +62,40 @@ export function PaymentSuccessContent({ paymentData }: PaymentSuccessContentProp
             <span className="text-lg font-bold text-green-600">${data.payment.amount}</span>
           </div>
 
-          {/* Appointment (date + time combined) */}
-          <div className="flex items-center justify-between bg-gray-50 rounded p-3">
-            <div className="flex items-center">
-              <Calendar className="w-4 h-4 mr-2 text-gray-600" />
-              <span className="text-sm text-gray-600">Appointment</span>
-            </div>
-            <div className="text-right">
-              <div className="text-sm font-medium text-gray-900">{formattedDate}</div>
-              <div className="text-xs text-gray-500">{formattedTime}</div>
-            </div>
-          </div>
+          {/* Appointment details - only show if appointment exists */}
+          {data.appointment && (
+            <>
+              {/* Appointment (date + time combined) */}
+              <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                <div className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-600" />
+                  <span className="text-sm text-gray-600">Appointment</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-gray-900">{formattedDate}</div>
+                  <div className="text-xs text-gray-500">{formattedTime}</div>
+                </div>
+              </div>
 
-          {/* Visit type */}
-          <div className="flex items-center justify-between bg-gray-50 rounded p-3">
-            <div className="flex items-center">
-              <User className="w-4 h-4 mr-2 text-gray-600" />
-              <span className="text-sm text-gray-600">Visit Type</span>
-            </div>
-            <span className="text-sm font-medium text-gray-900">{data.appointment.visit_type_name}</span>
-          </div>
+              {/* Visit type */}
+              <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                <div className="flex items-center">
+                  <User className="w-4 h-4 mr-2 text-gray-600" />
+                  <span className="text-sm text-gray-600">Visit Type</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">{data.appointment.visit_type_name}</span>
+              </div>
 
-          {/* Doctor */}
-          <div className="flex items-center justify-between bg-gray-50 rounded p-3">
-            <div className="flex items-center">
-              <User className="w-4 h-4 mr-2 text-gray-600" />
-              <span className="text-sm text-gray-600">Doctor</span>
-            </div>
-            <span className="text-sm font-medium text-gray-900">Dr. {data.appointment.doctor.first_name} {data.appointment.doctor.last_name}</span>
-          </div>
+              {/* Doctor */}
+              <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                <div className="flex items-center">
+                  <User className="w-4 h-4 mr-2 text-gray-600" />
+                  <span className="text-sm text-gray-600">Doctor</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">Dr. {data.appointment.doctor.first_name} {data.appointment.doctor.last_name}</span>
+              </div>
+            </>
+          )}
 
           {/* Patient */}
           {/* <div className="flex items-center justify-between bg-gray-50 rounded p-3">
@@ -99,47 +116,49 @@ export function PaymentSuccessContent({ paymentData }: PaymentSuccessContentProp
           </div> */}
         </div>
 
-        {/* Next Steps (flat, subtle) */}
-        <div className="mt-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">What&apos;s Next?</h3>
-          <div className="space-y-3">
-            <div className="flex items-start space-x-3">
-              <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-blue-600 font-semibold text-xs">1</span>
+        {/* Next Steps (flat, subtle) - only show if appointment exists */}
+        {data.appointment && (
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">What&apos;s Next?</h3>
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-600 font-semibold text-xs">1</span>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">Confirmation Email</p>
+                  <p className="text-gray-600 text-xs">
+                    You will receive a confirmation email with your appointment details.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium text-gray-900 text-sm">Confirmation Email</p>
-                <p className="text-gray-600 text-xs">
-                  You will receive a confirmation email with your appointment details.
-                </p>
+              
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-600 font-semibold text-xs">2</span>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">Reminder Notifications</p>
+                  <p className="text-gray-600 text-xs">
+                    We&apos;ll send you reminders before your appointment.
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex items-start space-x-3">
-              <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-blue-600 font-semibold text-xs">2</span>
-              </div>
-              <div>
-                <p className="font-medium text-gray-900 text-sm">Reminder Notifications</p>
-                <p className="text-gray-600 text-xs">
-                  We&apos;ll send you reminders before your appointment.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-3">
-              <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-blue-600 font-semibold text-xs">3</span>
-              </div>
-              <div>
-                <p className="font-medium text-gray-900 text-sm">Prepare for Your Visit</p>
-                <p className="text-gray-600 text-xs">
-                  Please arrive 15 minutes early and bring a valid ID.
-                </p>
+              
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-600 font-semibold text-xs">3</span>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">Prepare for Your Visit</p>
+                  <p className="text-gray-600 text-xs">
+                    Please arrive 15 minutes early and bring a valid ID.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>
