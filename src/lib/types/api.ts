@@ -899,7 +899,7 @@ export interface PaymentSessionData {
   stripe: PaymentSessionStripe;
   payment: PaymentSessionPayment;
   patient: PaymentSessionPatient;
-  appointment: PaymentSessionAppointment;
+  appointment: PaymentSessionAppointment | null;
 }
 
 export interface PaymentSessionResponse {
