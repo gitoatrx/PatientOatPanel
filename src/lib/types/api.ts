@@ -461,7 +461,7 @@ export interface ProvidersListResponse {
 export interface ProviderSelectionRequest {
   phone: string;
   clinic_id: number;
-  provider_id: number;
+  doctor_id: number;
   preferred_provider_notes?: string;
 }
 

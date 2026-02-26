@@ -184,16 +184,15 @@ export function PatientDoctorSelectionStep() {
         // Handle API error response
         const errorMessage = apiResponse.message || "Failed to save provider selection";
         
-        // Show error toast IMMEDIATELY
+        // Show error toast
         toast({
           variant: "error",
           title: "Save Failed",
           description: errorMessage,
         });
         
-        // Set error state after toast
         setError(errorMessage);
-        throw new Error(errorMessage);
+        return;
       }
     } catch (err) {
       // Handle unexpected errors
