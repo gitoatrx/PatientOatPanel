@@ -658,7 +658,7 @@ export const patientService = {
       const payload: ProviderSelectionRequest = {
         phone: phone,
         clinic_id: API_CONFIG.CLINIC_ID,
-        provider_id: providerId,
+        doctor_id: providerId,
       };
 
       if (preferredProviderNotes) {
@@ -700,7 +700,7 @@ export const patientService = {
     try {
 
       const response = await apiClient.get<AvailableSlotsResponse>(
-        `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS_PROVIDER}?clinic_id=${API_CONFIG.CLINIC_ID}&provider_id=${providerId}`,
+        `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS_PROVIDER}?clinic_id=${API_CONFIG.CLINIC_ID}&doctor_id=${providerId}`,
         {
           showLoading: false, // Don't show loading for this background fetch
           showErrorToast: false, // Handle errors in component
@@ -725,7 +725,7 @@ export const patientService = {
     try {
 
       const response = await apiClient.get<AvailableTimeSlotsResponse>(
-        `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS}?clinic_id=${API_CONFIG.CLINIC_ID}&provider_id=${providerId}&date=${date}`,
+        `${API_CONFIG.ENDPOINTS.AVAILABLE_SLOTS}?clinic_id=${API_CONFIG.CLINIC_ID}&doctor_id=${providerId}&date=${date}`,
         {
           showLoading: false, // Don't show loading for this background fetch
           showErrorToast: false, // Handle errors in component
