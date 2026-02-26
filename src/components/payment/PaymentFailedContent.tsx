@@ -9,9 +9,9 @@ interface PaymentFailedContentProps {
 export function PaymentFailedContent({ paymentData }: PaymentFailedContentProps) {
   const { data } = paymentData;
 
-  const appointmentDate = new Date(data.appointment.date_and_time);
-  const formattedDate = format(appointmentDate, 'EEE, MMM d, yyyy');
-  const formattedTime = format(appointmentDate, 'h:mm a');
+  const appointmentDate = data.appointment ? new Date(data.appointment.date_and_time) : null;
+  const formattedDate = appointmentDate ? format(appointmentDate, 'EEE, MMM d, yyyy') : 'N/A';
+  const formattedTime = appointmentDate ? format(appointmentDate, 'h:mm a') : 'N/A';
 
   return (
     <div className="min-h-screen bg-white">
@@ -39,35 +39,40 @@ export function PaymentFailedContent({ paymentData }: PaymentFailedContentProps)
             <span className="text-lg font-bold text-red-600">${data.payment.amount}</span>
           </div>
 
-          {/* Appointment */}
-          <div className="flex items-center justify-between bg-gray-50 rounded p-3">
-            <div className="flex items-center">
-              <Calendar className="w-4 h-4 mr-2 text-gray-600" />
-              <span className="text-sm text-gray-600">Appointment</span>
-            </div>
-            <div className="text-right">
-              <div className="text-sm font-medium text-gray-900">{formattedDate}</div>
-              <div className="text-xs text-gray-500">{formattedTime}</div>
-            </div>
-          </div>
+          {/* Appointment Details - only show if appointment exists */}
+          {data.appointment && (
+            <>
+              {/* Appointment */}
+              <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                <div className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-600" />
+                  <span className="text-sm text-gray-600">Appointment</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-gray-900">{formattedDate}</div>
+                  <div className="text-xs text-gray-500">{formattedTime}</div>
+                </div>
+              </div>
 
-          {/* Visit Type */}
-          <div className="flex items-center justify-between bg-gray-50 rounded p-3">
-            <div className="flex items-center">
-              <User className="w-4 h-4 mr-2 text-gray-600" />
-              <span className="text-sm text-gray-600">Visit Type</span>
-            </div>
-            <span className="text-sm font-medium text-gray-900">{data.appointment.visit_type_name}</span>
-          </div>
+              {/* Visit Type */}
+              <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                <div className="flex items-center">
+                  <User className="w-4 h-4 mr-2 text-gray-600" />
+                  <span className="text-sm text-gray-600">Visit Type</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">{data.appointment.visit_type_name}</span>
+              </div>
 
-          {/* Doctor */}
-          <div className="flex items-center justify-between bg-gray-50 rounded p-3">
-            <div className="flex items-center">
-              <User className="w-4 h-4 mr-2 text-gray-600" />
-              <span className="text-sm text-gray-600">Doctor</span>
-            </div>
-            <span className="text-sm font-medium text-gray-900">Dr. {data.appointment.doctor.first_name} {data.appointment.doctor.last_name}</span>
-          </div>
+              {/* Doctor */}
+              <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                <div className="flex items-center">
+                  <User className="w-4 h-4 mr-2 text-gray-600" />
+                  <span className="text-sm text-gray-600">Doctor</span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">Dr. {data.appointment.doctor.first_name} {data.appointment.doctor.last_name}</span>
+              </div>
+            </>
+          )}
 
           {/* Patient */}
           <div className="flex items-center justify-between bg-gray-50 rounded p-3">
